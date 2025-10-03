@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+  
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Roles {
+  CLIENT
+  PROVIDER
+  BILLER
+  TEAM
+}
+
+model User {
+  user_id      Int      @id @default(autoincrement()) 
+  name         String   @db.VarChar(100) 
+  email        String   @unique        
+  password_hash String   @db.VarChar(255)
+  account_name String? 
+  bring String? @default("null")
+  teams_member_count String? @default("null") 
+  focus String[]
+  hear_about_as   String? @default("null") 
+  created_at   DateTime @default(now()) 
+  updated_at   DateTime @updatedAt
+  active_status String @default("Offline")
+
+  connect_mail_hash String?
+  encryption_key String?
+  encryption_vi String?
+
+  // Password reset fields
+  reset_token String?
+  reset_token_expiry DateTime?
+
+  Role Roles @default(PROVIDER)
+  leader_id Int?
+  
+  // Add indexes for better performance
+  @@index([email])
+  @@index([leader_id])
+  @@index([created_at])
+  
+  // Relations
+  Projects Project[]
+  Collaboration ProjectMember[] @relation("UserProjectMembers")
+  AssignedTasks TaskMember[] @relation("UserTaskMembers")
+  CreatedTasks Task[] @relation("UserCreatedTasks")
+  Notifications Notification[] @relation("UserNotifications")
+  otps OTP[] @relation("UserOTPs")
+  Transcibtions Transcibtion[] @relation("UserTranscriptions")
+  Emails Email[] @relation("UserEmails")
+  Comments Comment[] @relation("UserComments")
+  Progress TaskProgress[] @relation("UserProgress")
+  Conversation Participant[] @relation("UserParticipants")
+  Meetings Meeting[] @relation("UserMeetings")
+  MeetingParticipants MeetingParticipant[] @relation("UserMeetingParticipants")
+  Transcribtions MeetingTranscibtion[] @relation("UserMeetingTranscriptions")
+  Media Media[] @relation("UserMedia")
+  Services ProjectClient[] @relation("UserProjectClients")
+  Time TaskTime[] @relation("UserTaskTime") 
+  teamsLed    UserTeam[]  @relation("UserTeamLeader")
+  teamsMember UserTeam[]  @relation("UserTeamMember")
+  lawyerFiles File[] @relation("FileLawyer")
+  clientFiles File[] @relation("FileClient")
+  // Billing relations
+  billingLineItems BillingLineItem[] @relation("UserBillingLineItems")
+  memberRates MemberRate[]
+  clientInvoices Invoice[] @relation("ClientInvoices")
+  billerInvoices Invoice[] @relation("BillerInvoices")
+  billerCaseAssignments CaseAssignment[] @relation("BillerCaseAssignments")
+  assignedByCaseAssignments CaseAssignment[] @relation("AssignedByCaseAssignments")
+    submittedReviews Review[]  @relation("SubmittedBy")
+  actedReviews     Review[]  @relation("ActedBy")
+  // Chat relations
+  Messages Message[] @relation("UserMessages")
+  // Private chat relations
+  User1PrivateConversations PrivateConversation[] @relation("User1PrivateConversations")
+  User2PrivateConversations PrivateConversation[] @relation("User2PrivateConversations")
+  UserPrivateMessages PrivateMessage[] @relation("UserPrivateMessages")
+  UserPrivateMessageReceivers PrivateMessage[] @relation("UserPrivateMessageReceivers")
+  // Expenses relations
+  expenses Expense[] @relation("UserExpenses")
+  providerExpenses Expense[] @relation("ProviderExpenses")
+  
+  // Admin approval relations
+  AdminApprovals UserRegistrationRequest[] @relation("AdminApprovals")
+}
+
+// New model for user registration requests
+model UserRegistrationRequest {
+  request_id   String   @id @default(uuid())
+  name         String   @db.VarChar(100)
+  email       String   @unique
+  password_hash String  @db.VarChar(255)
+  account_name String?
+  bring       String?
+  teams_member_count String?
+  focus       String[]
+  hear_about_as String?
+  company_name String?  @db.VarChar(200)
+  reason      String?   @db.Text
+  team_size   String?
+  status      RequestStatus @default(PENDING)
+  admin_notes String?   @db.Text
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  approved_at DateTime?
+  approved_by Int?
+  
+  // Relations
+  approvedBy  User?     @relation("AdminApprovals", fields: [approved_by], references: [user_id])
+  
+  @@index([email])
+  @@index([status])
+  @@index([created_at])
+}
+
+// Enum for request status
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model UserTeam {
+  team_member_id String   @id @default(uuid())
+  user_id        Int      
+  leader_id      Int
+  role           Roles     @default(TEAM)
+  legalRole      LegalRole?
+  customLegalRole String?
+
+  // this is the "leader" relation, name it "UserTeamLeader"
+  leader User @relation("UserTeamLeader", fields: [leader_id], references: [user_id])
+
+  // this is the "member" relation, name it "UserTeamMember"
+  user   User @relation("UserTeamMember", fields: [user_id],   references: [user_id])
+
+  // Cascade delete all project memberships when team member is deleted
+  projectMembers ProjectMember[] @relation("UserTeamProjectMembers")
+
+  
+}
+
+model Project {
+  project_id  Int      @id @default(autoincrement()) 
+  name        String   @db.VarChar(255)
+  description String?  @db.Text                  
+  created_by  Int                                  
+  created_at  DateTime @default(now())              
+  updated_at  DateTime @updatedAt
+  opposing String?    
+  user User @relation(fields: [created_by], references: [user_id])
+  client_name String?
+  client_address String?
+  status String?
+  budget Int?
+  Members ProjectMember[]
+  Clients ProjectClient[]
+  Tasks Task[]
+  Media Media[]
+  Time TaskTime[]
+  Comments Comment[]
+  priority     String?
+  filingDate   DateTime @default(now()) 
+   phases         String[] 
+  // TemplateDocuments TemplateDocument[]
+  // Billing relations
+  billingConfig BillingConfig?
+  invoices Invoice[] @relation("ProjectInvoices")
+  caseAssignments CaseAssignment[] @relation("ProjectCaseAssignments")
+
+  // Add indexes for better performance
+  @@index([created_by])
+  @@index([status])
+  @@index([created_at])
+  @@index([priority])
+}

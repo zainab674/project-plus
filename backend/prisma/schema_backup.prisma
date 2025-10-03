@@ -1,0 +1,989 @@
+generator client {
+  provider = "prisma-client-js"
+  
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Roles {
+  CLIENT
+  PROVIDER
+  BILLER
+  TEAM
+}
+
+model User {
+  user_id      Int      @id @default(autoincrement()) 
+  name         String   @db.VarChar(100) 
+  email        String   @unique        
+  password_hash String   @db.VarChar(255)
+  account_name String? 
+  bring String? @default("null")
+  teams_member_count String? @default("null") 
+  focus String[]
+  hear_about_as   String? @default("null") 
+  created_at   DateTime @default(now()) 
+  updated_at   DateTime @updatedAt
+  active_status String @default("Offline")
+
+  connect_mail_hash String?
+  encryption_key String?
+  encryption_vi String?
+
+  // Password reset fields
+  reset_token String?
+  reset_token_expiry DateTime?
+
+  Role Roles @default(PROVIDER)
+  leader_id Int?
+  
+  // Add indexes for better performance
+  @@index([email])
+  @@index([leader_id])
+  @@index([created_at])
+  
+  // Relations
+  Projects Project[]
+  Collaboration ProjectMember[] @relation("UserProjectMembers")
+  AssignedTasks TaskMember[] @relation("UserTaskMembers")
+  CreatedTasks Task[] @relation("UserCreatedTasks")
+  Notifications Notification[] @relation("UserNotifications")
+  otps OTP[] @relation("UserOTPs")
+  Transcibtions Transcibtion[] @relation("UserTranscriptions")
+  Emails Email[] @relation("UserEmails")
+  Comments Comment[] @relation("UserComments")
+  Progress TaskProgress[] @relation("UserProgress")
+  Conversation Participant[] @relation("UserParticipants")
+  Meetings Meeting[] @relation("UserMeetings")
+  MeetingParticipants MeetingParticipant[] @relation("UserMeetingParticipants")
+  Transcribtions MeetingTranscibtion[] @relation("UserMeetingTranscriptions")
+  Media Media[] @relation("UserMedia")
+  Services ProjectClient[] @relation("UserProjectClients")
+  Time TaskTime[] @relation("UserTaskTime") 
+  teamsLed    UserTeam[]  @relation("UserTeamLeader")
+  teamsMember UserTeam[]  @relation("UserTeamMember")
+  lawyerFiles File[] @relation("FileLawyer")
+  clientFiles File[] @relation("FileClient")
+  // Billing relations
+  billingLineItems BillingLineItem[] @relation("UserBillingLineItems")
+  memberRates MemberRate[]
+  clientInvoices Invoice[] @relation("ClientInvoices")
+  billerInvoices Invoice[] @relation("BillerInvoices")
+  billerCaseAssignments CaseAssignment[] @relation("BillerCaseAssignments")
+  assignedByCaseAssignments CaseAssignment[] @relation("AssignedByCaseAssignments")
+    submittedReviews Review[]  @relation("SubmittedBy")
+  actedReviews     Review[]  @relation("ActedBy")
+  // Chat relations
+  Messages Message[] @relation("UserMessages")
+  // Private chat relations
+  User1PrivateConversations PrivateConversation[] @relation("User1PrivateConversations")
+  User2PrivateConversations PrivateConversation[] @relation("User2PrivateConversations")
+  UserPrivateMessages PrivateMessage[] @relation("UserPrivateMessages")
+  UserPrivateMessageReceivers PrivateMessage[] @relation("UserPrivateMessageReceivers")
+  // Expenses relations
+  expenses Expense[] @relation("UserExpenses")
+  providerExpenses Expense[] @relation("ProviderExpenses")
+  
+  // Admin approval relations
+  AdminApprovals UserRegistrationRequest[] @relation("AdminApprovals")
+}
+
+model UserTeam {
+  team_member_id String   @id @default(uuid())
+  user_id        Int      
+  leader_id      Int
+  role           Roles     @default(TEAM)
+  legalRole      LegalRole?
+  customLegalRole String?
+
+  // this is the "leader" relation, name it "UserTeamLeader"
+  leader User @relation("UserTeamLeader", fields: [leader_id], references: [user_id])
+
+  // this is the "member" relation, name it "UserTeamMember"
+  user   User @relation("UserTeamMember", fields: [user_id],   references: [user_id])
+
+  // Cascade delete all project memberships when team member is deleted
+  projectMembers ProjectMember[] @relation("UserTeamProjectMembers")
+
+  
+}
+
+
+model Project {
+  project_id  Int      @id @default(autoincrement()) 
+  name        String   @db.VarChar(255)
+  description String?  @db.Text                  
+  created_by  Int                                  
+  created_at  DateTime @default(now())              
+  updated_at  DateTime @updatedAt
+  opposing String?    
+  user User @relation(fields: [created_by], references: [user_id])
+  client_name String?
+  client_address String?
+  status String?
+  budget Int?
+  Members ProjectMember[]
+  Clients ProjectClient[]
+  Tasks Task[]
+  Media Media[]
+  Time TaskTime[]
+  Comments Comment[]
+  priority     String?
+  filingDate   DateTime @default(now()) 
+   phases         String[] 
+  // TemplateDocuments TemplateDocument[]
+  // Billing relations
+  billingConfig BillingConfig?
+  invoices Invoice[] @relation("ProjectInvoices")
+  caseAssignments CaseAssignment[] @relation("ProjectCaseAssignments")
+
+  // Add indexes for better performance
+  @@index([created_by])
+  @@index([status])
+  @@index([created_at])
+  @@index([priority])
+}
+
+model TDocuments {
+  t_document_id String @id @default(uuid())
+  user_id Int
+  file_url String?
+  created_at      DateTime @default(now())
+  size Int?
+  mimeType String?
+  filename String?
+  description String?
+  key String?
+  status DocumentStatus @default(PENDING)
+}
+ 
+
+model TemplateDocument {
+  template_document_id String  @id @default(uuid())
+
+  owner_id Int
+  // Relation to Project
+  // project_id Int
+  // project    Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+
+  // One TemplateDocument has many folders and files
+  folders Folder[]
+  files   File[]
+}
+
+enum FileTypes {
+  FILE
+  FOLDER
+}
+
+model Folder {
+  folder_id String   @id @default(uuid())
+  name      String
+
+  parent_id String?
+  parent    Folder?  @relation("Subfolders", fields: [parent_id], references: [folder_id])
+  subfolders Folder[] @relation("Subfolders")
+  file_type FileTypes @default(FOLDER)
+
+  template_document_id String
+  templateDocument     TemplateDocument @relation(fields: [template_document_id], references: [template_document_id], onDelete: Cascade)
+
+
+  files File[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model File {
+  file_id   String   @id @default(uuid())
+  name      String
+  size      Int
+  type      String   
+  path      String
+  file_type FileTypes @default(FILE)
+  // Relation to Folder
+  folder_id String
+  folder    Folder @relation(fields: [folder_id], references: [folder_id], onDelete: Cascade)
+
+  lawyer_id Int?
+  client_id Int?
+
+  lawyer User? @relation("FileLawyer", fields: [lawyer_id], references: [user_id], onDelete: Cascade)
+  client User? @relation("FileClient", fields: [client_id], references: [user_id], onDelete: Cascade)
+
+  // Relation to TemplateDocument
+  template_document_id String
+  templateDocument     TemplateDocument @relation(fields: [template_document_id], references: [template_document_id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+
+enum LegalRole {
+  TEAM_LEAD
+  ASSOCIATE
+  PARALEGAL
+  ANALYST
+  INVESTIGATOR
+  CUSTOM
+}
+
+model ProjectClient {
+  project_client_id String       @id @default(uuid())
+  project_id        Int      
+  user_id           Int
+  added_at          DateTime  @default(now())
+
+  // Add indexes for better performance
+  @@index([project_id])
+  @@index([user_id])
+  @@index([added_at])
+
+  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+  user User     @relation("UserProjectClients", fields: [user_id], references: [user_id], onDelete: Cascade)
+  Documents Documents[]
+  Filled Filled[]
+  Updates Updates[]
+  Billing Billing[]
+  signed signed[]
+}
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Documents {
+  document_id String @id @default(uuid())
+  project_client_id String
+  project_id Int
+  user_id Int
+  file_url String?
+  created_at      DateTime @default(now())
+  size Int?
+  mimeType String?
+  filename String?
+  description String?
+  name String?
+  key String?
+  status DocumentStatus @default(PENDING)
+  projectClient ProjectClient @relation(fields: [project_client_id], references: [project_client_id]) 
+}
+
+enum FilledStatus {
+  PENDING
+  COMPLETED
+  STUCK
+  PROCESSING
+  CANCELED
+}
+
+model Filled {
+  filled_id String @id @default(uuid())
+  project_client_id String
+  project_id Int
+  user_id Int
+  file_url String?
+  created_at      DateTime @default(now())
+  size Int?
+  mimeType String?
+  filename String?
+  description String?
+  progress String?
+  date DateTime?
+  name String?
+  key String?
+  status FilledStatus @default(PENDING)
+  projectClient ProjectClient @relation(fields: [project_client_id], references: [project_client_id])
+}
+
+enum signedStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model signed {
+  signed_id String @id @default(uuid())
+  project_client_id String
+  project_id Int
+  user_id Int
+
+  name String?
+  description String?
+
+  file_url String?
+  size Int?
+  mimeType String?
+  filename String?
+  key String?
+
+
+  sign_file_url String?
+  sign_size Int?
+  sign_mimeType String?
+  sign_filename String?
+  sign_key String?
+  sign_date DateTime?
+
+  status signedStatus @default(PENDING)
+
+  created_at      DateTime @default(now())
+  projectClient ProjectClient @relation(fields: [project_client_id], references: [project_client_id])
+
+
+}
+
+model Updates {
+  update_id String @id @default(uuid())
+  project_client_id String
+  project_id Int
+  user_id Int
+  message String @db.Text
+  created_at      DateTime @default(now())
+  size Int?
+  mimeType String?
+  filename String?
+  file_url String?
+  projectClient ProjectClient @relation(fields: [project_client_id], references: [project_client_id])
+}
+
+enum BillingStatus {
+  PAID
+  UNPAID
+  DRAFT
+  SENT
+  OVERDUE
+  CANCELLED
+}
+
+enum BillingType {
+  HOURLY
+  MONTHLY
+  PROJECT_BASED
+  TASK_BASED
+  FIXED_FEE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Billing {
+  billing_id String @id @default(uuid())
+  project_client_id String
+  project_id Int
+  user_id Int
+  created_at      DateTime @default(now())
+  amount Float
+  description String?
+  status BillingStatus @default(UNPAID)
+  start_date String
+  end_date String
+  projectClient ProjectClient @relation(fields: [project_client_id], references: [project_client_id])
+  
+  // New fields for enhanced billing
+  billing_type BillingType @default(HOURLY)
+  invoice_id String? @unique
+  due_date DateTime?
+  paid_date DateTime?
+  notes String?
+  
+  // Relations
+  lineItems BillingLineItem[]
+  invoice Invoice?
+}
+
+model BillingLineItem {
+  line_item_id String @id @default(uuid())
+  billing_id String
+  item_type String // TIME, TASK, MONTHLY_SALARY, PROJECT_FEE, etc.
+  description String
+  quantity Float
+  unit_rate Float
+  total_amount Float
+  user_id Int?
+  task_id Int?
+  time_entries String[] // Array of time entry IDs
+  created_at DateTime @default(now())
+  
+  // Relations
+  billing Billing @relation(fields: [billing_id], references: [billing_id], onDelete: Cascade)
+  user User? @relation("UserBillingLineItems", fields: [user_id], references: [user_id], onDelete: SetNull)
+  task Task? @relation(fields: [task_id], references: [task_id], onDelete: SetNull)
+}
+
+model BillingConfig {
+  config_id String @id @default(uuid())
+  project_id Int @unique 
+  
+  // Billing type flags - only one should be true
+  is_hourly Boolean @default(false)
+  is_fullcase Boolean @default(false)
+  is_taskbase Boolean @default(false)
+  
+  // Amount fields
+  hourly_rate Float?
+  project_fee Float?
+  task_amount Float?
+  
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  // Relations
+  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+  memberRates MemberRate[]
+  taskRates TaskRate[]
+}
+
+model MemberRate {
+  member_rate_id String @id @default(uuid())
+  config_id String
+  user_id Int
+  billing_type BillingType @default(HOURLY)
+  hourly_rate Float?
+  monthly_salary Float?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  // Relations
+  billingConfig BillingConfig @relation(fields: [config_id], references: [config_id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([config_id, user_id])
+}
+
+model TaskRate {
+  task_rate_id String @id @default(uuid())
+  config_id String
+  task_type String // MAIL, MEETING, CHAT, DOCUMENT, etc.
+  custom_rate Float
+  description String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  // Relations
+  billingConfig BillingConfig @relation(fields: [config_id], references: [config_id], onDelete: Cascade)
+}
+
+model Invoice {
+  invoice_id String @id @default(uuid())
+  billing_id String @unique
+  project_id Int
+  client_id Int
+  biller_id Int
+  invoice_number String @unique
+  status InvoiceStatus @default(DRAFT)
+  total_amount Float
+  subtotal Float
+  tax_amount Float @default(0)
+  discount_amount Float @default(0)
+  billing_period_start DateTime
+  billing_period_end DateTime
+  issued_date DateTime @default(now())
+  due_date DateTime
+  paid_date DateTime?
+  notes String?
+  terms_conditions String?
+  
+  // Relations
+  billing Billing @relation(fields: [billing_id], references: [billing_id], onDelete: Cascade)
+  project Project @relation("ProjectInvoices", fields: [project_id], references: [project_id], onDelete: Cascade)
+  client User @relation("ClientInvoices", fields: [client_id], references: [user_id], onDelete: Cascade)
+  biller User @relation("BillerInvoices", fields: [biller_id], references: [user_id], onDelete: Cascade)
+}
+
+model CaseAssignment {
+  assignment_id String @id @default(uuid())
+  project_id Int
+  biller_id Int
+  assigned_by Int
+  assigned_at DateTime @default(now())
+  
+  // Relations
+  project Project @relation("ProjectCaseAssignments", fields: [project_id], references: [project_id], onDelete: Cascade)
+  biller User @relation("BillerCaseAssignments", fields: [biller_id], references: [user_id], onDelete: Cascade)
+  assignedBy User @relation("AssignedByCaseAssignments", fields: [assigned_by], references: [user_id], onDelete: Cascade)
+}
+
+
+model ProjectMember {
+  project_member_id Int       @id @default(autoincrement())
+  project_id        Int      
+  user_id           Int  
+   user_team_id      String?        
+  role              Roles      @default(TEAM) 
+  legalRole         LegalRole?
+  customLegalRole   String?
+  added_at          DateTime  @default(now())
+
+  // Add indexes for better performance
+  @@index([project_id])
+  @@index([user_id])
+  @@index([role])
+  @@index([added_at])
+
+  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade) 
+  user User @relation("UserProjectMembers", fields: [user_id], references: [user_id], onDelete: Cascade, map: "FK_ProjectMember_User_1")
+userTeam UserTeam? @relation("UserTeamProjectMembers", fields: [user_team_id], references: [team_member_id], onDelete: Cascade, map: "FK_ProjectMember_UserTeam_1")
+
+}
+
+enum Status {
+  TO_DO
+  IN_PROGRESS
+  STUCK
+  DONE
+  OVER_DUE
+  IN_REVIEW
+}
+
+enum Priorities {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  NONE
+}
+
+model Task {
+  task_id     Int       @id @default(autoincrement())
+  project_id  Int   
+  name        String    @db.VarChar(255)
+  description String?   @db.Text
+  status      Status    @default(TO_DO)
+  created_by  Int      
+  assigned_to Int?     
+  phase       String?
+  created_at  DateTime  @default(now()) 
+  updated_at  DateTime  @updatedAt
+  priority Priorities @default(NONE)
+  last_date DateTime @default(now())
+  stuckReason String?
+  overDueReason String?
+  total_billing_amount Float @default(0)
+  inReview      Review[]
+  
+  // Add indexes for better performance
+  @@index([project_id])
+  @@index([created_by])
+  @@index([assigned_to])
+  @@index([status])
+  @@index([created_at])
+  @@index([priority])
+  
+  // Relations
+  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+  assignees TaskMember[]
+  creator User @relation("UserCreatedTasks", fields: [created_by], references: [user_id], onDelete: Cascade) 
+  Transcibtions Transcibtion[]
+  Emails Email[]
+  Progress TaskProgress[]
+  // Conversation Conversation[]
+  Meetings Meeting[]
+  Media Media[]
+  Time TaskTime[]
+  billingLineItems BillingLineItem[]
+  privateConversations PrivateConversation[] @relation("TaskPrivateConversations")
+}
+
+model Review {
+  review_id       Int           @id @default(autoincrement())
+  task            Task          @relation(fields: [task_id], references: [task_id] , onDelete: Cascade)
+  task_id         Int
+
+   acted_by_id     Int?          // Nullable in case no action yet
+  acted_by        User?         @relation("ActedBy", fields: [acted_by_id], references: [user_id])
+  submitted_by_id Int?
+  submitted_by    User?          @relation("SubmittedBy", fields: [submitted_by_id], references: [user_id])
+
+
+  submissionDesc  String        @db.Text
+  file_url        String?       // where the file lives
+  size            Int?          // file size in bytes
+  mimeType        String?       
+  filename        String?       
+  key             String?
+  action          ReviewAction?
+  rejectedReason  String?       // only set when `action = REJECTED`
+  created_at      DateTime      @default(now())
+}
+
+
+
+enum ReviewAction {
+  REJECTED
+  APPROVED
+}
+
+
+enum TimeStatus {
+  PROCESSING
+  ENDED
+}
+
+model TaskTime {
+  time_id String @id @default(uuid())
+  task_id Int
+  user_id Int
+  project_id Int @default(1)
+  start DateTime
+  end DateTime?
+  status TimeStatus @default(PROCESSING)
+  work_description String?
+  created_at      DateTime @default(now())
+  
+  // Add indexes for better performance
+  @@index([task_id])
+  @@index([user_id])
+  @@index([project_id])
+  @@index([status])
+  @@index([created_at])
+  
+  task Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade) 
+  user User @relation("UserTaskTime", fields: [user_id], references: [user_id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+}
+
+
+model TaskMember {
+  task_member_id Int       @id @default(autoincrement())
+  task_id        Int
+  user_id        Int
+  assigned_at    DateTime @default(now())
+
+  task Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+  user User @relation("UserTaskMembers", fields: [user_id], references: [user_id], onDelete: Cascade)
+}
+
+model Notification {
+  notification_id Int      @id @default(autoincrement())
+  user_id         Int
+  message         String   @db.Text
+  is_read         Boolean  @default(false)
+  created_at      DateTime @default(now())
+
+  user User @relation("UserNotifications", fields: [user_id], references: [user_id], onDelete: Cascade)
+}
+
+
+model Media {
+  media_id String @id @default(uuid())
+  project_id Int
+  task_id Int
+  user_id Int
+  file_url String
+  created_at      DateTime @default(now())
+  size Int?
+  mimeType String?
+  filename String?
+  key String?
+
+  user User @relation("UserMedia", fields: [user_id], references: [user_id], onDelete: Cascade)
+  task Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+}
+
+
+model OTP {
+  otp String @unique
+  user_id Int
+  user User @relation("UserOTPs", fields: [user_id], references: [user_id], onDelete: Cascade)
+  created_at      DateTime @default(now())
+}
+
+
+model Invitation {
+  id          Int       @id @default(autoincrement())
+  token       String    @unique
+  project_id  Int?
+  expires_at  DateTime
+  role Roles
+  legalRole   LegalRole?
+  customLegalRole String?
+  user_id Int?
+  leader_id Int?
+  invited_email String? @unique
+}
+
+
+
+model Transcibtion {
+  transcribtion_id String   @id @default(uuid())
+  task_id          Int
+  user_id          Int
+  Transcibtion     String   @db.Text
+  name             String
+  created_at       DateTime @default(now())
+
+  // Add indexes for better performance
+  @@index([task_id])
+  @@index([user_id])
+  @@index([created_at])
+
+  task Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+  user User @relation("UserTranscriptions", fields: [user_id], references: [user_id], onDelete: Cascade)
+}
+
+
+model Email {
+  email_id String @id @default(uuid())
+  task_id Int?
+  user_id Int
+  subject String @db.Text
+  content String @db.Text
+  created_at      DateTime @default(now())
+  to_user Int? @default(1)
+  from_user String? @db.Text
+  is_read Boolean @default(false)
+  project_id Int?
+  attachment_url String?
+  attachment_name String?
+  attachment_size Int?
+  attachment_mime_type String?
+
+  task  Task? @relation(fields: [task_id], references: [task_id] , onDelete: Cascade)
+  user User @relation("UserEmails", fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  // Add indexes for better performance
+  @@index([project_id])
+  @@index([task_id])
+  @@index([user_id])
+  @@index([to_user])
+  @@index([from_user])
+  @@index([is_read])
+  @@index([created_at])
+}
+
+enum ProgressTypes {
+  MAIL
+  MEETING
+  CHAT
+  CALL
+  COMMENT
+  TRANSCRIBTION
+  STATUS_CHANGED
+  MEDIA
+  OTHER
+}
+
+
+model TaskProgress {
+  progress_id String @id @default(uuid())
+  task_id Int
+  message String @db.Text
+  created_at      DateTime @default(now())
+  user_id Int
+  task  Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+  user User @relation("UserProgress", fields: [user_id], references: [user_id], onDelete: Cascade)
+  type ProgressTypes @default(OTHER)
+
+  // Add indexes for better performance
+  @@index([task_id])
+  @@index([user_id])
+  @@index([created_at])
+  @@index([type])
+}
+
+model Comment {
+  comment_id String @id @default(uuid())
+  project_id Int?
+  user_id Int
+  content String @db.Text
+  created_at      DateTime @default(now())
+  project  Project? @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+  user User @relation("UserComments", fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  // Add indexes for better performance
+  @@index([project_id])
+  @@index([user_id])
+  @@index([created_at])
+}
+
+enum MeetingStatus {
+  PENDING
+  SCHEDULED
+  CANCELED
+  COMPLETED
+  PROCESSING
+}
+
+model Meeting {
+  meeting_id String @id @default(uuid())
+  task_id Int
+  project_id Int?
+  heading String @db.Text
+  description String @db.Text
+  isScheduled Boolean
+  date DateTime?
+  time DateTime?
+  created_at  DateTime @default(now())
+  user_id Int
+  status MeetingStatus @default(PENDING)
+  participants MeetingParticipant[]
+  transcribtions MeetingTranscibtion[]
+  user User @relation("UserMeetings", fields: [user_id], references: [user_id], onDelete: Cascade)
+  task Task @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+  duration Int @default(0)
+  start_time DateTime?
+  end_time DateTime?
+}
+
+enum Vote {
+  ACCEPTED
+  REJECTED
+  PENDING
+}
+model MeetingParticipant {
+  meeting_participant_id String @id @default(uuid())
+  meeting_id String
+  created_at  DateTime @default(now())
+  user_id Int
+  vote Vote? @default(PENDING)
+
+  meeting Meeting @relation(fields: [meeting_id], references: [meeting_id], onDelete: Cascade)
+  user User @relation("UserMeetingParticipants", fields: [user_id], references: [user_id], onDelete: Cascade)
+}
+
+model MeetingTranscibtion {
+  meeting_transcribtion_id String @id @default(uuid())
+  meeting_id String
+  user_id Int
+  transcribe String @db.Text
+  meeting Meeting @relation(fields: [meeting_id], references: [meeting_id], onDelete: Cascade)
+  user User @relation("UserMeetingTranscriptions", fields: [user_id], references: [user_id], onDelete: Cascade)
+  created_at DateTime @default(now())
+}
+
+
+
+// chat systems
+model Conversation {
+  conversation_id           String        @id @default(uuid())
+  name         String?
+  isGroup      Boolean       @default(false)
+  last_message String?
+  participants Participant[]
+  task_id Int
+  project_id Int?
+  // task Task @relation(fields: [task_id],references: [task_id], onDelete: Cascade)
+}
+
+model Participant {
+  participant_id             String        @id @default(uuid())
+  user_id        Int
+  user           User          @relation("UserParticipants", fields: [user_id], references: [user_id], onDelete: Cascade)
+  conversation_id String
+  conversation   Conversation  @relation(fields: [conversation_id], references: [conversation_id], onDelete: Cascade)
+}
+
+enum ContentType {
+  PLAIN_TEXT
+  MARKDOWN
+  IMAGE
+  VIDEOS
+  AUDIO
+  DOCUMENT
+  CALL
+}
+
+enum CallStatus {
+  RINGING
+  PROCESSING
+  REJECTED
+  ENDED
+  NO_RESPONSE
+  LINE_BUSY
+}
+
+model Message {
+  message_id             String        @id @default(uuid())
+  conversation_id String
+  sender_id       Int
+  reciever_id Int?  // Made optional for group chat
+  content        String?
+  createdAt      DateTime      @default(now())
+  content_type ContentType @default(PLAIN_TEXT)
+  duration String? @default("1min")
+  call_status CallStatus @default(RINGING)
+  project_id Int?  // Added for group chat messages
+  task_id Int?     // Added for group chat messages
+  is_group_chat Boolean @default(false)  // Added to identify group chat messages
+  attachment_url String?  // URL to the uploaded file
+  attachment_name String?  // Original filename
+  attachment_size Int?  // File size in bytes
+  attachment_mime_type String?  // MIME type of the file
+  
+  // Relations
+  sender User @relation("UserMessages", fields: [sender_id], references: [user_id], onDelete: Cascade)
+
+  // Add indexes for better performance
+  @@index([conversation_id])
+  @@index([sender_id])
+  @@index([createdAt])
+  @@index([content_type])
+}
+
+// Private Chat System - Completely separate from project chat
+model PrivateConversation {
+  private_conversation_id String @id @default(uuid())
+  user1_id Int
+  user2_id Int
+  task_id Int
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  // Relations
+  user1 User @relation("User1PrivateConversations", fields: [user1_id], references: [user_id], onDelete: Cascade)
+  user2 User @relation("User2PrivateConversations", fields: [user2_id], references: [user_id], onDelete: Cascade)
+  task Task @relation("TaskPrivateConversations", fields: [task_id], references: [task_id], onDelete: Cascade)
+  messages PrivateMessage[]
+  
+  @@unique([user1_id, user2_id, task_id])
+}
+
+model PrivateMessage {
+  private_message_id String @id @default(uuid())
+  private_conversation_id String
+  sender_id Int
+  receiver_id Int
+  content String
+  content_type ContentType @default(PLAIN_TEXT)
+  created_at DateTime @default(now())
+  attachment_url String?
+  attachment_name String?
+  attachment_size Int?
+  attachment_mime_type String?
+  
+  // Relations
+  conversation PrivateConversation @relation(fields: [private_conversation_id], references: [private_conversation_id], onDelete: Cascade)
+  sender User @relation("UserPrivateMessages", fields: [sender_id], references: [user_id], onDelete: Cascade)
+  receiver User @relation("UserPrivateMessageReceivers", fields: [receiver_id], references: [user_id], onDelete: Cascade)
+}
+
+// Monthly Expenses Model
+model Expense {
+  expense_id Int @id @default(autoincrement())
+  name String @db.VarChar(255)
+  price Decimal @db.Decimal(10, 2)
+  month String @db.VarChar(7) // YYYY-MM format
+  user_id Int
+  provider_id Int? // ID of the provider this expense is for
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  
+  // Relations
+  user User @relation("UserExpenses", fields: [user_id], references: [user_id], onDelete: Cascade)
+  provider User? @relation("ProviderExpenses", fields: [provider_id], references: [user_id], onDelete: SetNull)
+}
+

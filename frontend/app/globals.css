@@ -1,0 +1,106 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@100..900&family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*
+{
+  box-sizing: border-box;
+  margin: 0%;
+  padding: 0%;
+  font-family: "Roboto", sans-serif;
+}
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+  }
+}
+
+/* Email Notification Toast Styles */
+.email-notification-toast {
+  @apply border-l-4 border-l-blue-500 shadow-lg;
+}
+
+.email-notification-toast .Toastify__toast-body {
+  @apply p-0;
+}
+
+.email-notification-toast .Toastify__progress-bar {
+  @apply bg-blue-500;
+}
+
+/* Custom toast animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.email-notification-toast {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.email-notification-toast.Toastify__toast--exit {
+  animation: slideOutRight 0.3s ease-in;
+}
+
+.jodit-status-bar
+{
+  display: none !important;
+}
+
+ol, ul, menu {
+  list-style: decimal;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+
+.fold-paper-effect
+{
+  position: absolute;
+  right: 0%;
+  top: 0%;
+  border-top: 5px solid white;
+  border-right: 5px solid white;
+  border-bottom: 5px solid transparent;
+  border-left: 5px solid transparent;
+  box-shadow: -3px 3px 3px rgba(0,0,0,0.2);
+}
+
+*::-webkit-scrollbar{
+  width: 5px;
+}
+
+*::-webkit-scrollbar-track {
+  @apply bg-gray-300 rounded-3xl
+}
+ 
+
+::-webkit-scrollbar-thumb {
+  @apply bg-blue-500 rounded-3xl
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-blue-600
+}

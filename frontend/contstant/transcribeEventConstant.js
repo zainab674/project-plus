@@ -1,0 +1,1 @@
+export const ON_TRANSCRIPT = "on:transcript";
