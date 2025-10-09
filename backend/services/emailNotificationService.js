@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { sendEmailViaProxy } from './emailProxyService.js';
 
 // Create transporter (you'll need to configure this with your email provider)
 const createTransporter = () => {
@@ -16,63 +17,77 @@ const createTransporter = () => {
 // Send approval email
 export const sendApprovalEmail = async (userEmail, userName) => {
     try {
+        const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                    <h1 style="margin: 0; font-size: 28px;">🎉 Registration Approved!</h1>
+                    <p style="margin: 10px 0 0 0; opacity: 0.9;">Welcome to our platform!</p>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+                    <h2 style="color: #333; margin-top: 0;">Hello ${userName},</h2>
+                    
+                    <p style="color: #666; line-height: 1.6;">
+                        Great news! Your registration request has been reviewed and approved by our admin team. 
+                        You can now access our platform and start using all the features.
+                    </p>
+                    
+                    <div style="background: #e8f5e8; border: 1px solid #4caf50; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                        <h3 style="color: #2e7d32; margin-top: 0;">✅ What's Next?</h3>
+                        <ul style="color: #2e7d32; padding-left: 20px;">
+                            <li>Visit our login page</li>
+                            <li>Use your email and password to sign in</li>
+                            <li>Complete your profile setup</li>
+                            <li>Start exploring the platform</li>
+                        </ul>
+                    </div>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/sign-in" 
+                           style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold;">
+                            🚀 Login Now
+                        </a>
+                    </div>
+                    
+                    <p style="color: #666; line-height: 1.6;">
+                        If you have any questions or need assistance, please don't hesitate to contact our support team.
+                    </p>
+                    
+                    <p style="color: #666; line-height: 1.6;">
+                        Best regards,<br>
+                        <strong>The Admin Team</strong>
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
+                    <p>This is an automated message. Please do not reply to this email.</p>
+                </div>
+            </div>
+        `;
+
+        // Try to send via Vercel proxy first
+        if (process.env.USE_EMAIL_PROXY === 'true' && process.env.EMAIL_PROXY_URL) {
+            const result = await sendEmailViaProxy({
+                to: userEmail,
+                subject: '🎉 Your Registration Request Has Been Approved!',
+                html
+            });
+            console.log('Approval email sent via proxy:', result.messageId);
+            return { success: true, messageId: result.messageId };
+        }
+
+        // Fallback to direct SMTP
         const transporter = createTransporter();
         
         const mailOptions = {
             from: process.env.SMTP_USER,
             to: userEmail,
             subject: '🎉 Your Registration Request Has Been Approved!',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-                        <h1 style="margin: 0; font-size: 28px;">🎉 Registration Approved!</h1>
-                        <p style="margin: 10px 0 0 0; opacity: 0.9;">Welcome to our platform!</p>
-                    </div>
-                    
-                    <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
-                        <h2 style="color: #333; margin-top: 0;">Hello ${userName},</h2>
-                        
-                        <p style="color: #666; line-height: 1.6;">
-                            Great news! Your registration request has been reviewed and approved by our admin team. 
-                            You can now access our platform and start using all the features.
-                        </p>
-                        
-                        <div style="background: #e8f5e8; border: 1px solid #4caf50; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                            <h3 style="color: #2e7d32; margin-top: 0;">✅ What's Next?</h3>
-                            <ul style="color: #2e7d32; padding-left: 20px;">
-                                <li>Visit our login page</li>
-                                <li>Use your email and password to sign in</li>
-                                <li>Complete your profile setup</li>
-                                <li>Start exploring the platform</li>
-                            </ul>
-                        </div>
-                        
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/sign-in" 
-                               style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold;">
-                                🚀 Login Now
-                            </a>
-                        </div>
-                        
-                        <p style="color: #666; line-height: 1.6;">
-                            If you have any questions or need assistance, please don't hesitate to contact our support team.
-                        </p>
-                        
-                        <p style="color: #666; line-height: 1.6;">
-                            Best regards,<br>
-                            <strong>The Admin Team</strong>
-                        </p>
-                    </div>
-                    
-                    <div style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
-                        <p>This is an automated message. Please do not reply to this email.</p>
-                    </div>
-                </div>
-            `
+            html
         };
         
         const info = await transporter.sendMail(mailOptions);
-        console.log('Approval email sent:', info.messageId);
+        console.log('Approval email sent via direct SMTP:', info.messageId);
         return { success: true, messageId: info.messageId };
         
     } catch (error) {

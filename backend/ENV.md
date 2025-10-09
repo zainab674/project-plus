@@ -29,6 +29,11 @@ This document describes all environment variables used by the project-plus backe
 - `EMAIL_PASS`: SMTP password
 - `EMAIL_FROM`: From email address
 
+## Email Proxy Configuration (For DigitalOcean/Blocked SMTP)
+- `USE_EMAIL_PROXY`: Enable email proxy (true/false, default: false)
+- `EMAIL_PROXY_URL`: Vercel email proxy API URL
+- `EMAIL_PROXY_API_KEY`: API key for email proxy authentication
+
 ## Twilio Configuration (Required for Voice Bot)
 - `TWILIO_ACCOUNT_SID`: Twilio account SID
 - `TWILIO_AUTH_TOKEN`: Twilio auth token
@@ -134,6 +139,11 @@ EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_app_password
 EMAIL_FROM=noreply@projectplus.com
 
+# Email Proxy (For DigitalOcean/Blocked SMTP)
+USE_EMAIL_PROXY=true
+EMAIL_PROXY_URL=https://vercel-email-proxy.vercel.app
+EMAIL_PROXY_API_KEY=zainab
+
 # Twilio (Required for Voice Bot)
 TWILIO_ACCOUNT_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
@@ -186,6 +196,8 @@ DEEPGRAM_API_KEY=your_deepgram_api_key
 - Verify SMTP credentials
 - Check email provider's security settings
 - Ensure proper email permissions
+- For DigitalOcean deployments: Enable `USE_EMAIL_PROXY=true` and configure proxy settings
+- Verify email proxy API key and URL are correct
 
 ## Security Notes
 

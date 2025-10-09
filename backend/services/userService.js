@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { createTransport } from "nodemailer";
+import { sendEmailViaProxy } from "./emailProxyService.js";
 import { generateOTP } from "../processors/generateOTPProcessor.js";
 import { prisma } from "../prisma/index.js";
 
@@ -12,7 +13,38 @@ export const generateJWTToken = (user, callback) => {
 
 export const sendOTPOnMail = async (user, callback) => {
   try {
+    const subject = "OTP";
+    const OTP = generateOTP();
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #333;">Your OTP Code</h2>
+        <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <p style="font-size: 18px; font-weight: bold; color: #007bff;">Your OTP is: ${OTP}</p>
+        </div>
+        <p style="color: #666; font-size: 14px;">
+          This OTP is valid for 10 minutes. Please do not share it with anyone.
+        </p>
+      </div>
+    `;
 
+    // Try to send via Vercel proxy first (for DigitalOcean deployments)
+    if (process.env.USE_EMAIL_PROXY === 'true' && process.env.EMAIL_PROXY_URL) {
+      console.log('📧 Sending OTP email via Vercel proxy to:', user.email);
+      
+      const result = await sendEmailViaProxy({
+        to: user.email,
+        subject,
+        html
+      });
+
+      console.log('✅ OTP email sent successfully via proxy:', result.messageId);
+      callback(OTP, null);
+      return;
+    }
+
+    // Fallback to direct SMTP
+    console.log('📧 Sending OTP email via direct SMTP to:', user.email);
+    
     const transporter = createTransport({
       host: process.env.SMTP_HOST,
       port: process.env.SMTP_PORT,
@@ -22,33 +54,96 @@ export const sendOTPOnMail = async (user, callback) => {
       },
     });
 
-    const subject = "OTP";
-    const OTP = generateOTP();
-    const text = `your otp is ${OTP}`;
-
     await transporter.sendMail({
       to: user.email,
       subject,
-      text,
+      text: `your otp is ${OTP}`,
+      html
     });
 
-
+    console.log('✅ OTP email sent successfully via direct SMTP');
     callback(OTP, null);
-  } catch (error) {
-    callback(null, error.message);
 
+  } catch (error) {
+    console.error('❌ Error sending OTP email:', error.message);
+    
+    // If direct SMTP fails and we haven't tried proxy yet, try proxy as fallback
+    if (process.env.USE_EMAIL_PROXY !== 'true' && process.env.EMAIL_PROXY_URL) {
+      console.log('🔄 Direct SMTP failed, trying Vercel proxy as fallback...');
+      try {
+        const subject = "OTP";
+        const OTP = generateOTP();
+        const html = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #333;">Your OTP Code</h2>
+            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+              <p style="font-size: 18px; font-weight: bold; color: #007bff;">Your OTP is: ${OTP}</p>
+            </div>
+            <p style="color: #666; font-size: 14px;">
+              This OTP is valid for 10 minutes. Please do not share it with anyone.
+            </p>
+          </div>
+        `;
+
+        const result = await sendEmailViaProxy({
+          to: user.email,
+          subject,
+          html
+        });
+
+        console.log('✅ OTP email sent successfully via proxy fallback:', result.messageId);
+        callback(OTP, null);
+        return;
+      } catch (proxyError) {
+        console.error('❌ Proxy fallback also failed:', proxyError.message);
+        callback(null, error.message);
+        return;
+      }
+    }
+    
+    callback(null, error.message);
   }
 };
 
 
 export const sendInviation = async (message, mail) => {
   try {
+    // Try to send via Vercel proxy first (for DigitalOcean deployments)
+    if (process.env.USE_EMAIL_PROXY === 'true' && process.env.EMAIL_PROXY_URL) {
+      console.log('📧 Sending invitation email via Vercel proxy to:', mail);
+      
+      const subject = "flexywexy.com Project Invitation";
+      const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #333;">Project Invitation</h2>
+          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            ${message.replace(/\n/g, '<br>')}
+          </div>
+          <p style="color: #666; font-size: 14px;">
+            Sent by: FlexyWexy Team<br>
+            Date: ${new Date().toLocaleDateString()}
+          </p>
+        </div>
+      `;
+
+      const result = await sendEmailViaProxy({
+        to: mail,
+        subject,
+        html
+      });
+
+      console.log('✅ Invitation email sent successfully via proxy:', result.messageId);
+      return result;
+    }
+
+    // Fallback to direct SMTP
+    console.log('📧 Sending invitation email via direct SMTP to:', mail);
+    
     // Check if SMTP credentials are configured
     if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
       throw new Error('SMTP configuration is missing. Please check environment variables: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS');
     }
 
-    console.log('📧 Sending invitation email to:', mail);
     console.log('📧 SMTP Config:', {
       host: process.env.SMTP_HOST,
       port: process.env.SMTP_PORT,
@@ -75,11 +170,44 @@ export const sendInviation = async (message, mail) => {
       text: message,
     });
 
-    console.log('✅ Email sent successfully:', result.messageId);
+    console.log('✅ Invitation email sent successfully via direct SMTP:', result.messageId);
     return result;
 
   } catch (error) {
-    console.error("❌ Error sending email:", error.message);
+    console.error("❌ Error sending invitation email:", error.message);
+    
+    // If direct SMTP fails and we haven't tried proxy yet, try proxy as fallback
+    if (process.env.USE_EMAIL_PROXY !== 'true' && process.env.EMAIL_PROXY_URL) {
+      console.log('🔄 Direct SMTP failed, trying Vercel proxy as fallback...');
+      try {
+        const subject = "flexywexy.com Project Invitation";
+        const html = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #333;">Project Invitation</h2>
+            <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+              ${message.replace(/\n/g, '<br>')}
+            </div>
+            <p style="color: #666; font-size: 14px;">
+              Sent by: FlexyWexy Team<br>
+              Date: ${new Date().toLocaleDateString()}
+            </p>
+          </div>
+        `;
+
+        const result = await sendEmailViaProxy({
+          to: mail,
+          subject,
+          html
+        });
+
+        console.log('✅ Invitation email sent successfully via proxy fallback:', result.messageId);
+        return result;
+      } catch (proxyError) {
+        console.error('❌ Proxy fallback also failed:', proxyError.message);
+        throw error; // Throw original error
+      }
+    }
+    
     if (error.response) {
       console.error("Response:", error.response);
     }
