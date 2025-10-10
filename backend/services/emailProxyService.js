@@ -3,8 +3,7 @@
  * Sends emails through Vercel API when SMTP is blocked
  */
 
-const EMAIL_PROXY_URL = process.env.EMAIL_PROXY_URL || 'https://your-vercel-app.vercel.app';
-const EMAIL_PROXY_API_KEY = process.env.EMAIL_PROXY_API_KEY;
+const EMAIL_PROXY_URL = process.env.EMAIL_PROXY_URL || 'https://vercel-email-proxy.vercel.app';
 
 /**
  * Send email through Vercel proxy
@@ -20,6 +19,10 @@ const EMAIL_PROXY_API_KEY = process.env.EMAIL_PROXY_API_KEY;
  */
 export const sendEmailViaProxy = async (emailData) => {
     try {
+        // Get environment variables
+        const EMAIL_PROXY_API_KEY = process.env.EMAIL_PROXY_API_KEY;
+        const EMAIL_PROXY_URL = process.env.EMAIL_PROXY_URL || 'https://vercel-email-proxy.vercel.app';
+        
         // Validate required fields
         if (!emailData.to || !emailData.subject) {
             throw new Error('Missing required fields: to and subject are required');
@@ -48,16 +51,99 @@ export const sendEmailViaProxy = async (emailData) => {
             timestamp: new Date().toISOString()
         });
 
-        // Make request to Vercel API
-        const response = await fetch(`${EMAIL_PROXY_URL}/api/send-email`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
-        });
+        // Log the payload for debugging
+        console.log('📧 Request payload:', JSON.stringify(payload, null, 2));
 
-        const result = await response.json();
+        // Check payload size before sending
+        const payloadString = JSON.stringify(payload);
+        const payloadSizeKB = Math.round(payloadString.length / 1024);
+        
+        console.log(`📧 Request payload size: ${payloadSizeKB}KB`);
+        console.log(`📧 EMAIL_PROXY_URL from env: ${process.env.EMAIL_PROXY_URL || 'NOT_SET'}`);
+        console.log(`📧 Using EMAIL_PROXY_URL: ${EMAIL_PROXY_URL}`);
+        console.log(`📧 Making request to: ${EMAIL_PROXY_URL}/api/send-email`);
+        console.log(`📧 Request method: POST`);
+        console.log(`📧 Content-Type: application/json`);
+        console.log(`📧 API Key: ${EMAIL_PROXY_API_KEY ? 'SET' : 'NOT_SET'}`);
+        
+        // Vercel has a 4.5MB limit for request body, but let's be conservative
+        if (payloadSizeKB > 1000) { // 1MB limit
+            throw new Error(`Request body too large: ${payloadSizeKB}KB. Maximum allowed: 1000KB`);
+        }
+
+        // Make request to Vercel API with timeout and retry logic
+        const makeRequest = async (retryCount = 0) => {
+            console.log(`📧 Starting request attempt ${retryCount + 1}...`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            
+            try {
+                console.log(`📧 Sending fetch request to: ${EMAIL_PROXY_URL}/api/send-email`);
+                console.log(`📧 Request body length: ${payloadString.length} characters`);
+                
+                const response = await fetch(`${EMAIL_PROXY_URL}/api/send-email`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: payloadString,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                console.log(`📧 Received response with status: ${response.status}`);
+                console.log(`📧 Response headers:`, Object.fromEntries(response.headers.entries()));
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                console.error(`📧 Request attempt ${retryCount + 1} failed:`, error.message);
+                console.error(`📧 Error type:`, error.name);
+                console.error(`📧 Error stack:`, error.stack);
+                
+                if (error.name === 'AbortError') {
+                    throw new Error('Request timeout - email proxy took too long to respond');
+                }
+                
+                // Retry on network errors (up to 2 retries)
+                if (retryCount < 2 && (error.message.includes('fetch') || error.message.includes('network'))) {
+                    console.log(`🔄 Retrying request (attempt ${retryCount + 1}/2)...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                    return makeRequest(retryCount + 1);
+                }
+                
+                throw error;
+            }
+        };
+        
+        const response = await makeRequest();
+
+        let result;
+        try {
+            console.log(`📧 Attempting to parse response as JSON...`);
+            result = await response.json();
+            console.log(`📧 Successfully parsed JSON response:`, JSON.stringify(result, null, 2));
+        } catch (jsonError) {
+            console.error('❌ Failed to parse JSON response from email proxy:');
+            console.error('JSON Error:', jsonError.message);
+            console.error('JSON Error type:', jsonError.name);
+            
+            // If JSON parsing fails, get the raw response text
+            console.log(`📧 Attempting to read response as text...`);
+            const responseText = await response.text();
+            console.error('Response status:', response.status);
+            console.error('Response headers:', Object.fromEntries(response.headers.entries()));
+            console.error('Response body length:', responseText.length);
+            console.error('Response body (first 500 chars):', responseText.substring(0, 500));
+            console.error('Response body (last 500 chars):', responseText.substring(Math.max(0, responseText.length - 500)));
+            
+            // Check if it's a "Body is unusable" error
+            if (responseText.includes('Body is unusable') || jsonError.message.includes('Body is unusable')) {
+                console.error('❌ Detected "Body is unusable" error');
+                throw new Error('Request body error - the request body may be too large or malformed');
+            }
+            
+            throw new Error(`Invalid JSON response from email proxy (Status: ${response.status}): ${responseText.substring(0, 200)}...`);
+        }
 
         if (!response.ok) {
             throw new Error(`Email proxy API error: ${result.error || 'Unknown error'}`);

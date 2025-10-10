@@ -36,6 +36,12 @@ export default function Page() {
         }
     }, []);
 
+    const handleMeetingDeleted = useCallback((deletedMeetingId) => {
+        setMeetings(prevMeetings => 
+            prevMeetings.filter(meeting => meeting.meeting_id !== deletedMeetingId)
+        );
+    }, []);
+
     useEffect(() => {
         getMeetings();
     }, []);
@@ -101,7 +107,7 @@ export default function Page() {
                         <TabsContent value="all">
                             {
                                 meetings.length > 0 &&
-                                <RenderMeeting meetings={meetings} />
+                                <RenderMeeting meetings={meetings} onMeetingDeleted={handleMeetingDeleted} />
                             }
                             {
                                 meetings.length == 0 &&
@@ -123,7 +129,7 @@ export default function Page() {
                         <TabsContent value="created">
                             {
                                 meetings?.filter(meeting => meeting.user_id == user?.user_id).length > 0 &&
-                                <RenderMeeting meetings={meetings?.filter(meeting => meeting.user_id == user?.user_id)} />
+                                <RenderMeeting meetings={meetings?.filter(meeting => meeting.user_id == user?.user_id)} onMeetingDeleted={handleMeetingDeleted} />
                             }
                             {
                                 meetings?.filter(meeting => meeting.user_id == user?.user_id).length == 0 &&
@@ -144,7 +150,7 @@ export default function Page() {
                         <TabsContent value="joined">
                             {
                                 meetings?.filter(meeting => meeting.user_id != user?.user_id).length > 0 &&
-                                <RenderMeeting meetings={meetings?.filter(meeting => meeting.user_id != user?.user_id)} />
+                                <RenderMeeting meetings={meetings?.filter(meeting => meeting.user_id != user?.user_id)} onMeetingDeleted={handleMeetingDeleted} />
                             }
                             {
                                 meetings?.filter(meeting => meeting.user_id != user?.user_id).length == 0 &&

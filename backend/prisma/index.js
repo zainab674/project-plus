@@ -18,6 +18,12 @@ if (process.env.NODE_ENV === 'production') {
   if (!global.prisma) {
     global.prisma = new PrismaClient({
       log: ['error', 'warn'],
+      // Add connection pool configuration
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL + '?connection_limit=5&pool_timeout=20',
+        },
+      },
     });
   }
   prisma = global.prisma;

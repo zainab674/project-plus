@@ -1,9 +1,7 @@
 import "dotenv/config";
 import catchAsyncError from '../middlewares/catchAsyncError.js';
 import ErrorHandler from '../utils/errorHandler.js';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../prisma/index.js';
 
 // Create a new contact
 export const createContact = catchAsyncError(async (req, res, next) => {

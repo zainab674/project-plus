@@ -294,9 +294,9 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
 
     // Filter timeline based on mode
     const filteredTimeline = useMemo(() => {
-        if (timelineMode === 'all') return comprehensiveTimeline;
-        return comprehensiveTimeline.filter(item => item.type === timelineMode);
-    }, [comprehensiveTimeline, timelineMode]);
+        // Always show all timeline data - no filtering by mode
+        return comprehensiveTimeline;
+    }, [comprehensiveTimeline]);
 
     // Filtered timeline for a specific project
     const projectTimeline = useMemo(() => {
@@ -541,33 +541,9 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
             <div className="space-y-6">
 
 
-                {/* Timeline Mode Toggle */}
+                {/* Timeline Mode Toggle - REMOVED TABS */}
                 {!selectedProjectForTimeline && (
                     <div className="space-y-4 mb-6">
-                        <div className="flex space-x-2">
-                            {[
-                                { key: 'all', label: 'All Activities', icon: Activity },
-                                { key: 'time', label: 'Time Tracking', icon: Clock },
-                                { key: 'progress', label: 'Progress & Mails', icon: Mail },
-                                { key: 'documents', label: 'Documents', icon: FileTextIcon }
-                            ].map((mode) => {
-                                const IconComponent = mode.icon;
-                                return (
-                                    <button
-                                        key={mode.key}
-                                        onClick={() => setTimelineMode(mode.key)}
-                                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${timelineMode === mode.key
-                                            ? 'bg-blue-600 text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                            }`}
-                                    >
-                                        <IconComponent size={16} />
-                                        <span>{mode.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
                         {/* Custom Date Range Picker */}
                         <div className="bg-gray-50 p-4 rounded-lg border">
                             <div className="flex items-center justify-between mb-3">
@@ -833,10 +809,10 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                             )}
                                                         </td>
                                                         <td className="py-2 px-3">
-                                                            {row.start.replace('T', ' ').split('.')[0]}
+                                                            {row.start ? row.start.replace('T', ' ').split('.')[0] : 'N/A'}
                                                         </td>
                                                         <td className="py-2 px-3">
-                                                            {row.end.replace('T', ' ').split('.')[0]}
+                                                            {row.end ? row.end.replace('T', ' ').split('.')[0] : 'N/A'}
                                                         </td>
                                                         <td className="py-2 px-3 text-right">{row.hours}h</td>
                                                         <td className="py-2 px-3">{row.description}</td>

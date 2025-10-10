@@ -73,14 +73,23 @@ export const handleMessage = async (data, redis, io) => {
             redis.publish(REDIS_CHANNEL, JSON.stringify(redisPublishData));
         } else {
             // If Redis is not available, emit directly to all team members
+            console.log('🔍 Message data for broadcasting:', {
+                is_group_chat: data.is_group_chat,
+                project_id: data.project_id,
+                reciever_id: data.reciever_id,
+                conversation_id: data.conversation_id
+            });
+            
             if (data.is_group_chat && data.project_id) {
                 // Emit to all connected users (in a real app, you'd filter by project members)
+                console.log('📢 Broadcasting group message to all users');
                 io.emit(ON_MESSAGE, broadcastData);
 
                 // Send real-time notification for group message
                 chatNotificationService.notifyGroupMessage(broadcastData);
             } else if (data.reciever_id) {
                 // Individual message
+                console.log('📢 Broadcasting individual message to receiver:', data.reciever_id);
                 let receiverSocketId = userSocketMap.get(data.reciever_id.toString());
                 if (!receiverSocketId) {
                     receiverSocketId = userSocketMap.get(parseInt(data.reciever_id));
@@ -92,10 +101,11 @@ export const handleMessage = async (data, redis, io) => {
                     // Send real-time notification for private message
                     chatNotificationService.notifyPrivateMessage(broadcastData);
                 } else {
-
+                    console.log('⚠️ Receiver not found for individual message');
                 }
             } else {
                 // Public message - broadcast to all users
+                console.log('📢 Broadcasting public message to all users');
                 io.emit(ON_MESSAGE, broadcastData);
 
                 // Send real-time notification for public message
@@ -339,8 +349,7 @@ export const handlePrivateMessage = async (data, redis, io) => {
                 receiverSocketId = userSocketMap.get(parseInt(data.receiver_id));
             }
 
-
-
+            console.log('🔍 Looking for receiver ID:', data.receiver_id, 'as string:', data.receiver_id.toString(), 'as int:', parseInt(data.receiver_id));
 
             // Emit to receiver
             if (receiverSocketId) {
@@ -351,7 +360,7 @@ export const handlePrivateMessage = async (data, redis, io) => {
                 chatNotificationService.notifyPrivateMessage(broadcastData);
             } else {
                 console.warn('⚠️ Receiver not online, message saved but not delivered');
-
+                console.warn('⚠️ Available socket IDs:', Array.from(userSocketMap.keys()));
             }
 
             // Also emit back to sender for confirmation
@@ -360,11 +369,15 @@ export const handlePrivateMessage = async (data, redis, io) => {
                 senderSocketId = userSocketMap.get(parseInt(data.sender_id));
             }
 
+            console.log('🔍 User socket map contents:', Array.from(userSocketMap.entries()));
+            console.log('🔍 Looking for sender ID:', data.sender_id, 'as string:', data.sender_id.toString(), 'as int:', parseInt(data.sender_id));
+
             if (senderSocketId) {
                 console.log('✅ Broadcasting to sender socket:', senderSocketId);
                 io.to(senderSocketId).emit(ON_PRIVATE_MESSAGE, broadcastData);
             } else {
                 console.log('⚠️ Sender socket not found for ID:', data.sender_id);
+                console.log('⚠️ Available socket IDs:', Array.from(userSocketMap.keys()));
             }
         }
 
@@ -624,5 +637,6 @@ export const updateActiveStatus = async (status, user_id) => {
             }
         });
     } catch (error) {
+        console.error('Error updating active status:', error);
     }
 }

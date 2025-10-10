@@ -113,11 +113,15 @@ export const sendInviation = async (message, mail) => {
       console.log('📧 Sending invitation email via Vercel proxy to:', mail);
       
       const subject = "flexywexy.com Project Invitation";
+      
+      // Limit message size to prevent large request bodies
+      const truncatedMessage = message.length > 5000 ? message.substring(0, 5000) + '...' : message;
+      
       const html = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #333;">Project Invitation</h2>
           <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
-            ${message.replace(/\n/g, '<br>')}
+            ${truncatedMessage.replace(/\n/g, '<br>')}
           </div>
           <p style="color: #666; font-size: 14px;">
             Sent by: FlexyWexy Team<br>

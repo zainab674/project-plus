@@ -13,18 +13,15 @@ import Loader from '@/components/Loader';
 import moment from 'moment';
 import MemberRateModal from './MemberRateModal';
 import BillingEntriesModal from './BillingEntriesModal';
-import BillingConfigModal from './BillingConfigModal';
 import ActivityBillingModal from './ActivityBillingModal';
 
 const CaseDetailsModal = ({ isOpen, onClose, projectId }) => {
     const [caseDetails, setCaseDetails] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    const [isBillingConfigModalOpen, setIsBillingConfigModalOpen] = useState(false);
     const [isMemberRateModalOpen, setIsMemberRateModalOpen] = useState(false);
     const [isBillingEntriesModalOpen, setIsBillingEntriesModalOpen] = useState(false);
     const [isActivityBillingModalOpen, setIsActivityBillingModalOpen] = useState(false);
-    const [selectedCaseForConfig, setSelectedCaseForConfig] = useState(null);
     const [selectedCaseForRates, setSelectedCaseForRates] = useState(null);
     const [selectedCaseForEntries, setSelectedCaseForEntries] = useState(null);
     const [selectedActivityForBilling, setSelectedActivityForBilling] = useState(null);
@@ -38,22 +35,6 @@ const CaseDetailsModal = ({ isOpen, onClose, projectId }) => {
             Members: caseDetails?.Members
         }
     };
-
-    const handleBillingConfigClick = (e, assignment) => {
-        e.stopPropagation();
-        setSelectedCaseForConfig({
-            caseId: assignment.project_id,
-            caseName: assignment.project.name
-        });
-        setIsBillingConfigModalOpen(true);
-    };
-
-    const closeBillingConfigModal = () => {
-        setIsBillingConfigModalOpen(false);
-        setSelectedCaseForConfig(null);
-    };
-
-
 
     const handleMemberRateClick = async (e, assignment) => {
         e.stopPropagation();
@@ -154,10 +135,6 @@ const CaseDetailsModal = ({ isOpen, onClose, projectId }) => {
     const closeActivityBillingModal = () => {
         setIsActivityBillingModalOpen(false);
         setSelectedActivityForBilling(null);
-    };
-
-    const handleBillingConfigSuccess = () => {
-        fetchCaseDetails();
     };
 
     const handleMemberRateSuccess = () => {
@@ -303,15 +280,7 @@ const CaseDetailsModal = ({ isOpen, onClose, projectId }) => {
 
                     {/* Action Buttons */}
                     <div className="bg-slate-50 px-8 py-6 border-b border-slate-200">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <button
-                                onClick={(e) => handleBillingConfigClick(e, assignment)}
-                                className="flex items-center justify-center space-x-3 px-6 py-4 text-sm font-semibold text-white bg-gradient-to-r from-amber-600 to-amber-700 border border-amber-600 rounded-xl hover:from-amber-700 hover:to-amber-800 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                            >
-                                <Settings className="w-5 h-5" />
-                                <span>Configure Billing</span>
-                            </button>
-
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <button
                                 onClick={(e) => handleMemberRateClick(e, assignment)}
                                 className="flex items-center justify-center space-x-3 px-6 py-4 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 border border-blue-600 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
@@ -606,15 +575,6 @@ const CaseDetailsModal = ({ isOpen, onClose, projectId }) => {
                     </div>
                 </div>
             </div>
-
-            {/* Billing Configuration Modal */}
-            <BillingConfigModal
-                isOpen={isBillingConfigModalOpen}
-                onClose={closeBillingConfigModal}
-                caseId={selectedCaseForConfig?.caseId}
-                caseName={selectedCaseForConfig?.caseName}
-                onSuccess={handleBillingConfigSuccess}
-            />
 
             {/* Member Rate Modal */}
             <MemberRateModal

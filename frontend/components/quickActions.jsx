@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useState, useEffect, useRef } from 'react';
+import { ON_MESSAGE } from '../contstant/chatEventConstant';
 
 // Utility function to download files with proper filename
 const downloadFile = async (url, filename) => {
@@ -172,7 +173,7 @@ const QuickActions = () => {
         { name: 'Schedule Meeting', icon: Calendar, route: '/dashboard/schedule-meet', color: 'bg-indigo-200' },
         { name: 'Mail', icon: Mail, route: '/mail', color: 'bg-red-200' },
         { name: 'Chat', icon: MessageCircle, route: '', color: 'bg-yellow-200' },
-        { name: 'Team', icon: MessageCircle, route: '/dashboard/team', color: 'bg-emerald-200' },
+        { name: 'Team', icon: Users, route: '/dashboard/team', color: 'bg-emerald-200' },
         { name: 'TemplateDocs', icon: FileText, route: '/dashboard/template-documents', color: 'bg-indigo-200' },
         { name: 'Flowchart', icon: GitBranch, route: '/dashboard/flowchart', color: 'bg-cyan-200' },
         { name: 'Phone System', icon: Phone, route: '/dashboard/phone', color: 'bg-teal-200' },
@@ -744,7 +745,9 @@ const QuickActions = () => {
             const tempMessageId = `temp-${Date.now()}`;
             const messageWithTempId = {
                 ...data,
-                private_message_id: tempMessageId,
+                // Set the appropriate ID field based on message type
+                message_id: data.conversation_id ? tempMessageId : undefined, // For group chat
+                private_message_id: data.private_conversation_id ? tempMessageId : undefined, // For private chat
                 temp_message_id: tempMessageId, // Add temp_message_id for tracking
                 attachment_url: fileToUpload ? 'uploading...' : null,
                 attachment_name: fileToUpload?.name,
@@ -895,20 +898,45 @@ const QuickActions = () => {
         console.log('🔌 Setting up private message listener...');
 
         const messageHandler = (data) => {
-            console.log('🔍 Received private message:', data);
+            console.log('🔍 Received message:', data);
             console.log('🔍 Current selectedChatRecipient:', selectedChatRecipient);
             console.log('🔍 Current user:', user?.user_id);
 
             // Check if this message is for the current chat
-            if (selectedChatRecipient &&
+            // For private messages: check sender/receiver relationship
+            // For project messages: check conversation_id matches current chat
+            const isForCurrentChat = selectedChatRecipient && (
+                // Private message check
                 ((parseInt(data.sender_id) === selectedChatRecipient.id && parseInt(data.receiver_id) === user?.user_id) ||
-                    (parseInt(data.receiver_id) === selectedChatRecipient.id && parseInt(data.sender_id) === user?.user_id))) {
+                 (parseInt(data.receiver_id) === selectedChatRecipient.id && parseInt(data.sender_id) === user?.user_id)) ||
+                // Project message check (if conversation_id matches)
+                (data.conversation_id && chatConversationId && data.conversation_id === chatConversationId)
+            );
 
+            if (isForCurrentChat) {
                 console.log('✅ Message matches current chat, processing...');
 
-                // Skip if this is the sender's own message (they already have it in local state)
+                // Handle sender's own message - update temp message with real ID
                 if (parseInt(data.sender_id) === user?.user_id) {
-                    console.log('⚠️ Skipping sender\'s own message from socket');
+                    console.log('🔄 Updating sender\'s own message with real ID:', data.message_id || data.private_message_id);
+                    
+                    setChatMessages(prev => {
+                        return prev.map(msg => {
+                            // Update temp message with real message ID
+                            if (msg.temp_message_id && msg.content === data.content && parseInt(msg.sender_id) === parseInt(data.sender_id)) {
+                                console.log('✅ Updating temp message:', msg.temp_message_id, 'with real ID:', data.message_id || data.private_message_id);
+                                return {
+                                    ...msg,
+                                    // Update the appropriate ID field based on what we received
+                                    message_id: data.message_id || msg.message_id,
+                                    private_message_id: data.private_message_id || msg.private_message_id,
+                                    temp_message_id: undefined, // Remove temp ID
+                                    createdAt: data.createdAt || data.created_at || msg.createdAt
+                                };
+                            }
+                            return msg;
+                        });
+                    });
                     return;
                 }
 
@@ -937,9 +965,15 @@ const QuickActions = () => {
                         });
                     }
 
-                    // Check if message already exists to prevent duplicates (like ProjectChat)
+                    // Check if message already exists to prevent duplicates (works for both private and group chat)
                     const messageExists = prev.some(msg => {
-                        // Check by private_message_id first (most reliable)
+                        // Check by message_id (for group chat messages)
+                        if (data.message_id && msg.message_id === data.message_id) {
+                            console.log('🔍 Duplicate found by message_id:', data.message_id);
+                            return true;
+                        }
+
+                        // Check by private_message_id (for private chat messages)
                         if (data.private_message_id && msg.private_message_id === data.private_message_id) {
                             console.log('🔍 Duplicate found by private_message_id:', data.private_message_id);
                             return true;
@@ -951,7 +985,7 @@ const QuickActions = () => {
                             return true;
                         }
 
-                        // Check by content, sender, and time (fallback)
+                        // Check by content, sender, and time (fallback for both types)
                         if (msg.content === data.content &&
                             parseInt(msg.sender_id) === parseInt(data.sender_id)) {
                             const timeDiff = Math.abs(new Date(msg.createdAt || msg.created_at) - new Date(data.createdAt || data.created_at));
@@ -965,8 +999,8 @@ const QuickActions = () => {
                             }
                         }
 
-                        // Check for temporary messages with same content
-                        if (msg.private_message_id?.startsWith('temp-') &&
+                        // Check for temporary messages with same content (both types)
+                        if ((msg.message_id?.startsWith('temp-') || msg.private_message_id?.startsWith('temp-')) &&
                             msg.content === data.content &&
                             parseInt(msg.sender_id) === parseInt(data.sender_id)) {
                             console.log('🔍 Duplicate found by temp message with same content:', data.content);
@@ -989,12 +1023,16 @@ const QuickActions = () => {
         };
 
         socket.on(ON_PRIVATE_MESSAGE, messageHandler);
+        
+        // Also listen for general messages (for project chat)
+        socket.on(ON_MESSAGE, messageHandler);
 
         console.log('✅ Socket listeners set up successfully');
 
         return () => {
-            console.log('🔌 Cleaning up private message listener...');
+            console.log('🔌 Cleaning up message listeners...');
             socket.off(ON_PRIVATE_MESSAGE, messageHandler);
+            socket.off(ON_MESSAGE, messageHandler);
         };
     }, [socketRef, selectedChatRecipient, user?.user_id]);
 
@@ -1575,7 +1613,7 @@ const QuickActions = () => {
     return (
         <>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 ">
-                <div className="flex flex-wrap gap-4 items-center justify-center mx-auto">
+                <div className="flex gap-1 items-center justify-center mx-auto overflow-x-auto">
                     {quickActions.map((action, index) => {
                         const Icon = action.icon;
 
@@ -1583,7 +1621,7 @@ const QuickActions = () => {
                             <div key={index} className="relative">
                                 <button
                                     onClick={() => handleActionClick(action)}
-                                    className="flex flex-col items-center p-4 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"
+                                    className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"
                                 >
                                     <div className={`w-12 h-12 ${action.color} rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200`}>
                                         <Icon className="w-6 h-6 text-gray-500" />

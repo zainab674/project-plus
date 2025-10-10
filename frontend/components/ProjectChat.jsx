@@ -13,7 +13,7 @@ import { ON_MESSAGE } from "@/contstant/chatEventConstant"
 import { Card } from "@/components/ui/card"
 import AvatarCompoment from "@/components/AvatarCompoment"
 import moment from 'moment'
-import { getGroupChatMessages, createGroupChatMessage, getProjectGroupChatInfo } from "@/lib/http/chat"
+import { getGroupChatMessages, getProjectGroupChatInfo } from "@/lib/http/chat"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
@@ -22,7 +22,6 @@ export default function ProjectChat({ project }) {
   const [messageValue, setMessageValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
-  const [saveStatus, setSaveStatus] = useState({}); // Track save status for each message
   const [selectedTask, setSelectedTask] = useState(null); // State for selected task
   const [searchDate, setSearchDate] = useState(null); // State for date search
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false); // State for date picker popover
@@ -191,62 +190,8 @@ export default function ProjectChat({ project }) {
         fileInput.value = '';
       }
 
-      // Track save status
-      setSaveStatus(prev => ({ ...prev, [tempMessageId]: 'saving' }));
-
-      // Prepare form data for file upload
-      const formData = new FormData();
-      formData.append('content', messageValue.trim());
-      formData.append('content_type', 'PLAIN_TEXT');
-      
-      if (fileToUpload) {
-        formData.append('file', fileToUpload);
-      }
-
-      // Save to database in background (completely independent)
-      createGroupChatMessage(project.project_id, selectedTask.task_id, formData).then(res => {
-        // Update save status to success
-        setSaveStatus(prev => ({ ...prev, [tempMessageId]: 'saved' }));
-
-        // Update message with real message_id from database and attachment info
-        setMessages(prev => prev.map(msg =>
-          msg.message_id === tempMessageId
-            ? { 
-                ...msg, 
-                message_id: res.data.message.message_id,
-                attachment_url: res.data.message.attachment_url,
-                attachment_name: res.data.message.attachment_name,
-                attachment_size: res.data.message.attachment_size,
-                attachment_mime_type: res.data.message.attachment_mime_type
-              }
-            : msg
-        ));
-
-        // Update the local message with real attachment URL (no broadcast needed)
-        // Other users will get the complete message with attachment on their next load
-        if (res.data.message.attachment_url) {
-          // Just update the local message, don't broadcast to others
-          setMessages(prev => prev.map(msg =>
-            msg.message_id === tempMessageId
-              ? { 
-                  ...msg, 
-                  message_id: res.data.message.message_id,
-                  attachment_url: res.data.message.attachment_url,
-                  attachment_name: res.data.message.attachment_name,
-                  attachment_size: res.data.message.attachment_size,
-                  attachment_mime_type: res.data.message.attachment_mime_type
-                }
-              : msg
-          ));
-        }
-      }).catch(error => {
-        console.error('❌ Failed to save message to database:', error);
-        // Update save status to failed
-        setSaveStatus(prev => ({ ...prev, [tempMessageId]: 'failed' }));
-
-        // Show subtle notification
-        toast.warning("Message sent but failed to save to database");
-      });
+      // Note: Database save is handled by the socket system (handleProjectMessage in backend)
+      // No need for additional API call as it causes duplicate saves
 
     } catch (error) {
       console.error('Error in handleSend:', error);
@@ -505,14 +450,6 @@ export default function ProjectChat({ project }) {
                         <span className="text-xs opacity-60">
                           {moment(message.createdAt).format("LT")}
                         </span>
-                        {/* Save status indicator for own messages */}
-                        {message.sender_id === user?.user_id && (
-                          <span className="text-xs opacity-60">
-                            {saveStatus[message.message_id] === 'saving' && '💾'}
-                            {saveStatus[message.message_id] === 'saved' && '✅'}
-                            {saveStatus[message.message_id] === 'failed' && '⚠️'}
-                          </span>
-                        )}
                       </div>
                       <p className="break-words">{message.content}</p>
                       

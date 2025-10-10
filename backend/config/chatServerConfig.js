@@ -18,16 +18,47 @@ const initChatServer = (io) => {
 
   let redisPub, redisSub;
 
-  if (redisConfig.host && redisConfig.password) {
-    redisPub = new Redis(redisConfig);
-    redisSub = new Redis(redisConfig);
+  // Comment out Redis connection to avoid errors
+  /*
+  if (redisConfig.host) {
+    try {
+      // Try to connect to Redis with or without password
+      const redisConfigToUse = redisConfig.password ? redisConfig : {
+        host: redisConfig.host,
+        port: redisConfig.port,
+        username: redisConfig.username
+      };
+      
+      redisPub = new Redis(redisConfigToUse);
+      redisSub = new Redis(redisConfigToUse);
 
-    //subscribe redis
-    initRedisSubcriber(redisSub, io);
-    initChatConsumer();
+      // Test connection
+      redisPub.ping().then(() => {
+        console.log('✅ Redis connected successfully');
+        //subscribe redis
+        initRedisSubcriber(redisSub, io);
+        initChatConsumer();
+      }).catch((error) => {
+        console.log('❌ Redis connection failed:', error.message);
+        console.log('🔄 Running without Redis, using direct socket broadcasting');
+        redisPub = null;
+        redisSub = null;
+      });
+    } catch (error) {
+      console.log('❌ Redis initialization failed:', error.message);
+      console.log('🔄 Running without Redis, using direct socket broadcasting');
+      redisPub = null;
+      redisSub = null;
+    }
   } else {
     console.log('Redis not configured, running without Redis');
   }
+  */
+  
+  // Force Redis to be null to use direct socket broadcasting
+  redisPub = null;
+  redisSub = null;
+  console.log('🔄 Running without Redis, using direct socket broadcasting');
 
   io.on("connection", (socket) => {
     console.log('🔌 New socket connection:', socket.id);

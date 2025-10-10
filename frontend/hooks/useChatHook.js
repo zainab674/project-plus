@@ -18,7 +18,7 @@ const useChatHook = () => {
             socketRef.current.disconnect();
         }
 
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8978';
         socketRef.current = io(`${API_URL}/chat`, {
             query: { user_id: user.user_id },
             transports: ['websocket'],

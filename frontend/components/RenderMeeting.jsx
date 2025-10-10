@@ -2,14 +2,19 @@ import React, { useState } from 'react'
 import { Card, CardContent } from './ui/card'
 import RenderMembers from './RenderMembers'
 import moment from 'moment'
-import { Clock, Play, MessageSquare } from 'lucide-react'
+import { Clock, Play, MessageSquare, Trash2 } from 'lucide-react'
 import RenderTranscibtionChat from './RenderTranscibtionChat'
 import { Badge } from './ui/badge'
 import TranscriptionPopup from './TranscriptionPopup'
+import { deleteMeetingRequest } from '@/lib/http/meeting'
+import { toast } from 'react-toastify'
+import { useUser } from '@/providers/UserProvider'
 
-const RenderMeeting = ({ meetings }) => {
+const RenderMeeting = ({ meetings, onMeetingDeleted }) => {
     const [selectedMeeting, setSelectedMeeting] = useState(null);
     const [showTranscriptionPopup, setShowTranscriptionPopup] = useState(false);
+    const [deletingMeetingId, setDeletingMeetingId] = useState(null);
+    const { user } = useUser();
 
     const handleTranscriptionClick = (meeting) => {
         setSelectedMeeting(meeting);
@@ -19,6 +24,25 @@ const RenderMeeting = ({ meetings }) => {
     const closeTranscriptionPopup = () => {
         setShowTranscriptionPopup(false);
         setSelectedMeeting(null);
+    };
+
+    const handleDeleteMeeting = async (meetingId) => {
+        if (window.confirm('Are you sure you want to delete this meeting? This action cannot be undone.')) {
+            try {
+                setDeletingMeetingId(meetingId);
+                await deleteMeetingRequest(meetingId);
+                toast.success('Meeting deleted successfully');
+                // Call the callback to refresh the meetings list
+                if (onMeetingDeleted) {
+                    onMeetingDeleted(meetingId);
+                }
+            } catch (error) {
+                console.error('Error deleting meeting:', error);
+                toast.error(error?.response?.data?.message || 'Failed to delete meeting');
+            } finally {
+                setDeletingMeetingId(null);
+            }
+        }
     };
 
     return (
@@ -130,14 +154,28 @@ const RenderMeeting = ({ meetings }) => {
                                     )}
                                 </div>
                                 
-                                {/* Transcription Button */}
-                                <button
-                                    onClick={() => handleTranscriptionClick(meeting)}
-                                    className='bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2'
-                                >
-                                    <MessageSquare className='w-4 h-4' />
-                                    View Transcriptions
-                                </button>
+                                <div className='flex items-center gap-3'>
+                                    {/* Transcription Button */}
+                                    <button
+                                        onClick={() => handleTranscriptionClick(meeting)}
+                                        className='bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2'
+                                    >
+                                        <MessageSquare className='w-4 h-4' />
+                                        View Transcriptions
+                                    </button>
+                                    
+                                    {/* Delete Button - Only for Providers */}
+                                    {user?.Role === 'PROVIDER' && (
+                                        <button
+                                            onClick={() => handleDeleteMeeting(meeting.meeting_id)}
+                                            disabled={deletingMeetingId === meeting.meeting_id}
+                                            className='bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2'
+                                        >
+                                            <Trash2 className='w-4 h-4' />
+                                            {deletingMeetingId === meeting.meeting_id ? 'Deleting...' : 'Delete'}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
 

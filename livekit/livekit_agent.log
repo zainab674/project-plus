@@ -1289,3 +1289,27 @@ aiohttp.client_exceptions.ClientConnectionResetError: Cannot write to closing tr
 2025-10-03 21:25:22,459 - transcription-agent - INFO - Room disconnected, initiating cleanup...
 2025-10-03 21:25:22,489 - livekit.agents - DEBUG - http_session(): closing the httpclient ctx
 2025-10-03 21:25:22,507 - livekit.agents - DEBUG - http_session(): creating a new httpclient ctx
+2025-10-10 14:53:24,916 - transcription-agent - INFO - Environment variables validated successfully
+2025-10-10 14:53:25,086 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-10-10 14:53:25,101 - livekit.agents - DEV - Watching C:\Users\PMYLS\Desktop\flexyReal\project-plus\livekit
+2025-10-10 14:53:32,573 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-10-10 14:53:32,614 - livekit.agents - INFO - starting worker
+2025-10-10 14:53:34,399 - livekit.agents - INFO - registered worker
+2025-10-10 15:26:55,998 - livekit.agents - INFO - received job request
+2025-10-10 15:26:56,228 - livekit.agents - INFO - initializing job runner
+2025-10-10 15:26:56,231 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-10-10 15:26:56,232 - livekit.agents - INFO - job runner initialized
+2025-10-10 15:26:56,244 - transcription-agent - INFO - Starting transcription agent with enhanced error handling...
+2025-10-10 15:26:56,246 - transcription-agent - INFO - Agent dispatched to room: meeting-6b0e483b-56c3-4c4a-bae2-d6308d21d50b
+2025-10-10 15:27:02,655 - transcription-agent - INFO - Transcription agent connected and listening for audio tracks
+2025-10-10 15:27:03,111 - transcription-agent - INFO - [SUCCESS] Meeting start notification sent for meeting 6b0e483b-56c3-4c4a-bae2-d6308d21d50b
+2025-10-10 15:28:49,037 - transcription-agent - INFO - Participant percyjames9898@gmail.com disconnected
+2025-10-10 15:28:52,017 - transcription-agent - INFO - Participant andriajulie746@gmail.com disconnected
+2025-10-10 15:29:10,524 - livekit - WARNING - livekit::rtc_engine:453:livekit::rtc_engine - received session close: "signal client closed: \"stream closed\"" UnknownReason Resume
+2025-10-10 15:29:10,534 - transcription-agent - INFO - Room disconnected, initiating cleanup...
+2025-10-10 15:29:10,539 - transcription-agent - INFO - Starting graceful shutdown...
+2025-10-10 15:29:10,540 - transcription-agent - INFO - Transcription agent shutdown completed
+2025-10-10 15:29:10,542 - livekit.agents - DEBUG - shutting down job task
+2025-10-10 15:29:10,542 - livekit.agents - DEBUG - http_session(): closing the httpclient ctx
+2025-10-10 15:29:10,544 - livekit.agents - DEBUG - http_session(): creating a new httpclient ctx
+2025-10-10 15:29:10,545 - livekit.agents - DEBUG - job exiting

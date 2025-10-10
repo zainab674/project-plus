@@ -32,9 +32,9 @@ const CallHistoryComponent = ({ history, makeCall, onSaveAsContact, contacts = [
                                 className='flex items-center gap-4 p-2 flex-1 cursor-pointer hover:bg-gray-50 rounded-md transition-colors'
                                 onClick={() => onViewDetails && onViewDetails(call)}
                             >
-                                <AvatarCompoment name={call.contact_name || call.name || "U"} className="!w-[4rem] !h-[4rem] text-3xl" />
+                                <AvatarCompoment name={call.contact_name || call.name || phoneNumber} className="!w-[4rem] !h-[4rem] text-3xl" />
                                 <div className="flex-1">
-                                    <h2 className='opacity-80 text-lg'>{call.contact_name || call.name || "Unknown"}</h2>
+                                    <h2 className='opacity-80 text-lg'>{call.contact_name || call.name || phoneNumber}</h2>
                                     <h2 className='opacity-50 text-sm mt-1'>{phoneNumber}</h2>
                                     <div className='flex items-center gap-2 mt-1'>
                                         <span className={`text-xs px-2 py-1 rounded-full ${
