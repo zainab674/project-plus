@@ -15,35 +15,32 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-
     <html lang="en">
-
-      
       <body>
-      <Suspense>
-        <UserProvider>
-          <EmailNotificationProvider>
-            <RoleSelectionWrapper>
-              {children}
-              <ConditionalAIChatbot />
-            </RoleSelectionWrapper>
-          </EmailNotificationProvider>
-        </UserProvider>
+        <Suspense>
+          <UserProvider>
+            <EmailNotificationProvider>
+              <RoleSelectionWrapper>
+                {children}
+                <ConditionalAIChatbot />
+              </RoleSelectionWrapper>
+            </EmailNotificationProvider>
+          </UserProvider>
 
-        <ToastContainer
-          position="top-right"
-          autoClose={5000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="light"
-          transition={Bounce}
-        />
-      </Suspense>
+          <ToastContainer
+            position="top-right"
+            autoClose={5000}
+            hideProgressBar={false}
+            newestOnTop={false}
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="light"
+            transition={Bounce}
+          />
+        </Suspense>
       </body>
     </html>
   );
