@@ -2,8 +2,18 @@ import { AgentDispatchClient } from 'livekit-server-sdk';
 
 class AgentDispatchService {
     constructor() {
+        // AgentDispatchClient needs the HTTP API host, not the WebSocket URL
+        const apiHost = process.env.LIVEKIT_HOST || process.env.LIVEKIT_URL?.replace('wss://', 'https://');
+        
+        if (!apiHost) {
+            console.error('❌ LIVEKIT_HOST or LIVEKIT_URL is not configured for AgentDispatchService');
+            throw new Error('LIVEKIT_HOST environment variable is required for agent dispatch');
+        }
+
+        console.log(`🤖 Initializing AgentDispatchClient with host: ${apiHost}`);
+        
         this.client = new AgentDispatchClient(
-            process.env.LIVEKIT_URL,
+            apiHost,
             process.env.LIVEKIT_API_KEY,
             process.env.LIVEKIT_API_SECRET
         );

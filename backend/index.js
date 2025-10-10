@@ -76,6 +76,51 @@ import ngrokService from './services/ngrokService.js';
 
 config();
 
+// Validate critical environment variables on startup
+console.log('🔍 Validating environment variables...');
+const requiredEnvVars = {
+    'LIVEKIT_URL': process.env.LIVEKIT_URL,
+    'LIVEKIT_HOST': process.env.LIVEKIT_HOST,
+    'LIVEKIT_API_KEY': process.env.LIVEKIT_API_KEY,
+    'LIVEKIT_API_SECRET': process.env.LIVEKIT_API_SECRET,
+    'JWT_SECRET': process.env.JWT_SECRET,
+    'DATABASE_URL': process.env.DATABASE_URL
+};
+
+const missingVars = [];
+const livekitUrlOrHost = process.env.LIVEKIT_URL || process.env.LIVEKIT_HOST;
+
+// Check LiveKit configuration
+if (!livekitUrlOrHost) {
+    missingVars.push('LIVEKIT_URL or LIVEKIT_HOST');
+    console.error(`❌ Missing required environment variable: LIVEKIT_URL or LIVEKIT_HOST`);
+} else {
+    console.log(`✅ LiveKit URL/Host: ${livekitUrlOrHost}`);
+}
+
+// Check other required variables
+for (const [key, value] of Object.entries(requiredEnvVars)) {
+    if (key === 'LIVEKIT_URL' || key === 'LIVEKIT_HOST') {
+        continue; // Already checked above
+    }
+    
+    if (!value) {
+        missingVars.push(key);
+        console.error(`❌ Missing required environment variable: ${key}`);
+    } else {
+        console.log(`✅ ${key}: ${key.includes('SECRET') || key.includes('KEY') ? 'SET' : value}`);
+    }
+}
+
+if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingVars.join(', '));
+    console.error('❌ Please check your deployment configuration');
+    if (process.env.NODE_ENV === 'production') {
+        console.error('❌ This is a production deployment - environment variables must be set in your deployment platform');
+    }
+} else {
+    console.log('✅ All required environment variables are configured');
+}
 
 // await ensureTopicsExist(); // Call this before initChatConsumer()
 

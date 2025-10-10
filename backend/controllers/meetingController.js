@@ -578,11 +578,42 @@ export const generateLiveKitToken = catchAsyncError(async (req, res, next) => {
         console.log(`LiveKit URL: ${process.env.LIVEKIT_URL || process.env.LIVEKIT_HOST}`);
         console.log(`Agent 'transcriber' will be dispatched to this room`);
 
+        // Debug environment variables
+        console.log('🔍 Environment Debug Info:');
+        console.log(`- NODE_ENV: ${process.env.NODE_ENV}`);
+        console.log(`- LIVEKIT_URL: ${process.env.LIVEKIT_URL || 'NOT SET'}`);
+        console.log(`- LIVEKIT_HOST: ${process.env.LIVEKIT_HOST || 'NOT SET'}`);
+        console.log(`- LIVEKIT_API_KEY: ${process.env.LIVEKIT_API_KEY ? 'SET' : 'NOT SET'}`);
+        console.log(`- LIVEKIT_API_SECRET: ${process.env.LIVEKIT_API_SECRET ? 'SET' : 'NOT SET'}`);
+
+        // Validate LiveKit URL configuration
+        const serverUrl = process.env.LIVEKIT_URL || process.env.LIVEKIT_HOST;
+        if (!serverUrl) {
+            console.error('❌ LIVEKIT_URL and LIVEKIT_HOST are not configured');
+            console.error('❌ This is likely a deployment configuration issue');
+            console.error('❌ Please check your deployment platform environment variables');
+            return next(new ErrorHandler("LiveKit server configuration is missing. Please configure LIVEKIT_URL environment variable in your deployment platform."));
+        }
+
+        // Ensure the URL is properly formatted
+        let formattedServerUrl = serverUrl;
+        if (!serverUrl.startsWith('wss://') && !serverUrl.startsWith('ws://')) {
+            // If it's an HTTPS URL, convert to WSS
+            if (serverUrl.startsWith('https://')) {
+                formattedServerUrl = serverUrl.replace('https://', 'wss://');
+            } else {
+                // Assume it's a domain and add wss://
+                formattedServerUrl = `wss://${serverUrl}`;
+            }
+        }
+
+        console.log(`✅ Using LiveKit server URL: ${formattedServerUrl}`);
+
         res.status(200).json({
             success: true,
             token: token,
             roomName: `meeting-${meeting_id}`,
-            serverUrl: process.env.LIVEKIT_URL,
+            serverUrl: formattedServerUrl,
             meeting: {
                 meeting_id: meeting.meeting_id,
                 heading: meeting.heading,

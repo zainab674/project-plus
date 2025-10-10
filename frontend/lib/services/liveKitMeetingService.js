@@ -33,7 +33,22 @@ class LiveKitMeetingService {
         throw new Error(errorData.message || 'Failed to get meeting token');
       }
 
-      return await response.json();
+      const data = await response.json();
+      
+      // Validate server URL in response
+      if (!data.serverUrl) {
+        throw new Error('Server URL is missing from meeting token response');
+      }
+
+      // Validate URL format
+      try {
+        new URL(data.serverUrl);
+      } catch (urlError) {
+        throw new Error(`Invalid server URL format: ${data.serverUrl}`);
+      }
+
+      console.log('🔗 LiveKit server URL validated:', data.serverUrl);
+      return data;
     } catch (error) {
       console.error('Error generating meeting token:', error);
       throw error;

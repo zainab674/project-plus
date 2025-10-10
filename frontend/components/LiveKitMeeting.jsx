@@ -74,6 +74,20 @@ const LiveKitMeeting = ({ meetingId }) => {
       const data = await response.json();
       setMeetingData(data.meeting);
 
+      // Validate server URL before connecting
+      if (!data.serverUrl) {
+        throw new Error('Server URL is missing from meeting token response');
+      }
+
+      // Validate URL format
+      try {
+        new URL(data.serverUrl);
+      } catch (urlError) {
+        throw new Error(`Invalid server URL format: ${data.serverUrl}`);
+      }
+
+      console.log('🔗 Connecting to LiveKit server:', data.serverUrl);
+      
       // Connect to LiveKit room
       await room.connect(data.serverUrl, data.token);
       setIsConnected(true);
