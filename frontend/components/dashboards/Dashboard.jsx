@@ -20,6 +20,7 @@ import UnTake from './untake';
 import Billing from './billing';
 import BusinessStatus from './businessStatus';
 import ClientDashboard from './ClientDashboard';
+import RecentCases from './recentCases';
 import TopNavigation from '../TopNavigation';
 import { QuickActions } from '../quickActions';
 import { useUser } from "@/providers/UserProvider"
@@ -120,6 +121,9 @@ const Dashboard = () => {
               < CreateCase />
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {user?.Role !== 'BILLER' && (
+                <RecentCases />
+              )}
               {user?.Role !== 'BILLER' && (
                 <Todo />
               )}
