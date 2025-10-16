@@ -69,7 +69,7 @@ export default function Page() {
                             </TabsList>
                             <div className="flex items-center gap-2">
                                 {
-                                    user?.Role === "PROVIDER" &&
+                                    (user?.Role === "PROVIDER" || user?.Role === "TEAM") &&
                                     <>
                                         <Button className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all" onClick={() => setCreateMeeting(true)}>
                                             <Plus className="mr-2 h-4 w-4" />
@@ -171,8 +171,8 @@ export default function Page() {
                     </Tabs>
                 </div>
             </div>
-            <CreateMeeting open={createMeeting} onClose={() => setCreateMeeting(false)} isScheduled={false} getMeetings={getMeetings} />
-            <CreateMeetingClient open={createMeetingClient} onClose={() => setCreateMeetingClient(false)} isScheduled={false} getMeetings={getMeetings} />
+            <CreateMeeting open={createMeeting} onClose={() => setCreateMeeting(false)} isScheduled={false} getMeetings={getMeetings} project_id={null} />
+            <CreateMeetingClient open={createMeetingClient} onClose={() => setCreateMeetingClient(false)} isScheduled={false} getMeetings={getMeetings} project_id={null} />
         </>
     )
 }

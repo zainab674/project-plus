@@ -4,6 +4,7 @@ import WebViewer from '@pdftron/webviewer';
 import { uploadSignRequest } from '@/lib/http/client';
 import { toast } from 'react-toastify';
 import { Button } from '@/components/Button';
+import { useRouter } from 'next/navigation';
 
 
 
@@ -14,6 +15,7 @@ const page = ({ params, searchParams }) => {
     const instanceRef = useRef(null);
     const alreadyRef = useRef(false);
     const [loading,setLoading] = useState(false);
+    const router = useRouter();
 
 
     useEffect(() => {
@@ -81,6 +83,12 @@ const page = ({ params, searchParams }) => {
           setLoading(true);
           const res = await uploadSignRequest(formData);
           toast.success(res.data.message);
+          
+          // Navigate back to the signature list page after successful upload
+          setTimeout(() => {
+            router.back();
+          }, 1500); // Small delay to show success message
+          
         } catch (error) {
           toast.error(error?.response?.data?.message || error.message);
         } finally {

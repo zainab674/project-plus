@@ -126,7 +126,7 @@ export default function Page() {
                     </Tabs>
                 </div>
             </div>
-            <CreateMeeting open={createMeeting} onClose={() => setCreateMeeting(false)} isScheduled={true} getMeetings={getMeetings} />
+            <CreateMeeting open={createMeeting} onClose={() => setCreateMeeting(false)} isScheduled={true} getMeetings={getMeetings} project_id={null} />
         </>
     )
 }

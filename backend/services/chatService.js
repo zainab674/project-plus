@@ -43,7 +43,12 @@ export const handleMessage = async (data, redis, io) => {
             createdAt: new Date(),
             project_id: data.project_id ? parseInt(data.project_id) : null,
             task_id: data.task_id ? parseInt(data.task_id) : null,
-            is_group_chat: data.is_group_chat || false
+            is_group_chat: data.is_group_chat || false,
+            // Include attachment data when saving to database
+            attachment_url: data.attachment_url || null,
+            attachment_name: data.attachment_name || null,
+            attachment_size: data.attachment_size || null,
+            attachment_mime_type: data.attachment_mime_type || null
         };
 
 
@@ -61,7 +66,12 @@ export const handleMessage = async (data, redis, io) => {
             // Ensure all fields from the original data are preserved
             sender_name: data.sender_name,
             task_name: data.task_name,
-            task_id: data.task_id
+            task_id: data.task_id,
+            // Include attachment data in broadcast
+            attachment_url: data.attachment_url || null,
+            attachment_name: data.attachment_name || null,
+            attachment_size: data.attachment_size || null,
+            attachment_mime_type: data.attachment_mime_type || null
         };
 
 
@@ -239,7 +249,12 @@ export const handleProjectMessage = async (data, redis, io) => {
             sender_id: parseInt(sender_id),
             reciever_id: parseInt(project_id), // Using project_id as receiver for group chat
             content: content,
-            content_type: content_type
+            content_type: content_type,
+            // Include attachment data when saving to database
+            attachment_url: data.attachment_url || null,
+            attachment_name: data.attachment_name || null,
+            attachment_size: data.attachment_size || null,
+            attachment_mime_type: data.attachment_mime_type || null
         }
     });
 
@@ -252,7 +267,12 @@ export const handleProjectMessage = async (data, redis, io) => {
         content: content,
         content_type: content_type,
         createdAt: message.createdAt,
-        event: RedisEvent.onProjectMessage
+        event: RedisEvent.onProjectMessage,
+        // Include attachment data in broadcast (same as private chat)
+        attachment_url: data.attachment_url || null,
+        attachment_name: data.attachment_name || null,
+        attachment_size: data.attachment_size || null,
+        attachment_mime_type: data.attachment_mime_type || null
     };
 
     // Broadcast to all members in the project room
@@ -263,7 +283,9 @@ export const handleProjectMessage = async (data, redis, io) => {
     chatNotificationService.notifyProjectMessage(messageData);
 
     // Also publish to Redis for cross-server communication
-    redis.publish(REDIS_CHANNEL, JSON.stringify(messageData));
+    if (redis) {
+        redis.publish(REDIS_CHANNEL, JSON.stringify(messageData));
+    }
 }
 
 export const handlePrivateMessage = async (data, redis, io) => {

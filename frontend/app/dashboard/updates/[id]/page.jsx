@@ -353,12 +353,12 @@ const page = ({ params }) => {
                                     <div>
                                         <h1 className="text-4xl font-bold text-gray-900">Project Updates</h1>
                                         <p className="text-lg text-gray-600 mt-2">
-                                            {user?.Role === "PROVIDER" ? "Share updates and communicate with clients" : "Stay informed about your project progress"}
+                                            {user?.Role === "PROVIDER" || user?.Role === "TEAM" ? "Share updates and communicate with clients" : "Stay informed about your project progress"}
                                         </p>
                                         <div className="flex items-center space-x-4 mt-3 text-sm text-gray-500">
                                             <span className="flex items-center space-x-1">
                                                 <User className="h-4 w-4" />
-                                                <span>Role: {user?.Role === "PROVIDER" ? "Attorney" : "Client"}</span>
+                                                <span>Role: {user?.Role === "PROVIDER" ? "Attorney" : user?.Role === "TEAM" ? "Team Member" : "Client"}</span>
                                             </span>
                                             <span className="flex items-center space-x-1">
                                                 <Activity className="h-4 w-4" />
@@ -367,7 +367,7 @@ const page = ({ params }) => {
                                         </div>
                                     </div>
                                 </div>
-                                {user?.Role === "PROVIDER" && (
+                                {(user?.Role === "PROVIDER" || user?.Role === "TEAM") && (
                                     <Button
                                         onClick={() => setOpen(true)}
                                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2 shadow-lg hover:shadow-xl transition-all"
@@ -575,7 +575,7 @@ const page = ({ params }) => {
                                             <p className="text-gray-400 text-sm">
                                                 {searchTerm || dateFilter !== 'ALL'
                                                     ? 'Try adjusting your search or filter criteria'
-                                                    : user?.Role === "PROVIDER"
+                                                    : (user?.Role === "PROVIDER" || user?.Role === "TEAM")
                                                         ? 'Click "Post Update" to share the first project update'
                                                         : 'No updates have been posted yet'
                                                 }

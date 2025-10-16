@@ -296,6 +296,7 @@ export default function Page({ params }) {
           <UpdateCaseModal
             onClose={async () => {
               setShowUpdateCaseForm(false);
+              getProjectDetails(); // Refresh project data after update
             }}
             caseToUpdate={project}
           />
@@ -350,6 +351,8 @@ export default function Page({ params }) {
         getMeetings={() => { }}
         project_id={project?.project_id}
       />
+      {console.log('Project page - project data:', project)}
+      {console.log('Project page - project_id being passed:', project?.project_id)}
 
       <CreateMeetingClient
         open={createMeetingClient}

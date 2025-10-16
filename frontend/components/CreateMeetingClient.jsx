@@ -8,11 +8,12 @@ import { Select, SelectGroup, SelectLabel, SelectTrigger, SelectValue, SelectCon
 import { useUser } from '@/providers/UserProvider'
 import { toast } from 'react-toastify'
 import { createMeetingClientRequest } from '@/lib/http/meeting'
+import { getProjectRequest } from '@/lib/http/project'
 import { useRouter } from 'next/navigation'
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients, project_id = null }) => {
-    const { user, loadUserWithProjects } = useUser();
+    const { user, loadUserWithProjects, hasFullUserData } = useUser();
     const [selectProject, setSelectedProject] = useState(project_id || '');
     const [selectTask, setSelectedTask] = useState('');
     const [selectClient, setSelectedClient] = useState('');
@@ -22,22 +23,43 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
     const [time, setTime] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [fullUserData, setFullUserData] = useState(null);
+    const [specificProject, setSpecificProject] = useState(null);
 
     // Load full user data when component mounts or when user changes
     useEffect(() => {
-        if (user && !user.Projects) {
+        if (user && !user.Projects && !hasFullUserData) {
             loadUserWithProjects().then(fullUser => {
                 setFullUserData(fullUser);
+            }).catch(error => {
+                console.error('CreateMeetingClient - Error loading user with projects:', error);
             });
         } else if (user && user.Projects) {
             setFullUserData(user);
         }
-    }, [user, loadUserWithProjects]);
+    }, [user, loadUserWithProjects, hasFullUserData]);
 
-    // Use fullUserData instead of user for Projects access
-    const userWithProjects = fullUserData || user;
+    // Fetch specific project when project_id is provided
+    useEffect(() => {
+        if (project_id && !specificProject) {
+            getProjectRequest(project_id).then(res => {
+                setSpecificProject(res.data.project);
+            }).catch(error => {
+                console.error('CreateMeetingClient - Error fetching specific project:', error);
+            });
+        }
+    }, [project_id, specificProject]);
+
+    // Use specific project if available, otherwise use fullUserData
+    const userWithProjects = specificProject ? { Projects: [specificProject] } : (fullUserData || user);
 
     const router = useRouter();
+
+    // Update selected project when project_id prop changes
+    useEffect(() => {
+        if (project_id) {
+            setSelectedProject(project_id);
+        }
+    }, [project_id]);
 
     // Reset task selection when project changes
     useEffect(() => {
@@ -88,6 +110,22 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
 
     // Get current project details
     const currentProject = userWithProjects?.Projects?.find(project => project?.project_id == selectProject);
+
+    // Don't render until user data is loaded OR specific project is loaded
+    if (!userWithProjects || (!userWithProjects.Projects && !specificProject)) {
+        return (
+            <BigDialog open={open} onClose={onClose}>
+                <div className='px-2 py-3'>
+                    <div className="w-full px-10 space-y-6 mt-5">
+                        <h1 className="text-3xl font-semibold text-black text-center">Create A New Meeting For Client</h1>
+                        <div className="flex items-center justify-center h-32">
+                            <p className="text-gray-500">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            </BigDialog>
+        );
+    }
 
     return (
         <BigDialog open={open} onClose={onClose}>

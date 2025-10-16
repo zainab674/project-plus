@@ -468,12 +468,12 @@ const page = ({ params }) => {
                                     <div>
                                         <h1 className="text-4xl font-bold text-gray-900">Document Management</h1>
                                         <p className="text-lg text-gray-600 mt-2">
-                                            {user?.Role === "PROVIDER" ? "Manage and review client documents" : "Upload and track your documents"}
+                                            {user?.Role === "PROVIDER" || user?.Role === "TEAM" ? "Manage and review client documents" : "Upload and track your documents"}
                                         </p>
                                         <div className="flex items-center space-x-4 mt-3 text-sm text-gray-500">
                                             <span className="flex items-center space-x-1">
                                                 <User className="h-4 w-4" />
-                                                <span>Role: {user?.Role === "PROVIDER" ? "Attorney" : "Client"}</span>
+                                                <span>Role: {user?.Role === "PROVIDER" ? "Attorney" : user?.Role === "TEAM" ? "Team Member" : "Client"}</span>
                                             </span>
                                             <span className="flex items-center space-x-1">
                                                 <Activity className="h-4 w-4" />
@@ -482,7 +482,7 @@ const page = ({ params }) => {
                                         </div>
                                     </div>
                                 </div>
-                                {user?.Role === "PROVIDER" && (
+                                {(user?.Role === "PROVIDER" || user?.Role === "TEAM") && (
                                     <Button
                                         onClick={() => setOpen(true)}
                                         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium flex items-center space-x-2 shadow-lg hover:shadow-xl transition-all"
@@ -644,7 +644,7 @@ const page = ({ params }) => {
                                                             </div>
                                                         </TableCell>
                                                         <TableCell className="text-center">
-                                                            {user?.Role === "PROVIDER" ? (
+                                                            {(user?.Role === "PROVIDER" || user?.Role === "TEAM") ? (
                                                                 <Select
                                                                     onValueChange={(status) => handleUpdateStatus(status, document.document_id)}
                                                                     value={document.status}
@@ -688,7 +688,7 @@ const page = ({ params }) => {
                                                         </TableCell>
                                                         <TableCell>
                                                             <div className="flex items-center justify-center space-x-2">
-                                                                {user?.Role === "PROVIDER" ? (
+                                                                {(user?.Role === "PROVIDER" || user?.Role === "TEAM") ? (
                                                                     <>
                                                                         {document.filename ? (
                                                                             <div className="flex items-center space-x-2">
@@ -765,7 +765,7 @@ const page = ({ params }) => {
                                                                     <p className="text-gray-400 text-sm">
                                                                         {searchTerm || statusFilter !== 'ALL'
                                                                             ? 'Try adjusting your search or filter criteria'
-                                                                            : user?.Role === "PROVIDER"
+                                                                            : (user?.Role === "PROVIDER" || user?.Role === "TEAM")
                                                                                 ? 'Click "Request Document" to add a new document request'
                                                                                 : 'No documents have been requested yet'
                                                                         }
