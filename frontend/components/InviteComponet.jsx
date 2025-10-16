@@ -8,7 +8,7 @@ import { generateInvitation } from '@/utils/createInvitation';
 import { useUser } from '@/providers/UserProvider';
 import { Input } from './ui/input';
 
-const InviteComponet = ({ open, onClose, project }) => {
+const InviteComponet = ({ open, onClose, project, isClient = true }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [link, setLink] = useState(null);
     const [invitation, setInvitation] = useState('');
@@ -21,7 +21,7 @@ const InviteComponet = ({ open, onClose, project }) => {
         setIsLoading(true);
         try {
             const formdata = {
-                role: 'CLIENT',
+                role: isClient ? 'CLIENT' : 'TEAM',
                 projectId: project.project_id
             }
             const res = await invitePeopleRequest(formdata);
@@ -31,9 +31,9 @@ const InviteComponet = ({ open, onClose, project }) => {
                 project.name,
                 user?.name,
                 'Project Admin',
-                'CLIENT',
-                "True",
-                'Client'
+                isClient ? 'CLIENT' : 'TEAM',
+                isClient ? "True" : "False",
+                isClient ? 'Client' : 'Team Member'
             );
             setInvitation(invitation);
         } catch (error) {
@@ -41,18 +41,18 @@ const InviteComponet = ({ open, onClose, project }) => {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [isClient, project, user]);
 
     const handleCopy = useCallback(() => {
         try {
             if (typeof window != 'undefined') {
                 window.navigator.clipboard.writeText(invitation);
-                toast.success("Client Invitation Copied");
+                toast.success(`${isClient ? 'Client' : 'Team Member'} Invitation Copied`);
             }
         } catch (error) {
             toast.error(error.message);
         }
-    }, [invitation]);
+    }, [invitation, isClient]);
 
     const handleSendViaMail = useCallback(async (e) => {
         e.preventDefault();
@@ -78,17 +78,17 @@ const InviteComponet = ({ open, onClose, project }) => {
             {
                 sendViaMail &&
                 <>
-                    <h2 className='text-center font-medium text-2xl text-gray-700'>Send Client Invitation Via Mail</h2>
+                    <h2 className='text-center font-medium text-2xl text-gray-700'>Send {isClient ? 'Client' : 'Team Member'} Invitation Via Mail</h2>
                     <form className='mt-16 space-y-6 mx-auto max-w-2xl flex-col' onSubmit={handleSendViaMail}>
                         <Input
                             type="email"
-                            placeholder="Enter Client Email"
+                            placeholder={`Enter ${isClient ? 'Client' : 'Team Member'} Email`}
                             value={mail}
                             onChange={(e) => setMail(e.target.value)}
                         />
 
                         <Button className="bg-blue-600 text-white hover:bg-blue-700 w-full" isLoading={isLoading} disabled={isLoading || !mail}>
-                            Send Client Invitation
+                            Send {isClient ? 'Client' : 'Team Member'} Invitation
                         </Button>
                     </form>
                 </>
@@ -97,14 +97,14 @@ const InviteComponet = ({ open, onClose, project }) => {
             {
                 !link &&
                 <>
-                    <h2 className='text-center font-medium text-2xl text-gray-700'>Create Client Invitation Link</h2>
+                    <h2 className='text-center font-medium text-2xl text-gray-700'>Create {isClient ? 'Client' : 'Team Member'} Invitation Link</h2>
                     <form className='mt-16 space-y-6 mx-auto max-w-2xl flex-col' onSubmit={handleSubmit}>
                         <div className='text-center text-gray-600 mb-4'>
-                            <p>This will create an invitation link for clients to join the project.</p>
+                            <p>This will create an invitation link for {isClient ? 'clients' : 'team members'} to join the project.</p>
                         </div>
 
                         <Button className="bg-blue-600 text-white hover:bg-blue-700 w-full" isLoading={isLoading} disabled={isLoading}>
-                            Create Client Invitation Link
+                            Create {isClient ? 'Client' : 'Team Member'} Invitation Link
                         </Button>
                     </form>
                 </>
@@ -113,7 +113,7 @@ const InviteComponet = ({ open, onClose, project }) => {
             {
                 link &&
                 <>
-                    <h2 className='text-center font-medium text-2xl text-gray-700'>Client Invitation Link</h2>
+                    <h2 className='text-center font-medium text-2xl text-gray-700'>{isClient ? 'Client' : 'Team Member'} Invitation Link</h2>
                     <div className='mt-16 space-y-6 mx-auto max-w-2xl flex-col'>
                         <Textarea
                             value={invitation}
@@ -123,7 +123,7 @@ const InviteComponet = ({ open, onClose, project }) => {
 
                         <div className='flex gap-3'>
                             <Button onClick={handleCopy} className="flex-1 bg-green-600 text-white hover:bg-green-700">
-                                Copy Client Invitation
+                                Copy {isClient ? 'Client' : 'Team Member'} Invitation
                             </Button>
                             <Button onClick={() => setSendViaMail(true)} className="flex-1 bg-blue-600 text-white hover:bg-blue-700">
                                 Send Via Mail

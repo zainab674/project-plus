@@ -1,15 +1,16 @@
 import catchAsyncError from '../middlewares/catchAsyncError.js';
 import ErrorHandler from '../utils/errorHandler.js';
-import { validateRequestBody } from '../utils/validateRequestBody.js';
+import { validateAndTransformRequestBody } from '../utils/validateRequestBody.js';
 import { CreateTaskRequestBodySchema } from '../schema/taskSchema.js';
 import { transcribeFile } from '../services/taskService.js';
 import { prisma } from "../prisma/index.js";
 import { decrypt } from '../services/encryptionService.js';
 import { fetchMail } from '../services/googleService.js';
+import { uploadToCloud } from '../services/mediaService.js';
+import { bytesToMB } from '../processors/bytesToMbProcessor.js';
 import dayjs from 'dayjs';
 import { dmmfToRuntimeDataModel } from '@prisma/client/runtime/library';
 import { sendMail } from '../processors/sendMailProcessor.js';
-import { uploadToCloud } from '../services/mediaService.js';
 
 async function getTaskDetailsByDate(taskId) {
     // Optimized: Use a single query with includes instead of multiple separate queries
@@ -125,13 +126,15 @@ async function getTaskDetailsByDate(taskId) {
 }
 
 export const createTask = catchAsyncError(async (req, res, next) => {
-    const { project_id, name, description, assigned_to, priority, last_date, otherMember, status, phase } = req.body;
     const user_id = req.user.user_id;
+    const file = req.file; // Get uploaded file
 
-    const [err, isValidate] = await validateRequestBody(req.body, CreateTaskRequestBodySchema);
-    if (!isValidate) {
+    const [err, validatedData] = await validateAndTransformRequestBody(req.body, CreateTaskRequestBodySchema);
+    if (!validatedData) {
         return next(new ErrorHandler(err, 401));
     }
+
+    const { project_id, name, description, assigned_to, priority, last_date, otherMember, status, phase } = validatedData;
 
     // Check if the project exists and the user is a member
     const projectMember = await prisma.projectMember.findFirst({
@@ -163,8 +166,6 @@ export const createTask = catchAsyncError(async (req, res, next) => {
         return next(new ErrorHandler("You provider member is not in project.", 403));
     }
 
-
-
     // Create a task
     const task = await prisma.task.create({
         data: {
@@ -194,10 +195,46 @@ export const createTask = catchAsyncError(async (req, res, next) => {
         data: memberData
     });
 
+    // Handle file upload if present
+    let media = null;
+    if (file) {
+        try {
+            const cloudRes = await uploadToCloud(file);
+            
+            media = await prisma.media.create({
+                data: {
+                    task_id: task.task_id,
+                    project_id: Number(project_id),
+                    file_url: cloudRes.url,
+                    key: cloudRes.key,
+                    user_id: user_id,
+                    filename: file.originalname,
+                    mimeType: file.mimetype,
+                    size: file.buffer.length
+                }
+            });
+
+            // Create task progress entry for the attachment
+            await prisma.taskProgress.create({
+                data: {
+                    message: `Task created with attachment: "${file.originalname}" (${bytesToMB(file.buffer.length)})`,
+                    user_id: user_id,
+                    task_id: task.task_id,
+                    type: "MEDIA"
+                }
+            });
+        } catch (uploadError) {
+            console.error('File upload error:', uploadError);
+            // Don't fail the task creation if file upload fails
+            // Just log the error and continue
+        }
+    }
 
     res.status(201).json({
         success: true,
         task,
+        media: media || null,
+        message: media ? 'Task created successfully with attachment' : 'Task created successfully'
     });
 });
 
@@ -279,6 +316,26 @@ export const getTaskById = catchAsyncError(async (req, res, next) => {
                     action: true,
                     rejectedReason: true,
                     created_at: true
+                },
+                orderBy: {
+                    created_at: 'desc'
+                }
+            },
+            Media: {
+                select: {
+                    media_id: true,
+                    file_url: true,
+                    filename: true,
+                    mimeType: true,
+                    size: true,
+                    created_at: true,
+                    user: {
+                        select: {
+                            user_id: true,
+                            name: true,
+                            email: true
+                        }
+                    }
                 },
                 orderBy: {
                     created_at: 'desc'
@@ -1358,6 +1415,26 @@ export const getProjectTaskDetails = catchAsyncError(async (req, res, next) => {
                             email: true
                         }
                     }
+                }
+            },
+            Media: {
+                select: {
+                    media_id: true,
+                    file_url: true,
+                    filename: true,
+                    mimeType: true,
+                    size: true,
+                    created_at: true,
+                    user: {
+                        select: {
+                            user_id: true,
+                            name: true,
+                            email: true
+                        }
+                    }
+                },
+                orderBy: {
+                    created_at: 'desc'
                 }
             },
             Time: {

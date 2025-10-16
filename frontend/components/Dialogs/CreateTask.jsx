@@ -1,7 +1,7 @@
 
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarIcon, ChartNoAxesColumnIncreasing, ChevronDownIcon, FileIcon, Menu, TypeOutline, User2, UserCircle, Users, UsersIcon, X, Layers } from 'lucide-react'
+import { CalendarIcon, ChartNoAxesColumnIncreasing, ChevronDownIcon, FileIcon, Menu, TypeOutline, User2, UserCircle, Users, UsersIcon, X, Layers, Upload, Paperclip } from 'lucide-react'
 import { Button } from "@/components/Button"
 import {
     Select,
@@ -30,6 +30,7 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
     const [selectedMember, setSelectedMember] = useState([]);
     const [isDisabled, setIsDiabled] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
     const { loadUser } = useUser()
     const [formdata, setFormdata] = useState({
         project_id: project?.project_id,
@@ -78,6 +79,19 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
         }
     }, [prefillData]);
 
+    // Handle file selection
+    const handleFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            // Check file size (max 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                toast.error('File size must be less than 10MB');
+                return;
+            }
+            setSelectedFile(file);
+        }
+    };
+
     const options = useMemo(() => (project?.Members?.filter(member => member.user_id != formdata.assigned_to).map(member => ({
         value: member?.user?.user_id, label: member?.user?.name, icon: (props) => <AvatarCompoment name={member?.user?.name} {...props} />
     }))), [project, formdata]);
@@ -85,17 +99,45 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
     const handleCreate = useCallback(async () => {
         setIsLoading(true);
         try {
-            console.log('🔍 CreateTask: Creating task with data:', { formdata, selectedMember, project });
-            const taskData = {
-                ...formdata,
-                otherMember: selectedMember,
-                project_id: project.project_id,
-                last_date: formdata.last_date + 'T00:00:00Z'
-            };
-            console.log('🔍 CreateTask: Final task data:', taskData);
+            console.log('🔍 CreateTask: Creating task with data:', { formdata, selectedMember, project, selectedFile });
+            
+            // Create FormData for file upload
+            const formData = new FormData();
+            
+            // Add all task data fields
+            formData.append('project_id', parseInt(project.project_id));
+            formData.append('name', formdata.name);
+            formData.append('description', formdata.description || '');
+            formData.append('assigned_to', parseInt(formdata.assigned_to) || -1);
+            formData.append('priority', formdata.priority);
+            formData.append('status', formdata.status);
+            formData.append('phase', formdata.phase || '');
+            formData.append('last_date', formdata.last_date ? formdata.last_date + 'T00:00:00Z' : '');
+            
+            // Add other members as array (convert to numbers)
+            const otherMemberNumbers = selectedMember.map(id => parseInt(id));
+            formData.append('otherMember', JSON.stringify(otherMemberNumbers));
+            
+            // Add file if selected
+            if (selectedFile) {
+                formData.append('file', selectedFile);
+            }
 
-            const res = await createTaskRequest(taskData);
+            console.log('🔍 CreateTask: Final form data:', {
+                project_id: project.project_id,
+                name: formdata.name,
+                priority: formdata.priority,
+                phase: formdata.phase,
+                status: formdata.status,
+                assigned_to: formdata.assigned_to,
+                description: formdata.description,
+                hasFile: !!selectedFile,
+                fileName: selectedFile?.name
+            });
+
+            const res = await createTaskRequest(formData);
             setSelectedMember([]);
+            setSelectedFile(null);
             setFormdata({
                 project_id: project?.project_id,
                 name: "New Task",
@@ -115,7 +157,7 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
         } finally {
             setIsLoading(false)
         }
-    }, [selectedMember, formdata, project, hasPhases]);
+    }, [selectedMember, formdata, project, hasPhases, selectedFile]);
 
     const config = useMemo(() => ({
         placeholder: "Add description",
@@ -327,6 +369,52 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
                             onChange={(e) => setFormdata(prev => ({ ...prev, description: e.target.value }))}
                             value={formdata.description} >
                         </Textarea>
+                    </div>
+                </div>
+
+                {/* File Attachment */}
+                <div className="grid grid-cols-[auto,1fr] gap-5 items-center">
+                    <div className='flex items-center gap-2 w-[6rem]'>
+                        <Paperclip className="h-5 w-5 text-black" />
+                        <span className='text-black text-sm font-medium'>Attachment</span>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="file"
+                                id="file-upload-create"
+                                onChange={handleFileSelect}
+                                className="hidden"
+                                accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif,.xlsx,.xls,.ppt,.pptx"
+                            />
+                            <label
+                                htmlFor="file-upload-create"
+                                className="flex items-center gap-2 px-4 py-2 border border-primary rounded-md cursor-pointer hover:bg-gray-50 transition-colors"
+                            >
+                                <Upload className="h-4 w-4 text-gray-600" />
+                                <span className="text-sm text-gray-700">Choose File</span>
+                            </label>
+                            {selectedFile && (
+                                <button
+                                    onClick={() => setSelectedFile(null)}
+                                    className="text-red-500 hover:text-red-700 text-sm"
+                                >
+                                    Remove
+                                </button>
+                            )}
+                        </div>
+                        {selectedFile && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <FileIcon className="h-4 w-4" />
+                                <span>{selectedFile.name}</span>
+                                <span className="text-gray-400">
+                                    ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                                </span>
+                            </div>
+                        )}
+                        <p className="text-xs text-gray-500">
+                            Supported formats: PDF, DOC, DOCX, TXT, JPG, PNG, GIF, XLSX, XLS, PPT, PPTX (Max 10MB)
+                        </p>
                     </div>
                 </div>
 

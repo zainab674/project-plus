@@ -22,6 +22,7 @@ import {
 import { toast } from 'react-toastify';
 import { UserContext } from '@/providers/UserProvider';
 import { useRouter } from 'next/navigation';
+import BackButton from '@/components/BackButton';
 
 const ProfilePage = () => {
     const { user, setUser } = useContext(UserContext);
@@ -175,14 +176,7 @@ const ProfilePage = () => {
                             <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile</h1>
                             <p className="text-gray-600">Manage your account information and settings</p>
                         </div>
-                        <Button
-                            variant="outline"
-                            onClick={() => router.back()}
-                            className="flex items-center space-x-2"
-                        >
-                            <X className="h-4 w-4" />
-                            <span>Back</span>
-                        </Button>
+                        <BackButton />
                     </div>
                 </div>
 

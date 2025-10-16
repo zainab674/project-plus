@@ -691,8 +691,11 @@ export const generateInvitationLink = catchAsyncError(async (req, res, next) => 
     let link;
     if (role === 'CLIENT') {
         link = `${process.env.FRONTEND_URL}/join-project/${token}`;
+    } else if (role === 'TEAM' && projectId) {
+        // For project-specific team invitations
+        link = `${process.env.FRONTEND_URL}/join-project/${token}`;
     } else {
-        // For team and biller invitations
+        // For general team and biller invitations (no project_id)
         link = `${process.env.FRONTEND_URL}/join-team/${token}`;
     }
 

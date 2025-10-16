@@ -87,8 +87,8 @@ import {
     Briefcase,
     CheckCircle,
     X,
-    Search,
     Plus,
+    Search,
     Send,
     Inbox,
     Archive,
@@ -117,6 +117,7 @@ import TimelineModal from './modals/timelineModel';
 
 import BillerModal from './modals/BillerModal';
 import CaseAssignmentModal from './modals/CaseAssignmentModal';
+import AddTaskModal from './modals/AddTaskModal';
 import ConnectMailBox from './mail/ConnectMailBox';
 import FlowchartModal from './modals/FlowchartModal';
 import { useUser } from '@/providers/UserProvider';
@@ -157,6 +158,9 @@ const QuickActions = () => {
     const openCaseAssignmentModal = () => setIsCaseAssignmentModalOpen(true);
     const closeCaseAssignmentModal = () => setIsCaseAssignmentModalOpen(false);
 
+    const openAddTaskModal = () => setIsAddTaskModalOpen(true);
+    const closeAddTaskModal = () => setIsAddTaskModalOpen(false);
+
 
 
     const openSignatureModal = () => setIsSignatureModalOpen(true);
@@ -167,6 +171,7 @@ const QuickActions = () => {
 
     const allActions = [
         { name: 'Cases', icon: Briefcase, route: '/cases', color: 'bg-purple-200' },
+        { name: 'Add Task', icon: Plus, route: '', color: 'bg-blue-200', action: openAddTaskModal },
         { name: 'TimeLine', icon: Clock, route: '/timeline', color: 'bg-orange-200' },
         // { name: 'Case Timeline', icon: Clock, route: '', color: 'bg-blue-200', action: openCaseTimelineManagement },
         { name: 'Meeting', icon: Calendar, route: '/dashboard/meeting', color: 'bg-pink-200' },
@@ -222,6 +227,7 @@ const QuickActions = () => {
     const [isCaseAssignmentModalOpen, setIsCaseAssignmentModalOpen] = useState(false);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [isFlowchartModalOpen, setIsFlowchartModalOpen] = useState(false);
+    const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
 
     // New states for timeline functionality
     const [isTimelineCasesModalOpen, setIsTimelineCasesModalOpen] = useState(false);
@@ -1643,6 +1649,7 @@ const QuickActions = () => {
             <TimelineModal isOpen={isTimelineModalOpen} onClose={closeTimelineModal} />
 
             <BillerModal isOpen={isBillerModalOpen} onClose={closeBillerModal} />
+            <AddTaskModal open={isAddTaskModalOpen} onClose={closeAddTaskModal} />
 
             {/* Timeline Cases Modal */}
             {isTimelineCasesModalOpen && (

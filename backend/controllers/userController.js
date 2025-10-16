@@ -621,9 +621,10 @@ export const joinTeamThroughInvitation = catchAsyncError(async (req, res, next) 
         return next(new ErrorHandler('Invalid or expired invitation link', 400));
     }
 
-    // Check if this is a team invitation (no project_id)
-    if (invitation.project_id) {
-        return next(new ErrorHandler('This is a project invitation, not a team invitation', 400));
+    // For team invitations, project_id can be present for project-specific team invitations
+    // Only reject if this is a CLIENT invitation being processed as team invitation
+    if (invitation.role === 'CLIENT') {
+        return next(new ErrorHandler('This is a client invitation, not a team invitation', 400));
     }
 
     // Check if user is already in the team
@@ -705,9 +706,10 @@ export const teamSignup = catchAsyncError(async (req, res, next) => {
         return next(new ErrorHandler('Invalid or expired invitation link', 400));
     }
 
-    // Check if this is a team invitation (no project_id)
-    if (invitation.project_id) {
-        return next(new ErrorHandler('This is a project invitation, not a team invitation', 400));
+    // Check if this is a team invitation (project_id is optional for team invitations)
+    // For project-specific team invitations, we'll handle them here too
+    if (invitation.role !== 'TEAM' && invitation.role !== 'BILLER') {
+        return next(new ErrorHandler('This is not a team invitation', 400));
     }
 
     // Check if user already exists
@@ -746,6 +748,19 @@ export const teamSignup = catchAsyncError(async (req, res, next) => {
             }
         });
 
+        // Add user to project if project_id is provided (for project-specific team invitations)
+        if (invitation.project_id) {
+            await prisma.projectMember.create({
+                data: {
+                    project_id: invitation.project_id,
+                    user_id: user.user_id,
+                    role: invitation.role,
+                    legalRole: invitation.legalRole,
+                    customLegalRole: invitation.customLegalRole
+                }
+            });
+        }
+
         // Delete the invitation token
         await prisma.invitation.delete({
             where: { token }
@@ -753,7 +768,7 @@ export const teamSignup = catchAsyncError(async (req, res, next) => {
 
         res.status(201).json({
             success: true,
-            message: 'Account created successfully! You can now login.',
+            message: invitation.project_id ? 'Account created successfully! You can now login and access the project.' : 'Account created successfully! You can now login.',
             user: {
                 user_id: user.user_id,
                 name: user.name,
@@ -861,9 +876,10 @@ export const joinTeamThroughInvitationPublic = catchAsyncError(async (req, res, 
         return next(new ErrorHandler('Invalid or expired invitation link', 400));
     }
 
-    // Check if this is a team invitation (no project_id)
-    if (invitation.project_id) {
-        return next(new ErrorHandler('This is a project invitation, not a team invitation', 400));
+    // For team invitations, project_id can be present for project-specific team invitations
+    // Only reject if this is a CLIENT invitation being processed as team invitation
+    if (invitation.role === 'CLIENT') {
+        return next(new ErrorHandler('This is a client invitation, not a team invitation', 400));
     }
 
     // Find user by email

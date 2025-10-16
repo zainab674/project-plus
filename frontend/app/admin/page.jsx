@@ -38,6 +38,7 @@ import {
 import UserTreeView from '@/components/ui/tree';
 import { UserContext } from '@/providers/UserProvider';
 import { useRouter } from 'next/navigation';
+import BackButton from '@/components/BackButton';
 
 const AdminPage = () => {
     const { user, isAuth, isLoading } = useContext(UserContext);
@@ -82,9 +83,7 @@ const AdminPage = () => {
                     <p className="text-gray-600 mb-6">
                         You don't have permission to access this page. Only administrators can view the admin dashboard.
                     </p>
-                    <Button onClick={() => router.push('/dashboard')} className="bg-blue-600 hover:bg-blue-700">
-                        Go to Dashboard
-                    </Button>
+                    <BackButton />
                 </div>
             </div>
         );
@@ -394,6 +393,7 @@ const AdminPage = () => {
                             <p className="text-gray-600">Manage user registration requests and system access</p>
                         </div>
                         <div className="flex items-center space-x-3">
+                            <BackButton />
                             <div className="flex items-center space-x-2 bg-blue-50 px-3 py-2 rounded-lg">
                                 <Shield className="h-5 w-5 text-blue-600" />
                                 <span className="text-sm font-medium text-blue-700">Administrator</span>

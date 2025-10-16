@@ -128,7 +128,7 @@ const JoinTeamPage = () => {
                         <div className="space-y-3 w-full">
                             {isUserNotFound && (
                                 <Button 
-                                    onClick={() => router.push(`/sign-up?next_to=${encodeURIComponent(window.location.href)}`)} 
+                                    onClick={() => router.push(`/team-signup/${params.token}`)} 
                                     className="w-full bg-blue-600 hover:bg-blue-700"
                                 >
                                     Create Account

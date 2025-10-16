@@ -33,7 +33,7 @@ const router = express.Router();
 
 router
     .route("/")
-    .post(authMiddleware, createTask);
+    .post(authMiddleware, singleUpload, createTask);
 
 // Get all tasks for user dashboard
 router

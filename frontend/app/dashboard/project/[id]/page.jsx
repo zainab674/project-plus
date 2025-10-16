@@ -208,7 +208,13 @@ export default function Page({ params }) {
                           <span>Invite Client</span>
                         </DropdownMenuItem>
 
-
+                        <DropdownMenuItem
+                          className="cursor-pointer text-black hover:!bg-tbutton-bg hover:!text-tbutton-text"
+                          onClick={() => { setInviteOpen(true); setIsClient(false); }}
+                        >
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          <span>Invite Team Member</span>
+                        </DropdownMenuItem>
 
                         <DropdownMenuItem
                           className="cursor-pointer text-black hover:!bg-tbutton-bg hover:!text-tbutton-text"
@@ -321,16 +327,12 @@ export default function Page({ params }) {
           />
         </BigDialog>
 
-        {isClient ? (
-          <InviteComponet
-            open={inviteOpen}
-            onClose={() => setInviteOpen(false)}
-            project={project}
-          />
-        )
-          :
-          ""
-        }
+        <InviteComponet
+          open={inviteOpen}
+          onClose={() => setInviteOpen(false)}
+          project={project}
+          isClient={isClient}
+        />
 
 
       </div>
