@@ -350,6 +350,20 @@ export const getMeetings = catchAsyncError(async (req, res, next) => {
                     },
                     transcribe: true
                 }
+            },
+            task: {
+                select: {
+                    task_id: true,
+                    name: true,
+                    project_id: true,
+                    project: {
+                        select: {
+                            project_id: true,
+                            name: true,
+                            client_name: true
+                        }
+                    }
+                }
             }
         }
     });

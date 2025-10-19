@@ -25,11 +25,11 @@ import TopNavigation from '../TopNavigation';
 import { QuickActions } from '../quickActions';
 import { useUser } from "@/providers/UserProvider"
 import AILawyerAssistant from '../AILawyerAssistant';
+import { DashboardFilterProvider, useDashboardFilter } from '@/providers/DashboardFilterProvider';
 
 
-const Dashboard = () => {
-
-  const [projects, setProjects] = React.useState([]);
+// Dashboard Content Component that uses filter context
+const DashboardContent = () => {
   const [meeting, setMeeting] = React.useState(null);
   const { user } = useUser();
   const [isLoading, setIsloading] = React.useState(true);
@@ -38,6 +38,15 @@ const Dashboard = () => {
   const [dates, setDates] = React.useState(getRecentDatesWithLabels(20));
   const [selectedDate, setSelectedDate] = React.useState(dates[0].date);
 
+  // Get filter context
+  const { 
+    filteredProjects, 
+    filteredTimelineData, 
+    isLoading: filterLoading,
+    fetchProjects,
+    fetchTimelineData,
+    error: filterError
+  } = useDashboardFilter();
 
   const getProgress = React.useCallback(async () => {
     try {
@@ -49,54 +58,34 @@ const Dashboard = () => {
     }
   }, [selectedDate])
 
-  // const getProjectAllProject = React.useCallback(async () => {
-  //   setIsloading(true)
-  //   try {
-  //     const [res, res2] = await Promise.all([getAllProjectRequest(), getPedingDocsRequest()]);
-  //     const { projects, collaboratedProjects } = res.data;
-  //     setProjects([...projects, ...collaboratedProjects]);
-  //     setPendingDocs(res2.data);
-  //     console.log(" setPendingDocs ", res2.data)
-
-  //   } catch (error) {
-  //     setProjects(null);
-  //     console.log(error?.response?.data?.meesage || error?.meesage);
-  //   } finally {
-  //     setIsloading(false)
-  //   }
-  // }, []);
-
   useEffect(() => {
     if (user) {
       setIsloading(false)
     }
-
   }, [user])
 
-
   const getMeetings = React.useCallback(async () => {
-
     try {
       const res = await getsMeetingRequest(true);
-
       setMeeting(res.data.meetings[0]);
       console.log(" setMeeting ", res.data.meetings[0])
-
     } catch (error) {
       console.log(error?.response?.data?.message || error.message);
     }
   }, []);
 
+  // Initialize filter data when component mounts
   React.useEffect(() => {
-    // getProjectAllProject();
+    fetchProjects();
+    fetchTimelineData();
     getMeetings();
-  }, []);
+  }, [fetchProjects, fetchTimelineData, getMeetings]);
 
   React.useEffect(() => {
     getProgress();
   }, [selectedDate])
 
-  if (isLoading) {
+  if (isLoading || filterLoading) {
     return <>
       <div className="h-screen bg-white m-2 rounded-md flex items-center justify-center">
         <Loader />
@@ -106,7 +95,6 @@ const Dashboard = () => {
 
 
   return (
-
     <>
       <TopNavigation />
       <QuickActions />
@@ -117,28 +105,42 @@ const Dashboard = () => {
       ) : (
         <div className="min-h-screen bg-gray-50 p-2">
           <div className="max-w-7xl mx-auto">
+            {/* Error Display */}
+            {filterError && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-700 text-sm">
+                  <strong>Filter Error:</strong> {filterError}
+                </p>
+              </div>
+            )}
+
             {user?.Role === 'PROVIDER' && (
               < CreateCase />
             )}
+            
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {user?.Role !== 'BILLER' && (
-                <RecentCases />
+                <RecentCases filteredProjects={filteredProjects} />
               )}
               {user?.Role !== 'BILLER' && (
-                <Todo />
+                <Todo filteredProjects={filteredProjects} />
               )}
               {user?.Role !== 'BILLER' && user?.Role !== 'TEAM' && (
-                < LawFirmTimeline />
+                < LawFirmTimeline 
+                  timelineData={filteredTimelineData}
+                  timelineLoading={filterLoading}
+                />
               )}
               {user?.Role === 'PROVIDER' && (
-                < TimeEfficiency projectId={undefined} />
+                < TimeEfficiency projectId={undefined} filteredProjects={filteredProjects} />
               )}
               <LawFirmMeetingSystem />
               {user?.Role !== 'TEAM' && (
-                <Billing />
+                <Billing filteredProjects={filteredProjects} />
               )}
               {user?.Role === 'PROVIDER' && (
-                <BusinessStatus />
+                <BusinessStatus filteredProjects={filteredProjects} />
               )}
             </div>
           </div>
@@ -150,6 +152,15 @@ const Dashboard = () => {
         <AILawyerAssistant />
       )}
     </>
+  );
+};
+
+// Main Dashboard Component with Filter Provider
+const Dashboard = () => {
+  return (
+    <DashboardFilterProvider>
+      <DashboardContent />
+    </DashboardFilterProvider>
   );
 };
 

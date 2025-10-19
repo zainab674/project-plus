@@ -79,6 +79,17 @@ const downloadFile = async (url, filename) => {
   }
 };
 
+// Utility function to view files in new tab
+const viewFile = (url) => {
+  try {
+    console.log('Viewing file:', { url });
+    // Direct Cloudinary URL for viewing
+    window.open(url, '_blank');
+  } catch (error) {
+    console.error('View error:', error);
+  }
+};
+
 const FlowchartModal = ({
     isOpen,
     onClose,
@@ -445,6 +456,12 @@ const FlowchartModal = ({
                                                             </div>
                                                             {doc.file_url && (
                                                                 <div className="flex gap-2 mt-2">
+                                                                    <button
+                                                                        onClick={() => viewFile(doc.file_url, doc.filename)}
+                                                                        className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200"
+                                                                    >
+                                                                        View
+                                                                    </button>
                                                                     <button
                                                                         onClick={() => downloadFile(doc.file_url, doc.filename)}
                                                                         className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"

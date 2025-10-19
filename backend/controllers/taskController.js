@@ -1131,6 +1131,23 @@ export const getProgress = catchAsyncError(async (req, res, next) => {
                     name: true,
                     email: true
                 }
+            },
+            task: {
+                select: {
+                    Media: {
+                        select: {
+                            media_id: true,
+                            file_url: true,
+                            filename: true,
+                            mimeType: true,
+                            size: true,
+                            created_at: true
+                        },
+                        orderBy: {
+                            created_at: 'desc'
+                        }
+                    }
+                }
             }
         }
     });
@@ -1233,6 +1250,7 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             }
         },
         select: {
+            project_id: true,
             name: true,
             Clients: {
                 select: {
@@ -1254,6 +1272,7 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             }
         },
         select: {
+            project_id: true,
             name: true,
             description: true,
             Tasks: {
@@ -1272,7 +1291,20 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
                                     name: true,
                                     assigned_to: true,
                                     assignees: true,
-                                    description: true
+                                    description: true,
+                                    Media: {
+                                        select: {
+                                            media_id: true,
+                                            file_url: true,
+                                            filename: true,
+                                            mimeType: true,
+                                            size: true,
+                                            created_at: true
+                                        },
+                                        orderBy: {
+                                            created_at: 'desc'
+                                        }
+                                    }
                                 }
                             },
                             user: {
@@ -1294,6 +1326,7 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             }
         },
         select: {
+            project_id: true,
             name: true,
             description: true,
             Time: {
@@ -1326,6 +1359,7 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             }
         }
     });
+
 
     res.status(200).json({
         success: true,
@@ -2084,7 +2118,9 @@ export const getTimeEfficiencyData = catchAsyncError(async (req, res, next) => {
                 rejected: rejectedReviews,
                 pending: pendingReviews
             },
-            projectsCount: memberData.projects.length
+            projectsCount: memberData.projects.length,
+            project_ids: memberData.projects.map(p => p.project_id),
+            projects: memberData.projects
         });
     }
 

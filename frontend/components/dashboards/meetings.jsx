@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Users, Calendar, Clock, MapPin, FileText, Video, Phone, User, Building, Play } from 'lucide-react';
 import { getsMeetingRequest } from '@/lib/http/meeting';
 import { useUser } from '@/providers/UserProvider';
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider';
 import moment from 'moment';
 import JoinMeetingButton, { MeetingStatusBadge } from '@/components/JoinMeetingButton';
 
@@ -53,7 +54,10 @@ const transformMeetingData = (meeting) => {
         caseNumber: meeting.meeting_id.slice(0, 8).toUpperCase(),
         status: meeting.status,
         isScheduled: meeting.isScheduled,
-        meeting_id: meeting.meeting_id
+        meeting_id: meeting.meeting_id,
+        // Include project information for filtering
+        task: meeting.task,
+        project: meeting.task?.project
     };
 };
 
@@ -228,6 +232,18 @@ const MeetingDetailModal = ({ meeting, onClose, onBack }) => (
                                 <span className="text-gray-600">Case Number:</span>
                                 <span className="font-medium">{meeting.caseNumber}</span>
                             </div>
+                            {meeting.project && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Project:</span>
+                                    <span className="font-medium">{meeting.project.name}</span>
+                                </div>
+                            )}
+                            {meeting.project?.client_name && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Client:</span>
+                                    <span className="font-medium">{meeting.project.client_name}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -293,6 +309,7 @@ const LawFirmMeetingSystem = () => {
     const [meetings, setMeetings] = useState([]);
     const [loading, setLoading] = useState(true);
     const { user } = useUser();
+    const { selectedCase, selectedMonthYear, filteredProjects } = useDashboardFilter();
 
     const fetchMeetings = useCallback(async () => {
         try {
@@ -316,6 +333,37 @@ const LawFirmMeetingSystem = () => {
 
     const todaysMeetings = meetings.filter(meeting => meeting.date === 'Today');
     const upcomingMeetings = meetings.filter(meeting => meeting.date !== 'Today');
+
+    // Filter meetings based on selected case and month
+    const filteredMeetings = useMemo(() => {
+        let filtered = meetings;
+
+        // Filter by selected case if any
+        if (selectedCase) {
+            // Filter meetings that are related to the selected case
+            filtered = filtered.filter(meeting => {
+                // Check if meeting has project information and matches selected case
+                return meeting.task?.project?.project_id === selectedCase.project_id;
+            });
+        }
+
+        // Filter by selected month-year if any
+        if (selectedMonthYear) {
+            const [month, year] = selectedMonthYear.split(' ');
+            const startOfMonth = moment(`${year}-${moment().month(month).format('MM')}-01`);
+            const endOfMonth = startOfMonth.clone().endOf('month');
+
+            filtered = filtered.filter(meeting => {
+                const meetingDate = moment(meeting.startTime || meeting.created_at);
+                return meetingDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+            });
+        }
+
+        return filtered;
+    }, [meetings, selectedCase, selectedMonthYear]);
+
+    const filteredTodaysMeetings = filteredMeetings.filter(meeting => meeting.date === 'Today');
+    const filteredUpcomingMeetings = filteredMeetings.filter(meeting => meeting.date !== 'Today');
 
     const handleSelectMeeting = (meeting) => {
         setSelectedMeeting(meeting);
@@ -383,7 +431,7 @@ const LawFirmMeetingSystem = () => {
                                         <p className="text-sm text-gray-600 mt-1">Active schedule</p>
                                     </div>
                                     <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-                                        {todaysMeetings.length}
+                                        {filteredTodaysMeetings.length}
                                     </span>
                                 </div>
                             </div>
@@ -399,7 +447,7 @@ const LawFirmMeetingSystem = () => {
                                         <p className="text-sm text-gray-600 mt-1">Future schedule</p>
                                     </div>
                                     <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-                                        {upcomingMeetings.length}
+                                        {filteredUpcomingMeetings.length}
                                     </span>
                                 </div>
                             </div>
@@ -410,13 +458,13 @@ const LawFirmMeetingSystem = () => {
                                 <div className="flex justify-between items-center text-sm mt-2">
                                     <span className="text-gray-600">Immediate Meetings:</span>
                                     <span className="font-medium text-blue-600">
-                                        {meetings.filter(m => !m.isScheduled).length}
+                                        {filteredMeetings.filter(m => !m.isScheduled).length}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center text-sm mt-2">
                                     <span className="text-gray-600">Scheduled Meetings:</span>
                                     <span className="font-medium text-green-600">
-                                        {meetings.filter(m => m.isScheduled).length}
+                                        {filteredMeetings.filter(m => m.isScheduled).length}
                                     </span>
                                 </div>
                             </div>
@@ -434,7 +482,7 @@ const LawFirmMeetingSystem = () => {
                 <MeetingListModal
                     onClose={() => setActiveModal(null)}
                     onSelectMeeting={handleSelectMeeting}
-                    meetings={meetings}
+                    meetings={filteredMeetings}
                 />
             )}
 

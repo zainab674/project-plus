@@ -1,16 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Briefcase, Calendar, User, Clock, ChevronRight, Eye, AlertCircle } from 'lucide-react';
 import { getAllProjectRequest } from '@/lib/http/project';
 import { useUser } from '@/providers/UserProvider';
 import Link from 'next/link';
 import moment from 'moment';
 
-const RecentCases = () => {
+const RecentCases = ({ filteredProjects = null }) => {
     const [recentCases, setRecentCases] = useState([]);
     const [loading, setLoading] = useState(true);
     const { user } = useUser();
 
+    // Use filtered projects if provided, otherwise fetch from API
+    const cases = useMemo(() => {
+        if (filteredProjects && Array.isArray(filteredProjects)) {
+            return filteredProjects;
+        }
+        return recentCases;
+    }, [filteredProjects, recentCases]);
+
     const fetchRecentCases = useCallback(async () => {
+        // Skip API call if filtered projects are provided
+        if (filteredProjects) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             const response = await getAllProjectRequest();
@@ -37,13 +51,33 @@ const RecentCases = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [filteredProjects]);
 
     useEffect(() => {
         if (user) {
             fetchRecentCases();
         }
     }, [user, fetchRecentCases]);
+
+    // Filter cases based on user role and status
+    const filteredCases = useMemo(() => {
+        if (!Array.isArray(cases)) return [];
+
+        let filtered = cases.filter(caseItem => caseItem && caseItem.project_id);
+
+        // Filter by user role
+        if (user?.Role === 'TEAM') {
+            // Only show cases where user is a member
+            filtered = filtered.filter(caseItem => 
+                caseItem.Members?.some(member => member.user?.user_id === user.user_id)
+            );
+        }
+
+        // Sort by creation date (most recent first) and take only 4
+        return filtered
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 4);
+    }, [cases, user]);
 
     const getStatusColor = (status) => {
         switch (status?.toUpperCase()) {
@@ -104,14 +138,16 @@ const RecentCases = () => {
                 </Link>
             </div>
 
-            {recentCases.length === 0 ? (
+            {filteredCases.length === 0 ? (
                 <div className="text-center py-8">
                     <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">No recent cases found</p>
+                    <p className="text-gray-500 text-sm">
+                        {filteredProjects ? 'No cases match the current filters' : 'No recent cases found'}
+                    </p>
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {recentCases.map((caseItem) => (
+                    {filteredCases.map((caseItem) => (
                         <Link 
                             key={caseItem.project_id} 
                             href={`/dashboard/project/${caseItem.project_id}`}

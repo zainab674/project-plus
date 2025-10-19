@@ -15,6 +15,7 @@
     "@fullcalendar/react": "^6.1.17",
     "@fullcalendar/timegrid": "^6.1.17",
     "@headlessui/react": "^2.2.4",
+    "@heroicons/react": "^2.2.0",
     "@livekit/components-react": "^2.9.14",
     "@livekit/components-styles": "^1.1.6",
     "@pdftron/webviewer": "^11.3.0",

@@ -1,25 +1,178 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TrendingUp, Clock, Users, Calendar, X, CheckCircle, AlertCircle, Target, MessageSquare, User, Loader2, Briefcase } from 'lucide-react';
 import { getTimeEfficiencyDataRequest } from '@/lib/http/task';
+import { getAllTaskProgressRequest } from '@/lib/http/task';
 import { useUser } from '@/providers/UserProvider';
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider';
 import moment from 'moment';
+import dayjs from 'dayjs';
 
-const TimeEfficiency = ({ projectId }) => {
+const TimeEfficiency = ({ projectId, filteredProjects = null }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [timeData, setTimeData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const { user } = useUser();
+    
+    // Get filter context
+    const { 
+        filteredProjects: contextFilteredProjects, 
+        selectedCase, 
+        selectedMonthYear,
+        isLoading: filterLoading 
+    } = useDashboardFilter();
+
+    // Use projects from context if available, otherwise use prop
+    const effectiveFilteredProjects = contextFilteredProjects.length > 0 ? contextFilteredProjects : filteredProjects;
+    
+    // Filter time data based on filtered projects
+    const filteredTimeData = useMemo(() => {
+        if (!effectiveFilteredProjects || !Array.isArray(effectiveFilteredProjects) || projectId) {
+            return timeData;
+        }
+
+        const filteredProjectIds = effectiveFilteredProjects.map(project => project.project_id);
+        return timeData.filter(dataItem => 
+            dataItem.project_ids && dataItem.project_ids.some(pid => filteredProjectIds.includes(pid))
+        );
+    }, [timeData, effectiveFilteredProjects, projectId]);
+
+    // Helper function to calculate efficiency from time data
+    const calculateEfficiencyFromTimeData = (timeData) => {
+        const userMap = new Map();
+        
+        timeData.forEach(project => {
+            project.Time?.forEach(timeEntry => {
+                const userName = timeEntry.user?.name || 'Unknown';
+                const userId = timeEntry.user?.user_id || userName;
+                
+                if (!userMap.has(userId)) {
+                    userMap.set(userId, {
+                        lawyer: userName,
+                        title: 'TEAM', // Default role, could be enhanced
+                        totalHours: 0,
+                        taskHours: 0,
+                        meetingHours: 0,
+                        clientHours: 0,
+                        researchHours: 0,
+                        tasksCompleted: 0,
+                        efficiency: 0,
+                        tasksAccuracy: 0,
+                        tasks: [],
+                        reviewStats: { total: 0, approved: 0, rejected: 0, pending: 0 },
+                        projectsCount: 0,
+                        project_ids: [],
+                        projects: []
+                    });
+                }
+                
+                const userData = userMap.get(userId);
+                const hours = timeEntry.end && timeEntry.start ? 
+                    (new Date(timeEntry.end) - new Date(timeEntry.start)) / (1000 * 60 * 60) : 0;
+                
+                userData.totalHours += hours;
+                userData.taskHours += hours; // Simplified - all time is task time
+                userData.tasksCompleted += 1;
+                
+                // Add project info
+                if (!userData.project_ids.includes(project.project_id)) {
+                    userData.project_ids.push(project.project_id);
+                    userData.projects.push({ project_id: project.project_id, name: project.name });
+                    userData.projectsCount += 1;
+                }
+            });
+        });
+        
+        // Calculate efficiency (simplified calculation)
+        userMap.forEach(userData => {
+            userData.efficiency = userData.tasksCompleted > 0 ? 
+                Math.min(100, Math.round((userData.tasksCompleted / Math.max(1, userData.totalHours)) * 20)) : 0;
+            userData.tasksAccuracy = userData.efficiency; // Simplified
+        });
+        
+        return Array.from(userMap.values());
+    };
 
     // Fetch real-time efficiency data
     const fetchEfficiencyData = async () => {
         try {
             setLoading(true);
             setError(null);
-            const response = await getTimeEfficiencyDataRequest(projectId);
-            setTimeData(response.data.efficiencyData || []);
+            
+            // If we have date filtering, use getAllTaskProgress API for more accurate data
+            if (selectedMonthYear) {
+                const [month, year] = selectedMonthYear.split(' ');
+                const startOfMonth = dayjs(`${year}-${dayjs().month(month).format('MM')}-01`);
+                const endOfMonth = startOfMonth.endOf('month');
+                
+                const projectId = effectiveFilteredProjects?.length === 1 ? effectiveFilteredProjects[0].project_id : null;
+                
+                const response = await getAllTaskProgressRequest(
+                    startOfMonth.format('DD-MM-YYYY'),
+                    endOfMonth.format('DD-MM-YYYY'),
+                    null,
+                    projectId
+                );
+                
+                const efficiencyData = calculateEfficiencyFromTimeData(response.data.times || []);
+                setTimeData(efficiencyData);
+            } else if (effectiveFilteredProjects && effectiveFilteredProjects.length > 0 && !projectId) {
+                // If we have filtered projects but no date filter, use the efficiency API
+                const allEfficiencyData = [];
+                
+                for (const project of effectiveFilteredProjects) {
+                    try {
+                        const response = await getTimeEfficiencyDataRequest(project.project_id);
+                        if (response.data.efficiencyData) {
+                            allEfficiencyData.push(...response.data.efficiencyData);
+                        }
+                    } catch (projectErr) {
+                        console.error(`Error fetching data for project ${project.project_id}:`, projectErr);
+                    }
+                }
+                
+                // Remove duplicates based on user name and combine data
+                const uniqueUsers = new Map();
+                allEfficiencyData.forEach(data => {
+                    const key = data.lawyer;
+                    if (!uniqueUsers.has(key)) {
+                        uniqueUsers.set(key, { ...data });
+                    } else {
+                        const existing = uniqueUsers.get(key);
+                        // Combine the data (sum hours, average efficiency, etc.)
+                        existing.totalHours += data.totalHours;
+                        existing.taskHours += data.taskHours;
+                        existing.meetingHours += data.meetingHours;
+                        existing.clientHours += data.clientHours;
+                        existing.researchHours += data.researchHours;
+                        existing.tasksCompleted += data.tasksCompleted;
+                        existing.projectsCount += data.projectsCount;
+                        existing.project_ids = [...(existing.project_ids || []), ...(data.project_ids || [])];
+                        existing.projects = [...(existing.projects || []), ...(data.projects || [])];
+                        
+                        // Recalculate efficiency as average
+                        existing.efficiency = Math.round((existing.efficiency + data.efficiency) / 2);
+                        
+                        // Combine review stats
+                        if (data.reviewStats) {
+                            existing.reviewStats = {
+                                total: (existing.reviewStats?.total || 0) + (data.reviewStats.total || 0),
+                                approved: (existing.reviewStats?.approved || 0) + (data.reviewStats.approved || 0),
+                                rejected: (existing.reviewStats?.rejected || 0) + (data.reviewStats.rejected || 0),
+                                pending: (existing.reviewStats?.pending || 0) + (data.reviewStats.pending || 0)
+                            };
+                        }
+                    }
+                });
+                
+                setTimeData(Array.from(uniqueUsers.values()));
+            } else {
+                // Use the original single project approach
+                const response = await getTimeEfficiencyDataRequest(projectId);
+                setTimeData(response.data.efficiencyData || []);
+            }
         } catch (err) {
             console.error('Error fetching efficiency data:', err);
             setError(err?.response?.data?.message || 'Failed to load efficiency data');
@@ -31,7 +184,7 @@ const TimeEfficiency = ({ projectId }) => {
 
     useEffect(() => {
         fetchEfficiencyData();
-    }, [projectId]);
+    }, [projectId, effectiveFilteredProjects, selectedMonthYear]);
 
     // Refresh data every 5 minutes
     useEffect(() => {
@@ -40,7 +193,7 @@ const TimeEfficiency = ({ projectId }) => {
         }, 5 * 60 * 1000);
 
         return () => clearInterval(interval);
-    }, [projectId]);
+    }, [projectId, effectiveFilteredProjects, selectedMonthYear]);
 
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
@@ -79,9 +232,9 @@ const TimeEfficiency = ({ projectId }) => {
         return null;
     };
 
-    const totalHours = timeData.reduce((sum, lawyer) => sum + lawyer.totalHours, 0);
-    const avgEfficiency = timeData.length > 0 ? Math.round(timeData.reduce((sum, lawyer) => sum + lawyer.efficiency, 0) / timeData.length) : 0;
-    const topPerformer = timeData.length > 0 ? timeData.reduce((max, lawyer) => lawyer.efficiency > max.efficiency ? lawyer : max) : null;
+    const totalHours = filteredTimeData.reduce((sum, lawyer) => sum + lawyer.totalHours, 0);
+    const avgEfficiency = filteredTimeData.length > 0 ? Math.round(filteredTimeData.reduce((sum, lawyer) => sum + lawyer.efficiency, 0) / filteredTimeData.length) : 0;
+    const topPerformer = filteredTimeData.length > 0 ? filteredTimeData.reduce((max, lawyer) => lawyer.efficiency > max.efficiency ? lawyer : max) : null;
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -157,7 +310,7 @@ const TimeEfficiency = ({ projectId }) => {
         );
     }
 
-    if (timeData.length === 0) {
+    if (filteredTimeData.length === 0) {
         return (
             <div className="bg-white rounded-lg shadow-lg border-2 border-zinc-200">
                 <div className="px-6 py-4 border-b border-zinc-200 bg-zinc-300">
@@ -233,7 +386,7 @@ const TimeEfficiency = ({ projectId }) => {
             >
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                        data={timeData}
+                        data={filteredTimeData}
                         margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -452,7 +605,7 @@ const TimeEfficiency = ({ projectId }) => {
                                 // All Employees Overview
                                 <div className="p-6">
                                     <div className="grid gap-4">
-                                        {timeData.map((employee, index) => (
+                                        {filteredTimeData.map((employee, index) => (
                                             <div
                                                 key={index}
                                                 className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer"

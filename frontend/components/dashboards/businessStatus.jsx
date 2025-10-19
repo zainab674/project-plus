@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FileText, Users, DollarSign, CheckCircle, Clock, AlertCircle, X, RefreshCw, Settings } from 'lucide-react';
 import { getAllProjectWithTasksRequest } from '@/lib/http/project';
 import { getBillingConfigRequest, getMemberRatesRequest, getProjectBillingEntriesRequest } from '@/lib/http/client';
 import { toast } from 'react-toastify';
 import { useUser } from '@/providers/UserProvider';
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider';
 import BillingConfigModal from '@/components/modals/BillingConfigModal';
 import { getExpensesRequest } from '@/lib/http/expenses';
+import moment from 'moment';
 
-const BusinessStatus = () => {
+const BusinessStatus = ({ filteredProjects = null }) => {
     const [cases, setCases] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -15,13 +17,45 @@ const BusinessStatus = () => {
     const [totalExpenses, setTotalExpenses] = useState(0);
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM format
 
-
     const [billingConfigModal, setBillingConfigModal] = useState({
         isOpen: false,
         caseId: null,
         caseName: ''
     });
     const { user } = useUser();
+    const { selectedCase, selectedMonthYear } = useDashboardFilter();
+
+    // Filter cases based on filtered projects and month
+    const filteredCases = useMemo(() => {
+        let filtered = cases;
+
+        // Filter by selected case if any
+        if (selectedCase) {
+            filtered = filtered.filter(caseItem => 
+                caseItem.project_id === selectedCase.project_id
+            );
+        } else if (filteredProjects && Array.isArray(filteredProjects)) {
+            const filteredProjectIds = filteredProjects.map(project => project.project_id);
+            filtered = filtered.filter(caseItem => 
+                caseItem.project_id && filteredProjectIds.includes(caseItem.project_id)
+            );
+        }
+
+        // Filter by selected month-year if any
+        if (selectedMonthYear) {
+            const [month, year] = selectedMonthYear.split(' ');
+            const startOfMonth = moment(`${year}-${moment().month(month).format('MM')}-01`);
+            const endOfMonth = startOfMonth.clone().endOf('month');
+
+            filtered = filtered.filter(caseItem => {
+                if (!caseItem.created_at) return false;
+                const caseDate = moment(caseItem.created_at);
+                return caseDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+            });
+        }
+
+        return filtered;
+    }, [cases, selectedCase, selectedMonthYear, filteredProjects]);
 
     const loadExpenses = async () => {
         setLoading(true);
@@ -257,7 +291,7 @@ const BusinessStatus = () => {
     });
 
     // Calculate account receivable (sum of all actual billed activities)
-    const accountReceivable = cases.reduce((total, caseItem) => {
+    const accountReceivable = filteredCases.reduce((total, caseItem) => {
         // Sum up billed activities from billing entries
         if (caseItem.billingEntries && caseItem.billingEntries.length > 0) {
             const billedActivities = caseItem.billingEntries.filter(entry =>
@@ -272,7 +306,7 @@ const BusinessStatus = () => {
     }, 0);
 
     // Calculate unbilled activities (work done but not yet billed)
-    const unbilledActivities = cases.reduce((total, caseItem) => {
+    const unbilledActivities = filteredCases.reduce((total, caseItem) => {
         if (caseItem.billingEntries && caseItem.billingEntries.length > 0) {
             const unbilledEntries = caseItem.billingEntries.filter(entry =>
                 !entry.status || entry.status === 'PENDING' || entry.status === 'DRAFT'
@@ -286,7 +320,7 @@ const BusinessStatus = () => {
     }, 0);
 
     // Calculate account payable (sum of all member payments based on completed tasks)
-    const accountPayable = cases.reduce((total, caseItem) => {
+    const accountPayable = filteredCases.reduce((total, caseItem) => {
         let casePayable = 0;
 
         if (caseItem.memberRates && caseItem.memberRates.length > 0) {
@@ -315,7 +349,7 @@ const BusinessStatus = () => {
         return total + casePayable;
     }, 0);
 
-    const totalCompletedTasks = cases.reduce((total, caseItem) => {
+    const totalCompletedTasks = filteredCases.reduce((total, caseItem) => {
         return total + (caseItem.completedTasks?.length || 0);
     }, 0);
 
@@ -639,7 +673,7 @@ const BusinessStatus = () => {
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
                                     <p className="mt-2 text-sm text-gray-500">Loading cases...</p>
                                 </div>
-                            ) : cases.length === 0 ? (
+                            ) : filteredCases.length === 0 ? (
                                 <div className="text-center py-8">
                                     <FileText className="mx-auto h-12 w-12 text-gray-400" />
                                     <h3 className="mt-2 text-sm font-medium text-gray-900">No cases found</h3>
@@ -649,7 +683,7 @@ const BusinessStatus = () => {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {cases.map((caseItem, index) => (
+                                    {filteredCases.map((caseItem, index) => (
                                         <div key={caseItem.project_id} className="border border-gray-200 rounded-lg p-4">
                                             {/* Case Header */}
                                             <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">

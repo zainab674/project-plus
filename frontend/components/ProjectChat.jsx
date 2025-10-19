@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Bell, MessageCircle, Moon, PenSquare, Search, Users, ListTodo, Send, Calendar, X } from 'lucide-react'
+import { Bell, MessageCircle, Moon, PenSquare, Search, Users, ListTodo, Send, Calendar, X, FileText } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -16,6 +16,7 @@ import moment from 'moment'
 import { getGroupChatMessages, getProjectGroupChatInfo } from "@/lib/http/chat"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import InternalDocumentSelector from "./InternalDocumentSelector"
 
 export default function ProjectChat({ project }) {
   const [messages, setMessages] = useState([]);
@@ -26,6 +27,8 @@ export default function ProjectChat({ project }) {
   const [searchDate, setSearchDate] = useState(null); // State for date search
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false); // State for date picker popover
   const [selectedFile, setSelectedFile] = useState(null); // State for file attachment
+  const [selectedInternalDoc, setSelectedInternalDoc] = useState(null);
+  const [showInternalDocSelector, setShowInternalDocSelector] = useState(false);
   const { user } = useUser();
   const { handleSendMessage, socketRef } = useChatHook();
   const containerRef = useRef(null);
@@ -121,7 +124,13 @@ export default function ProjectChat({ project }) {
         return;
       }
       setSelectedFile(file);
+      setSelectedInternalDoc(null); // Clear internal doc when PC file is selected
     }
+  };
+
+  const handleInternalDocSelect = (doc) => {
+    setSelectedInternalDoc(doc);
+    setSelectedFile(null); // Clear PC file when internal doc is selected
   };
 
   // Handle task selection change
@@ -139,6 +148,7 @@ export default function ProjectChat({ project }) {
     try {
       // Store file reference before clearing
       const fileToUpload = selectedFile;
+      const internalDocToUpload = selectedInternalDoc;
       
       // Create message data for socket with attachment info
       const socketData = {
@@ -154,10 +164,10 @@ export default function ProjectChat({ project }) {
         project_id: project.project_id,
         is_group_chat: true,
         // Include attachment info in socket data
-        attachment_url: fileToUpload ? 'uploading...' : null,
-        attachment_name: fileToUpload?.name,
-        attachment_size: fileToUpload?.size,
-        attachment_mime_type: fileToUpload?.type
+        attachment_url: (fileToUpload || internalDocToUpload) ? 'uploading...' : null,
+        attachment_name: fileToUpload?.name || internalDocToUpload?.name,
+        attachment_size: fileToUpload?.size || internalDocToUpload?.size,
+        attachment_mime_type: fileToUpload?.type || 'application/pdf'
       };
 
       // Send via socket immediately - don't wait for it
@@ -173,16 +183,17 @@ export default function ProjectChat({ project }) {
       const messageWithTempId = { 
         ...socketData, 
         message_id: tempMessageId,
-        attachment_url: fileToUpload ? 'uploading...' : null,
-        attachment_name: fileToUpload?.name,
-        attachment_size: fileToUpload?.size,
-        attachment_mime_type: fileToUpload?.type
+        attachment_url: (fileToUpload || internalDocToUpload) ? 'uploading...' : null,
+        attachment_name: fileToUpload?.name || internalDocToUpload?.name,
+        attachment_size: fileToUpload?.size || internalDocToUpload?.size,
+        attachment_mime_type: fileToUpload?.type || 'application/pdf'
       };
       setMessages(prev => [...prev, messageWithTempId]);
       setMessageValue('');
       
-      // Clear selected file immediately after adding to messages
+      // Clear selected files immediately after adding to messages
       setSelectedFile(null);
+      setSelectedInternalDoc(null);
       
       // Clear the file input
       const fileInput = document.getElementById('file-upload');
@@ -471,16 +482,34 @@ export default function ProjectChat({ project }) {
                                 }
                               </p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => window.open(message.attachment_url, '_blank')}
-                              className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  // Direct Cloudinary URL for viewing
+                                  window.open(message.attachment_url, '_blank');
+                                }}
+                                className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                                title="View file"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => window.open(message.attachment_url, '_blank')}
+                                className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700"
+                                title="Download file"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -528,7 +557,7 @@ export default function ProjectChat({ project }) {
             className="flex-1 border border-gray-600"
           />
           
-          {/* File Upload Button */}
+          {/* File Upload Buttons */}
           <input
             id="file-upload"
             type="file"
@@ -549,6 +578,16 @@ export default function ProjectChat({ project }) {
           </Button>
           
           <Button
+            type="button"
+            variant="outline"
+            className="px-3"
+            disabled={sending}
+            onClick={() => setShowInternalDocSelector(true)}
+          >
+            <FileText className="w-4 h-4" />
+          </Button>
+          
+          <Button
             onClick={handleSend}
             disabled={!messageValue.trim() || sending}
             className="px-4"
@@ -561,7 +600,41 @@ export default function ProjectChat({ project }) {
           </Button>
         </div>
         <p className="text-xs text-gray-500 mt-1">Maximum file size: 10MB</p>
+        {(selectedFile || selectedInternalDoc) && (
+          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-blue-800">
+                  {selectedFile ? selectedFile.name : selectedInternalDoc?.name}
+                </span>
+                {selectedFile && (
+                  <span className="text-xs text-blue-600">
+                    ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedFile(null);
+                  setSelectedInternalDoc(null);
+                }}
+                className="text-blue-600 hover:text-blue-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Internal Document Selector */}
+      <InternalDocumentSelector
+        isOpen={showInternalDocSelector}
+        onClose={() => setShowInternalDocSelector(false)}
+        onSelect={handleInternalDocSelect}
+        selectedFile={selectedInternalDoc}
+      />
 
       {/* Audio element for notifications */}
       <audio ref={audioRef} src="/ding.mp3" preload="auto" />

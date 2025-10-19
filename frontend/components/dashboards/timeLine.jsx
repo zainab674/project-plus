@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Clock, BarChart3, TrendingUp, Calendar, FileText, Users, Gavel, DollarSign, ChevronRight, Activity, Mail, MessageSquare, Video, FileText as FileTextIcon } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { getAllProjectWithTasksRequest } from '@/lib/http/project';
-import { getAllTaskProgressRequest } from '@/lib/http/task';
 import Loader from '../Loader';
 import Link from 'next/link';
 import CaseDetail from '../modals/TimelineCase';
@@ -17,6 +16,228 @@ console.log('Dayjs test:', {
     parsed: dayjs('15-07-2025', 'DD-MM-YYYY').isValid(),
     testDate: dayjs('15-07-2025', 'DD-MM-YYYY').format('DD-MM-YYYY')
 });
+
+// Utility function to view files in new tab with proper filename
+const viewFile = async (url, filename) => {
+  try {
+    console.log('Viewing file:', { url, filename });
+    
+    // Check if it's a Cloudinary URL that might force download
+    const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
+    
+    if (isCloudinaryUrl) {
+      // For Cloudinary URLs, fetch the content and display it inline
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('Failed to fetch file');
+        }
+        
+        const contentType = response.headers.get('content-type') || '';
+        const fileContent = await response.text();
+        
+        // Create a new window and display the content inline
+        const newWindow = window.open('', '_blank');
+        
+        if (newWindow) {
+          // Create a simpler approach using data attributes
+          const escapedContent = fileContent.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+          const escapedContentType = contentType.replace(/"/g, '&quot;');
+          const escapedUrl = url.replace(/"/g, '&quot;');
+          const escapedFilename = (filename || 'document').replace(/"/g, '&quot;');
+          
+          newWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>${filename || 'Document Viewer'}</title>
+              <style>
+                body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #f5f5f5; }
+                .viewer-container { 
+                  max-width: 1200px; 
+                  margin: 0 auto; 
+                  background: white; 
+                  border-radius: 8px; 
+                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                  overflow: hidden;
+                }
+                .header { 
+                  background: #f8f9fa; 
+                  padding: 15px 20px; 
+                  border-bottom: 1px solid #dee2e6;
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                }
+                .content { 
+                  padding: 20px; 
+                  min-height: 400px;
+                  overflow: auto;
+                }
+                .fallback { 
+                  text-align: center; 
+                  padding: 50px; 
+                  color: #6c757d;
+                }
+                .fallback a { 
+                  color: #0066cc; 
+                  text-decoration: none; 
+                  margin: 0 10px;
+                }
+                .fallback a:hover { 
+                  text-decoration: underline; 
+                }
+                .btn {
+                  padding: 8px 16px;
+                  border: none;
+                  border-radius: 4px;
+                  cursor: pointer;
+                  text-decoration: none;
+                  display: inline-block;
+                  font-size: 14px;
+                }
+                .btn-primary {
+                  background: #007bff;
+                  color: white;
+                }
+                .btn-secondary {
+                  background: #6c757d;
+                  color: white;
+                }
+                .btn:hover {
+                  opacity: 0.9;
+                }
+                pre {
+                  white-space: pre-wrap;
+                  word-wrap: break-word;
+                  font-family: 'Courier New', monospace;
+                  background: #f8f9fa;
+                  padding: 15px;
+                  border-radius: 4px;
+                  border: 1px solid #e9ecef;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="viewer-container">
+                <div class="header">
+                  <h3 style="margin: 0; color: #495057;">${filename || 'Document Viewer'}</h3>
+                  <div>
+                    <a href="${url}" download="${filename || 'document'}" class="btn btn-secondary">Download</a>
+                    <button onclick="window.close()" class="btn btn-primary">Close</button>
+                  </div>
+                </div>
+                <div class="content" id="content" 
+                     data-content="${escapedContent}" 
+                     data-content-type="${escapedContentType}" 
+                     data-url="${escapedUrl}" 
+                     data-filename="${escapedFilename}">
+                  <!-- Content will be loaded here -->
+                </div>
+              </div>
+              <script>
+                function getContentDisplay(content, contentType, url, filename) {
+                  if (contentType.includes('text/plain') || contentType.includes('text/csv')) {
+                    return '<pre>' + escapeHtml(content) + '</pre>';
+                  } else if (contentType.includes('text/html')) {
+                    return content;
+                  } else if (contentType.includes('application/json')) {
+                    try {
+                      const json = JSON.parse(content);
+                      return '<pre>' + escapeHtml(JSON.stringify(json, null, 2)) + '</pre>';
+                    } catch (e) {
+                      return '<pre>' + escapeHtml(content) + '</pre>';
+                    }
+                  } else if (contentType.includes('image/')) {
+                    return '<img src="' + url + '" style="max-width: 100%; height: auto;" alt="Image preview" />';
+                  } else if (contentType.includes('pdf')) {
+                    return '<iframe src="' + url + '" style="width: 100%; height: 600px; border: none;"></iframe>';
+                  } else {
+                    return '<div class="fallback"><h4>Preview not available</h4><p>This file type cannot be previewed in the browser.</p><a href="' + url + '" download="' + filename + '">Download File</a></div>';
+                  }
+                }
+                
+                function escapeHtml(text) {
+                  const div = document.createElement('div');
+                  div.textContent = text;
+                  return div.innerHTML;
+                }
+                
+                // Load content after page is ready
+                document.addEventListener('DOMContentLoaded', function() {
+                  const contentDiv = document.getElementById('content');
+                  const content = contentDiv.getAttribute('data-content');
+                  const contentType = contentDiv.getAttribute('data-content-type');
+                  const url = contentDiv.getAttribute('data-url');
+                  const filename = contentDiv.getAttribute('data-filename');
+                  
+                  const displayContent = getContentDisplay(content, contentType, url, filename);
+                  contentDiv.innerHTML = displayContent;
+                });
+              </script>
+            </body>
+            </html>
+          `);
+          newWindow.document.close();
+        } else {
+          // Fallback if popup is blocked
+          window.open(url, '_blank');
+        }
+      } catch (fetchError) {
+        console.error('Fetch error:', fetchError);
+        // Fallback to direct link approach
+        window.open(url, '_blank');
+      }
+    } else {
+      // For non-Cloudinary URLs, use the original iframe approach
+      const newWindow = window.open('', '_blank');
+      
+      if (newWindow) {
+        newWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${filename || 'Document Viewer'}</title>
+            <style>
+              body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+              .viewer-container { width: 100%; height: 100vh; }
+              iframe { width: 100%; height: 100%; border: none; }
+              .fallback { text-align: center; padding: 50px; }
+              .fallback a { color: #0066cc; text-decoration: none; }
+              .fallback a:hover { text-decoration: underline; }
+            </style>
+          </head>
+          <body>
+            <div class="viewer-container">
+              <iframe src="${url}" onerror="showFallback()"></iframe>
+            </div>
+            <div class="fallback" id="fallback" style="display: none;">
+              <h3>File Preview Not Available</h3>
+              <p>This file cannot be previewed in the browser.</p>
+              <a href="${url}" download="${filename || 'document'}">Download File</a>
+            </div>
+            <script>
+              function showFallback() {
+                document.getElementById('fallback').style.display = 'block';
+                document.querySelector('.viewer-container').style.display = 'none';
+              }
+            </script>
+          </body>
+          </html>
+        `);
+        newWindow.document.close();
+      } else {
+        // Fallback if popup is blocked
+        window.open(url, '_blank');
+      }
+    }
+    
+  } catch (error) {
+    console.error('View error:', error);
+    // Fallback to direct link approach
+    window.open(url, '_blank');
+  }
+};
 
 // Utility function to download files with proper filename
 const downloadFile = async (url, filename) => {
@@ -50,7 +271,6 @@ const downloadFile = async (url, filename) => {
       const link = document.createElement('a');
       link.href = url;
       link.download = finalFilename || 'document';
-      link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -60,6 +280,7 @@ const downloadFile = async (url, filename) => {
     const blob = await response.blob();
     const blobUrl = URL.createObjectURL(blob);
     
+    // For download mode, trigger download
     const link = document.createElement('a');
     link.href = blobUrl;
     link.download = finalFilename || 'document';
@@ -80,7 +301,6 @@ const downloadFile = async (url, filename) => {
       const link = document.createElement('a');
       link.href = url;
       link.download = filename || 'document';
-      link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -101,10 +321,6 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
     const [showNewCaseForm, setShowNewCaseForm] = useState(false);
     const [viewMode, setViewMode] = useState('grid');
     const [searchTerm, setSearchTerm] = useState('');
-    const [internalTimeData, setInternalTimeData] = useState(null);
-    const [internalProgressData, setInternalProgressData] = useState(null);
-    const [internalDocumentsData, setInternalDocumentsData] = useState(null);
-    const [internalTimelineLoading, setInternalTimelineLoading] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [timelineMode, setTimelineMode] = useState('all'); // 'all', 'time', 'progress', 'documents'
@@ -122,11 +338,11 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
         (() => { }) : // No-op if external project is provided
         setInternalSelectedProjectForTimeline;
 
-    // Use external timeline data if provided, otherwise use internal state
-    const timeData = externalTimelineData?.times || internalTimeData;
-    const progressData = externalTimelineData?.progress || internalProgressData;
-    const documentsData = externalTimelineData?.documents || internalDocumentsData;
-    const timelineLoading = externalTimelineLoading !== undefined ? externalTimelineLoading : internalTimelineLoading;
+    // Use external timeline data if provided, otherwise use empty arrays
+    const timeData = externalTimelineData?.times || [];
+    const progressData = externalTimelineData?.progress || [];
+    const documentsData = externalTimelineData?.documents || [];
+    const timelineLoading = externalTimelineLoading !== undefined ? externalTimelineLoading : false;
 
     // Get date ranges for different views
     const getDateRange = (view) => {
@@ -235,9 +451,51 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                 icon = MessageSquare;
                                 color = 'blue';
                                 break;
+                            case 'MEDIA':
+                                icon = FileTextIcon;
+                                color = 'orange';
+                                break;
                             default:
                                 icon = Activity;
                                 color = 'gray';
+                        }
+
+                        // Check if this is a MEDIA type progress entry and has associated media
+                        let hasAttachment = false;
+                        let attachmentUrl = null;
+                        let attachmentName = null;
+                        
+                        if (progress.type === 'MEDIA') {
+                            console.log('MEDIA progress entry found:', {
+                                progressMessage: progress.message,
+                                taskMedia: progress.task?.Media,
+                                taskObject: progress.task,
+                                progressType: progress.type,
+                                fullTaskStructure: JSON.stringify(progress.task, null, 2)
+                            });
+                            
+                            if (progress.task?.Media && progress.task.Media.length > 0) {
+                                console.log('Task has Media array:', progress.task.Media);
+                                
+                                // Find the most recent media that matches the progress message
+                                const recentMedia = progress.task.Media.find(media => 
+                                    progress.message.includes(media.filename)
+                                ) || progress.task.Media[0]; // Fallback to first media if no exact match
+                                
+                                if (recentMedia) {
+                                    hasAttachment = true;
+                                    attachmentUrl = recentMedia.file_url;
+                                    attachmentName = recentMedia.filename;
+                                    console.log('Attachment found:', {
+                                        filename: attachmentName,
+                                        url: attachmentUrl
+                                    });
+                                } else {
+                                    console.log('No matching media found in progress.task.Media array');
+                                }
+                            } else {
+                                console.log('Progress.task.Media is empty or undefined:', progress.task?.Media);
+                            }
                         }
 
                         timeline.push({
@@ -245,14 +503,17 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                             type: 'progress',
                             progressType: progress.type,
                             project: project.name,
-                            task: task.name || '—',
+                            task: progress.task?.name || '—',
                             message: progress.message,
                             user: progress.user?.name || 'Unknown',
                             timestamp: progress.created_at,
                             icon,
                             color,
-                            taskData: task,
-                            projectData: project
+                            taskData: progress.task,
+                            projectData: project,
+                            hasAttachment,
+                            attachmentUrl,
+                            attachmentName
                         });
                     });
                 });
@@ -292,17 +553,43 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
         return timeline.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }, [timeData, progressData, documentsData]);
 
-    // Filter timeline based on mode
+    // Filter timeline based on mode and search term
     const filteredTimeline = useMemo(() => {
-        // Always show all timeline data - no filtering by mode
-        return comprehensiveTimeline;
-    }, [comprehensiveTimeline]);
+        let filtered = comprehensiveTimeline;
+        
+        // Apply search filter
+        if (searchTerm) {
+            filtered = comprehensiveTimeline.filter(item => 
+                item.project?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.task?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.type?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        
+        return filtered;
+    }, [comprehensiveTimeline, searchTerm]);
 
     // Filtered timeline for a specific project
     const projectTimeline = useMemo(() => {
         if (!selectedProjectForTimeline) return [];
-        return comprehensiveTimeline.filter(item => item.project === selectedProjectForTimeline.name);
-    }, [comprehensiveTimeline, selectedProjectForTimeline]);
+        
+        let filtered = comprehensiveTimeline.filter(item => item.project === selectedProjectForTimeline.name);
+        
+        // Apply search filter
+        if (searchTerm) {
+            filtered = filtered.filter(item => 
+                item.project?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.task?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.type?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        
+        return filtered;
+    }, [comprehensiveTimeline, selectedProjectForTimeline, searchTerm]);
 
     // Handle task click to show task details
     const handleTaskClick = (task, project) => {
@@ -327,75 +614,18 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
         }
     }, []);
 
-    const fetchTimeData = React.useCallback(async (view) => {
-        setInternalTimelineLoading(true);
-        try {
-            const dateRange = getDateRange(view);
-            console.log('Fetching time data with date range:', dateRange);
+    // Data fetching is now handled by the DashboardFilterProvider
+    // No need for internal fetchTimeData function
 
-            // If external project is selected, use it for the API call
-            const projectId = selectedProjectForTimeline?.project_id;
-
-            // Make the API call directly - the backend will handle date validation
-            const res = await getAllTaskProgressRequest(dateRange.start, dateRange.end, null, projectId);
-            console.log('Time data response:', res.data);
-
-            // Safely set the data with fallbacks
-            setInternalTimeData(Array.isArray(res.data?.times) ? res.data.times : []);
-            setInternalProgressData(Array.isArray(res.data?.progress) ? res.data.progress : []);
-            setInternalDocumentsData(Array.isArray(res.data?.documents) ? res.data.documents : []);
-        } catch (error) {
-            console.error('Error fetching time data:', error);
-            console.log(error?.response?.data?.message || error?.message);
-            // Set empty arrays on error
-            setInternalTimeData([]);
-            setInternalProgressData([]);
-            setInternalDocumentsData([]);
-        } finally {
-            setInternalTimelineLoading(false);
-        }
-    }, [selectedProjectForTimeline, useCustomDateRange, customDateRange]);
-
-    // Handle custom date range changes
-    const handleDateRangeChange = (field, value) => {
-        setCustomDateRange(prev => ({
-            ...prev,
-            [field]: value
-        }));
-    };
-
-    // Apply custom date range and refresh data
-    const applyCustomDateRange = () => {
-        setUseCustomDateRange(true);
-        fetchTimeData(timelineView);
-    };
-
-    // Reset to default date ranges
-    const resetToDefaultDateRange = () => {
-        setUseCustomDateRange(false);
-        setCustomDateRange({
-            startDate: dayjs().subtract(6, 'day').format('YYYY-MM-DD'),
-            endDate: dayjs().format('YYYY-MM-DD')
-        });
-        fetchTimeData(timelineView);
-    };
+    // Custom date range functionality is now handled by DashboardFilterProvider
+    // These functions are no longer needed
 
     useEffect(() => {
         getProjectAllProject();
     }, []);
 
-    useEffect(() => {
-        if (activeModal === 'timeline') {
-            fetchTimeData(timelineView);
-        }
-    }, [activeModal, timelineView, fetchTimeData]);
-
-    // Fetch data when external project changes
-    useEffect(() => {
-        if (externalSelectedProject) {
-            fetchTimeData(timelineView);
-        }
-    }, [externalSelectedProject, timelineView, fetchTimeData]);
+    // Data fetching is now handled by DashboardFilterProvider
+    // No need for timeline data fetching effects
 
     // Process real-time data for charts
     const processedTimeData = useMemo(() => {
@@ -541,62 +771,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
             <div className="space-y-6">
 
 
-                {/* Timeline Mode Toggle - REMOVED TABS */}
-                {!selectedProjectForTimeline && (
-                    <div className="space-y-4 mb-6">
-                        {/* Custom Date Range Picker */}
-                        <div className="bg-gray-50 p-4 rounded-lg border">
-                            <div className="flex items-center justify-between mb-3">
-                                <h4 className="text-sm font-medium text-gray-700">Date Range Selection</h4>
-                                <div className="flex items-center space-x-2">
-                                    <button
-                                        onClick={resetToDefaultDateRange}
-                                        className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-                                    >
-                                        Reset to Default
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-                                    <input
-                                        type="date"
-                                        value={customDateRange.startDate}
-                                        onChange={(e) => handleDateRangeChange('startDate', e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-                                    <input
-                                        type="date"
-                                        value={customDateRange.endDate}
-                                        onChange={(e) => handleDateRangeChange('endDate', e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    />
-                                </div>
-                                
-                                <div>
-                                    <button
-                                        onClick={applyCustomDateRange}
-                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-                                    >
-                                        Apply Date Range
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            {useCustomDateRange && (
-                                <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-                                    <strong>Custom Range Active:</strong> {customDateRange.startDate} to {customDateRange.endDate}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
+                {/* Date range filtering is now handled by DashboardFilterProvider */}
                 {timelineLoading ? (
                     <div className="flex items-center justify-center py-12">
                         <Loader />
@@ -651,11 +826,6 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                 <div className="bg-white p-6 rounded-lg border shadow-sm">
                                     <h4 className="text-lg font-semibold mb-4">
                                         Time Distribution ({timelineView})
-                                        {useCustomDateRange && (
-                                            <span className="text-sm font-normal text-gray-600 ml-2">
-                                                ({customDateRange.startDate} to {customDateRange.endDate})
-                                            </span>
-                                        )}
                                     </h4>
                                     {processedTimeData.length > 0 ? (
                                         <ResponsiveContainer width="100%" height={300}>
@@ -711,7 +881,18 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                         )}
                         {/* Comprehensive Timeline (all or project-specific) */}
                         <div className="bg-white p-6 rounded-lg border shadow-sm">
-                            <h4 className="text-lg font-semibold mb-4">{selectedProjectForTimeline ? `Timeline for ${selectedProjectForTimeline.name}` : 'Comprehensive Timeline'}</h4>
+                            <div className="flex justify-between items-center mb-4">
+                                <h4 className="text-lg font-semibold">{selectedProjectForTimeline ? `Timeline for ${selectedProjectForTimeline.name}` : 'Comprehensive Timeline'}</h4>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Search timeline..."
+                                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            </div>
                             {(selectedProjectForTimeline ? projectTimeline : filteredTimeline).length > 0 ? (
                                 <div className="space-y-4 max-h-96 overflow-y-auto">
                                     {(selectedProjectForTimeline ? projectTimeline : filteredTimeline).map((item) => {
@@ -742,25 +923,42 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                             {item.type === 'progress' && (
                                                                 <span className={`text-xs px-2 py-1 rounded ${item.progressType === 'MAIL' ? 'bg-green-100 text-green-800' :
                                                                     item.progressType === 'MEETING' ? 'bg-purple-100 text-purple-800' :
-                                                                        'bg-blue-100 text-blue-800'
+                                                                        item.progressType === 'MEDIA' ? 'bg-orange-100 text-orange-800' :
+                                                                            'bg-blue-100 text-blue-800'
                                                                     }`}>
                                                                     {item.progressType}
                                                                 </span>
                                                             )}
                                                             {item.hasAttachment && item.attachmentUrl && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        console.log('Download button clicked:', {
-                                                                            url: item.attachmentUrl,
-                                                                            filename: item.attachmentName,
-                                                                            item: item
-                                                                        });
-                                                                        downloadFile(item.attachmentUrl, item.attachmentName);
-                                                                    }}
-                                                                    className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"
-                                                                >
-                                                                    Download
-                                                                </button>
+                                                                <div className="flex items-center gap-1">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            console.log('View button clicked:', {
+                                                                                url: item.attachmentUrl,
+                                                                                filename: item.attachmentName,
+                                                                                item: item
+                                                                            });
+                                                                            // Use viewFile to open in new tab with proper filename
+                                                                            viewFile(item.attachmentUrl, item.attachmentName);
+                                                                        }}
+                                                                        className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                                                                    >
+                                                                        View
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            console.log('Download button clicked:', {
+                                                                                url: item.attachmentUrl,
+                                                                                filename: item.attachmentName,
+                                                                                item: item
+                                                                            });
+                                                                            downloadFile(item.attachmentUrl, item.attachmentName);
+                                                                        }}
+                                                                        className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200 transition-colors"
+                                                                    >
+                                                                        Download
+                                                                    </button>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     </div>
@@ -956,7 +1154,18 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
 
                         {/* Comprehensive Timeline */}
                         <div className="bg-white rounded-lg border border-gray-200 p-6">
-                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Timeline Activities</h3>
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-lg font-semibold text-gray-800">Timeline Activities</h3>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Search timeline..."
+                                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            </div>
                             {(selectedProjectForTimeline ? projectTimeline : filteredTimeline).length > 0 ? (
                                 <div className="space-y-4 max-h-96 overflow-y-auto">
                                     {(selectedProjectForTimeline ? projectTimeline : filteredTimeline).map((item) => {
@@ -971,7 +1180,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                         <span className="font-medium text-gray-800">{item.message}</span>
                                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                                             ${item.type === 'time' ? 'bg-blue-100 text-blue-800' :
-                                                                item.type === 'progress' ? 'bg-green-100 text-green-800' :
+                                                                item.type === 'progress' ? (item.progressType === 'MEDIA' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800') :
                                                                     'bg-orange-100 text-orange-800'}`}>
                                                             {item.type}
                                                         </span>
@@ -983,19 +1192,35 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                         {dayjs(item.timestamp).format('MMM DD, YYYY HH:mm')}
                                                     </div>
                                                     {item.hasAttachment && item.attachmentUrl && (
-                                                        <button
-                                                            onClick={() => {
-                                                                console.log('External timeline download clicked:', {
-                                                                    url: item.attachmentUrl,
-                                                                    filename: item.attachmentName,
-                                                                    item: item
-                                                                });
-                                                                downloadFile(item.attachmentUrl, item.attachmentName);
-                                                            }}
-                                                            className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200"
-                                                        >
-                                                            Download
-                                                        </button>
+                                                        <div className="flex items-center gap-1 mt-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    console.log('External timeline view clicked:', {
+                                                                        url: item.attachmentUrl,
+                                                                        filename: item.attachmentName,
+                                                                        item: item
+                                                                    });
+                                                                    // Use viewFile to open in new tab with proper filename
+                                                                    viewFile(item.attachmentUrl, item.attachmentName);
+                                                                }}
+                                                                className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                                                            >
+                                                                View
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    console.log('External timeline download clicked:', {
+                                                                        url: item.attachmentUrl,
+                                                                        filename: item.attachmentName,
+                                                                        item: item
+                                                                    });
+                                                                    downloadFile(item.attachmentUrl, item.attachmentName);
+                                                                }}
+                                                                className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200 transition-colors"
+                                                            >
+                                                                Download
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>

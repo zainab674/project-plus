@@ -2,12 +2,12 @@
 
 
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Calendar, ChevronDown, Maximize2, Clock, X, User, AlertCircle } from 'lucide-react';
 import { getAllUserTasksRequest } from '@/lib/http/task';
 import Link from 'next/link';
 
-const Todo = () => {
+const Todo = ({ filteredProjects = null }) => {
     const [selectedDay, setSelectedDay] = useState('Monday');
     const [showDateDropdown, setShowDateDropdown] = useState(false);
     const [allTasks, setAllTasks] = useState([]);
@@ -17,6 +17,18 @@ const Todo = () => {
     const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
     const [showCustomDateInput, setShowCustomDateInput] = useState(false);
     const [showCustomRangeInput, setShowCustomRangeInput] = useState(false);
+
+    // Filter tasks based on filtered projects
+    const filteredTasks = useMemo(() => {
+        if (!filteredProjects || !Array.isArray(filteredProjects)) {
+            return allTasks;
+        }
+
+        const filteredProjectIds = filteredProjects.map(project => project.project_id);
+        return allTasks.filter(task => 
+            task.project_id && filteredProjectIds.includes(task.project_id)
+        );
+    }, [allTasks, filteredProjects]);
 
     const fetchTasks = useCallback(async () => {
         setLoading(true);
@@ -62,7 +74,7 @@ const Todo = () => {
 
             const iso = targetDate.toISOString().split('T')[0];
 
-            const tasksForDay = allTasks.filter(task => {
+            const tasksForDay = filteredTasks.filter(task => {
                 if (!task.last_date) return false;
                 const taskIso = new Date(task.last_date).toISOString().split('T')[0];
                 return taskIso === iso;
@@ -82,7 +94,7 @@ const Todo = () => {
     const getTasksForCustomDate = (date) => {
         if (!date) return [];
         const iso = new Date(date).toISOString().split('T')[0];
-        return allTasks.filter(task => {
+        return filteredTasks.filter(task => {
             if (!task.last_date) return false;
             const taskIso = new Date(task.last_date).toISOString().split('T')[0];
             return taskIso === iso;
@@ -95,7 +107,7 @@ const Todo = () => {
         const start = new Date(startDate);
         const end = new Date(endDate);
 
-        return allTasks.filter(task => {
+        return filteredTasks.filter(task => {
             if (!task.last_date) return false;
             const taskDate = new Date(task.last_date);
             return taskDate >= start && taskDate <= end;

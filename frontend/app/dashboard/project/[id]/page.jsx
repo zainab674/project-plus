@@ -140,7 +140,7 @@ export default function Page({ params }) {
                 onClick={() => setShowChatModal(true)}
               >
                 <MessageCircle className="w-4 h-4" />
-                Project Chat
+                Internal Chat
               </Button>
               {user?.Role !== "CLIENT" && (
                 <>

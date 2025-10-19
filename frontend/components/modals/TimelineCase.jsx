@@ -10,9 +10,11 @@ import {
     FileText,
     Paperclip,
     CheckCircle,
+    Search,
 } from 'lucide-react';
 
 export default function CaseDetail({ selectedCase, onClose }) {
+    const [searchTerm, setSearchTerm] = useState('');
 
     const caseData = selectedCase || mockCase;
 
@@ -30,18 +32,44 @@ export default function CaseDetail({ selectedCase, onClose }) {
     } = caseData;
 
     const tasksByPhase = useMemo(() => {
-        return Tasks.reduce((map, task) => {
+        let filteredTasks = Tasks;
+        
+        // Apply search filter
+        if (searchTerm) {
+            filteredTasks = Tasks.filter(task => 
+                task.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                task.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                task.priority?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                task.phase?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        
+        return filteredTasks.reduce((map, task) => {
             if (phases.includes(task.phase)) {
                 (map[task.phase] = map[task.phase] || []).push(task);
             }
             return map;
         }, {});
-    }, [Tasks, phases]);
+    }, [Tasks, phases, searchTerm]);
 
-    // 2) Everything else is “Unassigned”
+    // 2) Everything else is "Unassigned"
     const tasksWithoutPhases = useMemo(() => {
-        return Tasks.filter(task => !phases.includes(task.phase));
-    }, [Tasks, phases]);
+        let filteredTasks = Tasks.filter(task => !phases.includes(task.phase));
+        
+        // Apply search filter
+        if (searchTerm) {
+            filteredTasks = filteredTasks.filter(task => 
+                task.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                task.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                task.priority?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                task.phase?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        
+        return filteredTasks;
+    }, [Tasks, phases, searchTerm]);
 
     // Calculate rejection count for each task
     const getRejectionCount = (task) => {
@@ -163,6 +191,20 @@ export default function CaseDetail({ selectedCase, onClose }) {
                 >
                     ×
                 </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
+                <div className="flex items-center gap-2">
+                    <Search className="w-5 h-5 text-indigo-500" />
+                    <input
+                        type="text"
+                        placeholder="Search tasks, descriptions, status, priority..."
+                        className="flex-1 px-3 py-2 border border-indigo-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
             </div>
 
             {/* Info Grid */}

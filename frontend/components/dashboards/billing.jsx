@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     AlertCircle, DollarSign, PieChart, Clock, CheckCircle, XCircle, User,
     FileText, Calendar, TrendingUp, TrendingDown, Plus, Settings,
@@ -9,6 +9,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { getMyAssignedCasesRequest, getBillerAssignedCasesRequest } from '@/lib/http/billing';
 import { getAllProjectRequest } from '@/lib/http/project';
 import { useUser } from '@/providers/UserProvider';
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider';
 import { toast } from 'react-toastify';
 import Loader from '@/components/Loader';
 import moment from 'moment';
@@ -19,8 +20,9 @@ import BillingEntriesModal from '@/components/modals/BillingEntriesModal';
 import { ExpensesModal } from '@/components/modals/ExpensesModal';
 import { ProviderCasesModal } from '@/components/modals/ProviderCasesModal';
 
-const Billing = () => {
+const Billing = ({ filteredProjects = null }) => {
     const { user } = useUser();
+    const { selectedCase, selectedMonthYear, filteredProjects: dashboardFilteredProjects } = useDashboardFilter();
     const [assignedCases, setAssignedCases] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedCaseId, setSelectedCaseId] = useState(null);
@@ -33,6 +35,41 @@ const Billing = () => {
     // Determine if user is a biller or provider
     const isBiller = user?.Role === 'BILLER';
     const isProvider = user?.Role === 'PROVIDER';
+
+    // Filter assigned cases based on dashboard filters
+    const filteredAssignedCases = useMemo(() => {
+        let filtered = assignedCases;
+
+        // Use dashboard filtered projects if available, otherwise use prop filteredProjects
+        const projectsToUse = dashboardFilteredProjects || filteredProjects;
+
+        // Filter by selected case if any
+        if (selectedCase) {
+            filtered = filtered.filter(caseItem => 
+                caseItem.project_id === selectedCase.project_id
+            );
+        } else if (projectsToUse && Array.isArray(projectsToUse)) {
+            const filteredProjectIds = projectsToUse.map(project => project.project_id);
+            filtered = filtered.filter(caseItem => 
+                caseItem.project_id && filteredProjectIds.includes(caseItem.project_id)
+            );
+        }
+
+        // Filter by selected month-year if any
+        if (selectedMonthYear) {
+            const [month, year] = selectedMonthYear.split(' ');
+            const startOfMonth = moment(`${year}-${moment().month(month).format('MM')}-01`);
+            const endOfMonth = startOfMonth.clone().endOf('month');
+
+            filtered = filtered.filter(caseItem => {
+                if (!caseItem.project?.created_at) return false;
+                const caseDate = moment(caseItem.project.created_at);
+                return caseDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+            });
+        }
+
+        return filtered;
+    }, [assignedCases, selectedCase, selectedMonthYear, dashboardFilteredProjects, filteredProjects]);
 
     const getMyAssignedCases = useCallback(async () => {
         setLoading(true);
@@ -83,7 +120,7 @@ const Billing = () => {
         if (user) {
             getMyAssignedCases();
         }
-    }, [user]);
+    }, [user, getMyAssignedCases]);
 
     const handleCaseClick = (projectId) => {
         setSelectedCaseId(projectId);
@@ -168,7 +205,7 @@ const Billing = () => {
         return grouped;
     };
 
-    const groupedCases = isProvider ? groupCasesByProvider(assignedCases) : {};
+    const groupedCases = isProvider ? groupCasesByProvider(filteredAssignedCases) : {};
 
 
     if (loading) {
@@ -235,7 +272,7 @@ const Billing = () => {
                             {isBiller ? (
                                 // Biller View - Show cases directly
                                 <div className="space-y-4">
-                                    {assignedCases.map((assignment) => (
+                                    {filteredAssignedCases.map((assignment) => (
                                         <div
                                             key={assignment.project_id}
                                             className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"

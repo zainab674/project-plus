@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { logoutUserRequest } from '@/lib/http/auth'
 import { toast } from 'react-toastify'
+import FilterControls from './FilterControls'
 
 const TopNavigation = ({ setSidebarOpen }) => {
     const { user, userAvatar, setUser, setIsAuth } = useUser();
@@ -38,15 +39,16 @@ const TopNavigation = ({ setSidebarOpen }) => {
     return (
         <header className="bg-white shadow">
             <div className="flex h-16 items-center justify-between px-4">
-                <h2 className='font-medium text-2xl hidden lg:block text-black'>flexywexy.com</h2>
-                {/* <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setSidebarOpen(true)}
-                    className="lg:hidden text-black hover:bg-tbutton-bg hover:text-tbutton-text"
-                >
-                    <Menu className="h-6 w-6" />
-                </Button> */}
+                <div className="flex items-center space-x-6">
+                    <h2 className='font-medium text-2xl hidden lg:block text-black'>flexywexy.com</h2>
+                    
+                    {/* Filter Controls - Only show for non-CLIENT users */}
+                    {user?.Role !== 'CLIENT' && (
+                        <div className="hidden md:block">
+                            <FilterControls />
+                        </div>
+                    )}
+                </div>
 
                 <div className="flex items-center space-x-4">
                     <Button variant="ghost" size="icon" className="text-black hover:bg-tbutton-bg hover:text-tbutton-text">
@@ -103,6 +105,13 @@ const TopNavigation = ({ setSidebarOpen }) => {
 
                 </div>
             </div>
+            
+            {/* Mobile Filter Controls */}
+            {user?.Role !== 'CLIENT' && (
+                <div className="md:hidden border-t border-gray-200 bg-gray-50 px-4 py-3">
+                    <FilterControls />
+                </div>
+            )}
         </header>
     )
 }

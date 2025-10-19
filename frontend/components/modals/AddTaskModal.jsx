@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarIcon, ChartNoAxesColumnIncreasing, ChevronDownIcon, FileIcon, Menu, TypeOutline, User2, UserCircle, Users, UsersIcon, X, Layers, Plus, Upload, Paperclip } from 'lucide-react'
+import { CalendarIcon, ChartNoAxesColumnIncreasing, ChevronDownIcon, FileIcon, Menu, TypeOutline, User2, UserCircle, Users, UsersIcon, X, Layers, Plus, Upload, Paperclip, FileText } from 'lucide-react'
 import { Button } from "@/components/Button"
 import {
     Select,
@@ -18,12 +18,15 @@ import { createTaskRequest } from '@/lib/http/task'
 import { useUser } from '@/providers/UserProvider'
 import { Textarea } from '../ui/textarea'
 import { Label } from '../ui/label'
+import InternalDocumentSelector from '../InternalDocumentSelector'
 
 const AddTaskModal = ({ open, onClose }) => {
     const [selectedMember, setSelectedMember] = useState([]);
     const [isDisabled, setIsDisabled] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
+    const [selectedInternalDoc, setSelectedInternalDoc] = useState(null);
+    const [showInternalDocSelector, setShowInternalDocSelector] = useState(false);
     const { user, loadUserWithProjects, hasFullUserData } = useUser();
     const [selectedProject, setSelectedProject] = useState('');
     const [fullUserData, setFullUserData] = useState(null);
@@ -77,7 +80,13 @@ const AddTaskModal = ({ open, onClose }) => {
                 return;
             }
             setSelectedFile(file);
+            setSelectedInternalDoc(null); // Clear internal doc when PC file is selected
         }
+    };
+
+    const handleInternalDocSelect = (doc) => {
+        setSelectedInternalDoc(doc);
+        setSelectedFile(null); // Clear PC file when internal doc is selected
     };
 
     // Reset form when modal opens/closes
@@ -175,9 +184,21 @@ const AddTaskModal = ({ open, onClose }) => {
             const otherMemberNumbers = selectedMember.map(id => parseInt(id));
             formData.append('otherMember', JSON.stringify(otherMemberNumbers));
             
-            // Add file if selected
+            // Add file if selected (either PC file or internal document)
             if (selectedFile) {
                 formData.append('file', selectedFile);
+            } else if (selectedInternalDoc) {
+                // For internal documents, we need to fetch the file data
+                try {
+                    const fileResponse = await fetch(selectedInternalDoc.path);
+                    const fileData = await fileResponse.arrayBuffer();
+                    const blob = new Blob([fileData], { type: 'application/pdf' });
+                    formData.append('file', blob, selectedInternalDoc.name);
+                } catch (error) {
+                    console.error('Error fetching internal document:', error);
+                    toast.error('Failed to attach internal document');
+                    return;
+                }
             }
 
             console.log('🔍 AddTaskModal: Final form data:', {
@@ -188,13 +209,14 @@ const AddTaskModal = ({ open, onClose }) => {
                 status: formdata.status,
                 assigned_to: formdata.assigned_to,
                 description: formdata.description,
-                hasFile: !!selectedFile,
-                fileName: selectedFile?.name
+                hasFile: !!(selectedFile || selectedInternalDoc),
+                fileName: selectedFile?.name || selectedInternalDoc?.name
             });
 
             const res = await createTaskRequest(formData);
             setSelectedMember([]);
             setSelectedFile(null);
+            setSelectedInternalDoc(null);
             setFormdata({
                 project_id: '',
                 name: "New Task",
@@ -489,7 +511,7 @@ const AddTaskModal = ({ open, onClose }) => {
                             <span className='text-black text-sm font-medium'>Attachment</span>
                         </div>
                         <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                                 <input
                                     type="file"
                                     id="file-upload"
@@ -504,22 +526,35 @@ const AddTaskModal = ({ open, onClose }) => {
                                     <Upload className="h-4 w-4 text-gray-600" />
                                     <span className="text-sm text-gray-700">Choose File</span>
                                 </label>
-                                {selectedFile && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowInternalDocSelector(true)}
+                                    className="flex items-center gap-2 px-4 py-2 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors text-blue-700"
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    <span className="text-sm">Internal Document</span>
+                                </button>
+                                {(selectedFile || selectedInternalDoc) && (
                                     <button
-                                        onClick={() => setSelectedFile(null)}
+                                        onClick={() => {
+                                            setSelectedFile(null);
+                                            setSelectedInternalDoc(null);
+                                        }}
                                         className="text-red-500 hover:text-red-700 text-sm"
                                     >
                                         Remove
                                     </button>
                                 )}
                             </div>
-                            {selectedFile && (
+                            {(selectedFile || selectedInternalDoc) && (
                                 <div className="flex items-center gap-2 text-sm text-gray-600">
                                     <FileIcon className="h-4 w-4" />
-                                    <span>{selectedFile.name}</span>
-                                    <span className="text-gray-400">
-                                        ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                                    </span>
+                                    <span>{selectedFile ? selectedFile.name : selectedInternalDoc?.name}</span>
+                                    {selectedFile && (
+                                        <span className="text-gray-400">
+                                            ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                                        </span>
+                                    )}
                                 </div>
                             )}
                             <p className="text-xs text-gray-500">
@@ -547,6 +582,14 @@ const AddTaskModal = ({ open, onClose }) => {
                     </Button>
                 </div>
             </div>
+            
+            {/* Internal Document Selector */}
+            <InternalDocumentSelector
+                isOpen={showInternalDocSelector}
+                onClose={() => setShowInternalDocSelector(false)}
+                onSelect={handleInternalDocSelect}
+                selectedFile={selectedInternalDoc}
+            />
         </div>
     )
 }

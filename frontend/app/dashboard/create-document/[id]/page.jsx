@@ -1,27 +1,27 @@
 'use client'
 /**
- * Document Manager - User-Based Document Management
+ * Document Manager - User-Friendly Document Management
  * 
- * This component has been modified to work with user-based document management
- * instead of project-based management. Users can now:
- * - Create and manage personal folders and files
- * - Organize documents in their own template document space
- * - Access documents regardless of project membership
- * 
- * The backend now creates folders in user-specific TemplateDocument records
- * rather than project-specific locations.
+ * This component provides an intuitive, accessible interface for document management
+ * designed for non-technical users. Features include:
+ * - Large, clear buttons and icons
+ * - Simple navigation with breadcrumbs
+ * - Helpful tooltips and instructions
+ * - Visual feedback for all actions
+ * - No hidden right-click menus
  */
 import React, { useState, useRef, useEffect } from 'react'
 import { createFolderRequest, createFileRequest, getFilesRequest, sendToLawyerRequest, deleteFolderRequest, deleteFileRequest } from '@/lib/http/project'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation';
-import { Folder, File, Plus, Upload, Edit, Send, Trash2, ChevronRight, ChevronDown, FolderOpen, FileText, MoreVertical } from 'lucide-react';
+import { Folder, File, Plus, Upload, Edit, Send, Trash2, ChevronRight, ChevronDown, FolderOpen, FileText, MoreVertical, Home, ArrowLeft, HelpCircle, Info } from 'lucide-react';
 import { useUser } from '@/providers/UserProvider';
 
 const DocumentManager = () => {
   const [items, setItems] = useState([]);
-  const [contextMenu, setContextMenu] = useState(null);
   const [expandedFolders, setExpandedFolders] = useState({});
+  const [currentPath, setCurrentPath] = useState([]);
+  const [showHelp, setShowHelp] = useState(false);
   const containerRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter()
@@ -47,7 +47,7 @@ const DocumentManager = () => {
   };
 
   const createFolder = async (parentId = null) => {
-    const name = prompt('Enter folder name:');
+    const name = prompt('What would you like to name your new folder?');
     if (name && name.trim()) {
       try {
         setIsLoading(true);
@@ -56,19 +56,18 @@ const DocumentManager = () => {
           parent_id: parentId
         });
         if (response.data.success) {
-          toast.success('Folder created successfully');
+          toast.success('✅ Folder created successfully!');
           fetchFiles(); // Refresh the file tree
         }
       } catch (error) {
         console.error('Folder creation error:', error);
-        toast.error(error?.response?.data?.message || 'Failed to create folder. Please try again.');
+        toast.error(error?.response?.data?.message || '❌ Failed to create folder. Please try again.');
       } finally {
         setIsLoading(false);
       }
     } else if (name !== null) {
-      toast.error('Please enter a valid folder name');
+      toast.error('❌ Please enter a folder name');
     }
-    setContextMenu(null);
   };
 
   const uploadFile = async (parentId) => {
@@ -86,89 +85,63 @@ const DocumentManager = () => {
 
           const response = await createFileRequest(formData);
           if (response.data.success) {
-            toast.success('File uploaded successfully');
+            toast.success('✅ File uploaded successfully!');
             fetchFiles(); // Refresh the file tree
           }
         } catch (error) {
           console.error('File upload error:', error);
-          toast.error(error?.response?.data?.message || 'Failed to upload file. Please try again.');
+          toast.error(error?.response?.data?.message || '❌ Failed to upload file. Please try again.');
         } finally {
           setIsLoading(false);
         }
       }
     };
     input.click();
-    setContextMenu(null);
   };
 
-  const deleteItem = async (id, type) => {
-    if (confirm('Are you sure you want to delete this item?')) {
+  const deleteItem = async (id, type, name) => {
+    const itemType = type === 'folder' ? 'folder' : 'file';
+    const confirmMessage = `Are you sure you want to delete "${name}"?\n\nThis action cannot be undone.`;
+    
+    if (confirm(confirmMessage)) {
       try {
         setIsLoading(true);
         
         if (type === 'folder') {
           await deleteFolderRequest(id);
-          toast.success('Folder deleted successfully');
+          toast.success('✅ Folder deleted successfully');
         } else if (type === 'file') {
           await deleteFileRequest(id);
-          toast.success('File deleted successfully');
+          toast.success('✅ File deleted successfully');
         }
         
         fetchFiles(); // Refresh the file tree
       } catch (error) {
-        toast.error(error?.response?.data?.message || 'Failed to delete item');
+        toast.error(error?.response?.data?.message || '❌ Failed to delete item');
       } finally {
         setIsLoading(false);
       }
     }
-    setContextMenu(null);
   };
 
 
-  // Replace your handleRightClick function with this improved version:
-
-  const handleRightClick = (e, item = null) => {
-    e.stopPropagation();
-    e.preventDefault();
-
-    // Get viewport dimensions
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    // Context menu dimensions (approximate)
-    const menuWidth = 200;
-    const menuHeight = item?.file_type === "FOLDER" ? 140 : item?.file_type === "FILE" ? 120 : 80;
-
-    // Calculate position
-    let x = e.pageX;
-    let y = e.pageY;
-
-    // Adjust horizontal position if menu would go off-screen
-    if (x + menuWidth > viewportWidth) {
-      x = viewportWidth - menuWidth - 10; // 10px padding from edge
-    }
-
-    // Adjust vertical position if menu would go off-screen
-    if (y + menuHeight > viewportHeight) {
-      y = viewportHeight - menuHeight - 10; // 10px padding from edge
-    }
-
-    // Ensure minimum distance from edges
-    x = Math.max(10, x);
-    y = Math.max(10, y);
-
-    setContextMenu({
-      x,
-      y,
-      item
-    });
+  // Helper function to format file sizes
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '';
+    const mb = bytes / 1024 / 1024;
+    return `${mb.toFixed(1)} MB`;
   };
 
   const handleFileAction = async (file) => {
     try {
       setIsLoading(true);
 
-      const description = window.prompt("Description");
+      const description = window.prompt("Please enter a description for this file:");
+      if (!description) {
+        toast.error('❌ Description is required');
+        return;
+      }
+      
       const formData = new FormData();
       formData.append("description", description);
 
@@ -183,14 +156,13 @@ const DocumentManager = () => {
       const response = await sendToLawyerRequest(formData);
 
       if (response.data.success) {
-        toast.success(response.data.message);
+        toast.success('✅ File sent to lawyer successfully!');
         fetchFiles(); // Refresh the file tree
       }
     } catch (error) {
       toast.error(error?.response?.data?.message || error.message);
     } finally {
       setIsLoading(false);
-      setContextMenu(null);
     }
   };
 
@@ -198,167 +170,172 @@ const DocumentManager = () => {
     router.push(`/dashboard/edit-file/${file.file_id}?file=${file.path}`)
   };
 
-  // Fixed renderTree function to handle nested structure
+  // User-friendly folder/file rendering with large, clear action buttons
   const renderTree = (folders = items, level = 0) => {
     return folders.map(folder => (
-      <div key={folder.folder_id} className={`${level > 0 ? 'ml-6' : ''} mb-1`}>
-        {/* Render folder */}
-        <div
-          className="flex items-center justify-between group hover:bg-gray-50 p-2 rounded-lg transition-all duration-200 border border-transparent hover:border-gray-200"
-          onContextMenu={(e) => handleRightClick(e, folder)}
-        >
-          <div className="flex items-center space-x-3">
-            {expandedFolders[folder.folder_id] ? (
-              <ChevronDown
-                className="w-4 h-4 text-gray-500 cursor-pointer hover:text-gray-700 transition-colors"
+      <div key={folder.folder_id} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
+        {/* Folder Card */}
+        <div className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-lg transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <button
                 onClick={() => {
                   setExpandedFolders(prev => ({
                     ...prev,
                     [folder.folder_id]: !prev[folder.folder_id]
                   }));
                 }}
-              />
-            ) : (
-              <ChevronRight
-                className="w-4 h-4 text-gray-500 cursor-pointer hover:text-gray-700 transition-colors"
-                onClick={() => {
-                  setExpandedFolders(prev => ({
-                    ...prev,
-                    [folder.folder_id]: !prev[folder.folder_id]
-                  }));
-                }}
-              />
-            )}
-            <FolderOpen className="w-5 h-5 text-blue-500" />
-            <span className="font-medium text-gray-700">{folder.name}</span>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
-              {folder.files?.length || 0} files
-            </span>
-          </div>
-          <div className="opacity-100 transition-opacity">
-
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-
-                // Get button position relative to viewport
-                const rect = e.currentTarget.getBoundingClientRect();
-                const viewportWidth = window.innerWidth;
-                const viewportHeight = window.innerHeight;
-                const menuWidth = 200;
-                const menuHeight = 140; // Approximate height for folder menu
-
-                let x = rect.right + 5; // Position to the right of the button with 5px gap
-                let y = rect.top;
-
-                // If menu would go off-screen to the right, position to the left of the button
-                if (x + menuWidth > viewportWidth) {
-                  x = rect.left - menuWidth - 5;
-                }
-
-                // If menu would go off-screen downward, adjust upward
-                if (y + menuHeight > viewportHeight) {
-                  y = viewportHeight - menuHeight - 10;
-                }
-
-                // Ensure minimum distance from edges
-                x = Math.max(10, x);
-                y = Math.max(10, y);
-
-                setContextMenu({
-                  x,
-                  y,
-                  item: folder
-                });
-              }}
-              className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-
-          </div>
-        </div>
-
-        {/* Render expanded content */}
-        {expandedFolders[folder.folder_id] && (
-          <div className="ml-6 mt-2 space-y-1">
-            {/* Render files in this folder */}
-            {folder.files && folder.files.map(file => (
-              <div
-                key={file.file_id}
-                className="group"
-                onContextMenu={(e) => handleRightClick(e, file)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
               >
+                {expandedFolders[folder.folder_id] ? (
+                  <ChevronDown className="w-6 h-6 text-gray-600" />
+                ) : (
+                  <ChevronRight className="w-6 h-6 text-gray-600" />
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setExpandedFolders(prev => ({
+                    ...prev,
+                    [folder.folder_id]: !prev[folder.folder_id]
+                  }));
+                }}
+                className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+              >
+                <FolderOpen className="w-8 h-8 text-blue-500" />
+              </button>
+              <button
+                onClick={() => {
+                  setExpandedFolders(prev => ({
+                    ...prev,
+                    [folder.folder_id]: !prev[folder.folder_id]
+                  }));
+                }}
+                className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
+                title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+              >
+                <h3 className="text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors">
+                  {folder.name}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {folder.files?.length || 0} files
+                  {folder.subfolders?.length > 0 && ` • ${folder.subfolders.length} subfolders`}
+                </p>
+              </button>
+            </div>
+            
+            {/* Folder Action Buttons */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => createFolder(folder.folder_id)}
+                className="flex items-center space-x-2 bg-emerald-300 text-emerald-800 px-4 py-2 rounded-lg hover:bg-emerald-400 transition-colors text-sm font-medium"
+                title="Create a new folder inside this folder"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Folder</span>
+              </button>
+              <button
+                onClick={() => uploadFile(folder.folder_id)}
+                className="flex items-center space-x-2 bg-cyan-300 text-cyan-800 px-4 py-2 rounded-lg hover:bg-cyan-400 transition-colors text-sm font-medium"
+                title="Upload a file to this folder"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Upload File</span>
+              </button>
+              <button
+                onClick={() => deleteItem(folder.folder_id, 'folder', folder.name)}
+                className="flex items-center space-x-2 bg-rose-300 text-rose-800 px-4 py-2 rounded-lg hover:bg-rose-400 transition-colors text-sm font-medium"
+                title="Delete this folder"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded Content */}
+          {expandedFolders[folder.folder_id] && (
+            <div className="mt-4 space-y-3">
+              {/* Files in this folder */}
+              {folder.files && folder.files.map(file => (
                 <div
-                  className="flex items-center justify-between hover:bg-gray-50 p-2 rounded-lg transition-all duration-200 cursor-pointer border border-transparent hover:border-gray-200"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setContextMenu({
-                      x: e.pageX,
-                      y: e.pageY,
-                      item: file
-                    });
-                  }}
+                  key={file.file_id}
+                  className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors"
                 >
-                  <div className="flex items-center space-x-3">
-                    <FileText className="w-4 h-4 text-gray-600" />
-                    <span className="text-gray-700">{file.name}</span>
-                    <span className="text-xs text-gray-400">
-                      {file.size ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : ''}
-                    </span>
-                  </div>
-                  <div className="opacity-100 transition-opacity flex items-center space-x-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditSend(file);
-                      }}
-                      className="p-1 hover:bg-blue-100 rounded text-blue-600"
-                      title="Edit File"
-                    >
-                      <Edit className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleFileAction(file);
-                      }}
-                      className="p-1 hover:bg-green-100 rounded text-green-600"
-                      title="Send to Lawyer"
-                    >
-                      <Send className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteItem(file.file_id, 'file');
-                      }}
-                      className="p-1 hover:bg-red-100 rounded text-red-600"
-                      title="Delete File"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <button
+                        onClick={() => {
+                          // You can add file preview functionality here later
+                          toast.info(`📄 ${file.name} - Click an action button to work with this file`);
+                        }}
+                        className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
+                        title="Click to see file info"
+                      >
+                        <FileText className="w-6 h-6 text-gray-600 hover:text-blue-600 transition-colors" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          // You can add file preview functionality here later
+                          toast.info(`📄 ${file.name} - Click an action button to work with this file`);
+                        }}
+                        className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
+                        title="Click to see file info"
+                      >
+                        <h4 className="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors">
+                          {file.name}
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {formatFileSize(file.size)}
+                        </p>
+                      </button>
+                    </div>
+                    
+                    {/* File Action Buttons */}
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleEditSend(file)}
+                        className="flex items-center space-x-2 bg-amber-300 text-amber-800 px-3 py-2 rounded-lg hover:bg-amber-400 transition-colors text-sm font-medium"
+                        title="Edit this file"
+                      >
+                        <Edit className="w-4 h-4" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleFileAction(file)}
+                        className="flex items-center space-x-2 bg-violet-300 text-violet-800 px-3 py-2 rounded-lg hover:bg-violet-400 transition-colors text-sm font-medium"
+                        title="Send this file to your lawyer"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span>Send to Lawyer</span>
+                      </button>
+                      <button
+                        onClick={() => deleteItem(file.file_id, 'file', file.name)}
+                        className="flex items-center space-x-2 bg-pink-300 text-pink-800 px-3 py-2 rounded-lg hover:bg-pink-400 transition-colors text-sm font-medium"
+                        title="Delete this file"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {/* Render subfolders recursively */}
-            {folder.subfolders && folder.subfolders.length > 0 &&
-              renderTree(folder.subfolders, level + 1)
-            }
-          </div>
-        )}
+              {/* Subfolders recursively */}
+              {folder.subfolders && folder.subfolders.length > 0 &&
+                renderTree(folder.subfolders, level + 1)
+              }
+            </div>
+          )}
+        </div>
       </div>
     ));
   };
 
-  useEffect(() => {
-    const closeMenu = () => setContextMenu(null);
-    window.addEventListener('click', closeMenu);
-    return () => window.removeEventListener('click', closeMenu);
-  }, []);
+  // No more context menu listeners needed
 
   return (
     <main className="flex-1 overflow-auto p-6 bg-gray-50 min-h-screen">
@@ -366,51 +343,83 @@ const DocumentManager = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Document Manager</h1>
-            <p className="text-gray-600 mt-1">Organize and manage your personal documents</p>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">📁 Document Manager</h1>
+            <p className="text-lg text-gray-600 mb-2">Organize and manage your personal documents</p>
             {user && (
-              <p className="text-sm text-gray-500 mt-1">Welcome, {user.name}</p>
+              <p className="text-base text-gray-500">Welcome, {user.name} 👋</p>
             )}
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setShowHelp(!showHelp)}
+              className="flex items-center space-x-2 bg-slate-300 text-slate-700 px-4 py-3 rounded-lg hover:bg-slate-400 transition-colors text-base font-medium"
+              title="Show help and instructions"
+            >
+              <HelpCircle className="w-5 h-5" />
+              <span>{showHelp ? 'Hide Help' : 'Show Help'}</span>
+            </button>
             <button
               onClick={() => createFolder(null)}
-              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center space-x-2 bg-sky-300 text-sky-800 px-6 py-3 rounded-lg hover:bg-sky-400 transition-colors text-base font-medium"
             >
-              <Plus className="w-4 h-4" />
-              <span>New Folder</span>
+              <Plus className="w-5 h-5" />
+              <span>Create New Folder</span>
             </button>
-
           </div>
         </div>
+        
+        {/* Help Section */}
+        {showHelp && (
+          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-6">
+            <h3 className="text-lg font-semibold text-blue-900 mb-3 flex items-center">
+              <Info className="w-5 h-5 mr-2" />
+              How to Use This Document Manager
+            </h3>
+            <div className="grid md:grid-cols-2 gap-4 text-sm text-blue-800">
+              <div>
+                <h4 className="font-semibold mb-2">📁 Managing Folders:</h4>
+                <ul className="space-y-1">
+                  <li>• Click the arrow, folder icon, or folder name to show/hide contents</li>
+                  <li>• Use "New Folder" to create folders inside other folders</li>
+                  <li>• Use "Upload File" to add documents to folders</li>
+                  <li>• Use "Delete" to remove folders (this will delete everything inside)</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">📄 Managing Files:</h4>
+                <ul className="space-y-1">
+                  <li>• Click the file icon or file name to see file information</li>
+                  <li>• Use "Edit" to modify your files</li>
+                  <li>• Use "Send to Lawyer" to share files with your attorney</li>
+                  <li>• Use "Delete" to remove files</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Toolbar */}
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <h2 className="text-lg font-semibold text-gray-800">File Explorer</h2>
-              <span className="text-sm text-gray-500">
-                {items.length} root folders
-              </span>
-              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                Personal Space
-              </span>
+              <h2 className="text-xl font-semibold text-gray-800">📂 Your Documents</h2>
+             
+             
             </div>
             <div className="flex items-center space-x-4">
-              <div className="text-xs text-gray-500 bg-white px-3 py-1 rounded-lg border">
-                💡 Right-click anywhere to create folders or upload files
-              </div>
+              
               <button
                 onClick={fetchFiles}
-                className="text-gray-500 hover:text-gray-700 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                title="Refresh"
+                className="flex items-center space-x-2 bg-white text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 shadow-sm"
+                title="Refresh your documents"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
+                <span className="text-sm font-medium">Refresh</span>
               </button>
             </div>
           </div>
@@ -420,119 +429,40 @@ const DocumentManager = () => {
         <div
           ref={containerRef}
           className="p-6 relative min-h-[60vh]"
-          onContextMenu={(e) => handleRightClick(e, null)}
         >
           {isLoading && (
-            <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-50 rounded-xl">
-              <div className="flex items-center space-x-3">
+            <div className="absolute inset-0 bg-white/90 flex items-center justify-center z-50 rounded-xl">
+              <div className="flex items-center space-x-4 bg-white p-6 rounded-xl shadow-lg border">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="text-gray-600">Loading files...</span>
+                <span className="text-lg text-gray-600 font-medium">Loading your documents...</span>
               </div>
             </div>
           )}
 
           {items.length === 0 && !isLoading ? (
-            <div className="text-center py-12">
-              <Folder className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No folders yet</h3>
-              <p className="text-gray-500 mb-6">Create your first folder to organize your personal documents and files</p>
-              <p className="text-sm text-gray-400 mb-6">This is your personal document space - organize files and folders as you need</p>
+            <div className="text-center py-16">
+              <div className="bg-blue-50 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
+                <Folder className="w-12 h-12 text-blue-500" />
+              </div>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-3">No folders yet</h3>
+              <p className="text-lg text-gray-600 mb-6 max-w-md mx-auto">
+                Create your first folder to organize your personal documents and files
+              </p>
+              <p className="text-base text-gray-500 mb-8 max-w-lg mx-auto">
+                This is your personal document space - you can organize files and folders however you like. 
+                Everything is clearly labeled and easy to use!
+              </p>
               <button
                 onClick={() => createFolder(null)}
-                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors mx-auto"
+                className="flex items-center space-x-3 bg-sky-300 text-sky-800 px-8 py-4 rounded-xl hover:bg-sky-400 transition-colors mx-auto text-lg font-medium shadow-lg"
               >
-                <Plus className="w-4 h-4" />
-                <span>Create Folder</span>
+                <Plus className="w-6 h-6" />
+                <span>Create Your First Folder</span>
               </button>
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-4">
               {renderTree()}
-            </div>
-          )}
-
-          {/* Context Menu */}
-          {contextMenu && (
-            <div
-              className="fixed z-50 bg-white border border-gray-200 shadow-xl rounded-lg py-2 text-sm min-w-[200px] max-w-[200px]"
-              style={{
-                top: `${contextMenu.y}px`,
-                left: `${contextMenu.x}px`,
-                transform: 'translateZ(0)' // Force GPU acceleration for better positioning
-              }}
-            >
-              {!contextMenu.item && (
-                <div className="space-y-1">
-                  <button
-                    onClick={() => createFolder(null)}
-                    className="flex items-center space-x-3 w-full text-left hover:bg-gray-50 px-4 py-2 transition-colors text-gray-700"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Create Folder</span>
-                  </button>
-                  <button
-                    onClick={() => uploadFile(null)}
-                    className="flex items-center space-x-3 w-full text-left hover:bg-gray-50 px-4 py-2 transition-colors text-gray-700"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span>Upload File</span>
-                  </button>
-                </div>
-              )}
-
-              {contextMenu.item?.file_type === "FOLDER" && (
-                <div className="space-y-1">
-                  <button
-                    onClick={() => createFolder(contextMenu.item.folder_id)}
-                    className="flex items-center space-x-3 w-full text-left hover:bg-gray-50 px-4 py-2 transition-colors text-gray-700"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>New Subfolder</span>
-                  </button>
-                  <button
-                    onClick={() => uploadFile(contextMenu.item.folder_id)}
-                    className="flex items-center space-x-3 w-full text-left hover:bg-gray-50 px-4 py-2 transition-colors text-gray-700"
-                  >
-                    <Upload className="w-4 h-4" />
-                    <span>Upload File</span>
-                  </button>
-                  <div className="border-t border-gray-200 my-1"></div>
-                  <button
-                    onClick={() => deleteItem(contextMenu.item.folder_id, 'folder')}
-                    className="flex items-center space-x-3 w-full text-left hover:bg-red-50 px-4 py-2 transition-colors text-red-600"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Delete Folder</span>
-                  </button>
-                </div>
-              )}
-
-              {contextMenu.item?.file_type === "FILE" && (
-                <div className="space-y-1">
-                  <button
-                    onClick={() => handleEditSend(contextMenu.item)}
-                    className="flex items-center space-x-3 w-full text-left hover:bg-gray-50 px-4 py-2 transition-colors text-gray-700"
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span>Edit File</span>
-                  </button>
-                  <button
-                    onClick={() => handleFileAction(contextMenu.item)}
-                    className="flex items-center space-x-3 w-full text-left hover:bg-gray-50 px-4 py-2 transition-colors text-gray-700"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>Send to Lawyer</span>
-                  </button>
-                  <div className="border-t border-gray-200 my-1"></div>
-                  <button
-                    onClick={() => deleteItem(contextMenu.item.file_id, 'file')}
-                    className="flex items-center space-x-3 w-full text-left hover:bg-red-50 px-4 py-2 transition-colors text-red-600"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Delete File</span>
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>

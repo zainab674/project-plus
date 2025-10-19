@@ -76,6 +76,18 @@ const downloadFile = async (url, filename) => {
     }
   }
 };
+
+// Utility function to view files in new tab
+const viewFile = (url) => {
+  try {
+    console.log('Viewing file:', { url });
+    // Direct Cloudinary URL for viewing
+    window.open(url, '_blank');
+  } catch (error) {
+    console.error('View error:', error);
+  }
+};
+
 import { useRouter } from 'next/navigation';
 import {
     Calendar,
@@ -137,6 +149,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import moment from 'moment';
 import { formatEmailBody } from './formatEmail';
+import InternalDocumentSelector from './InternalDocumentSelector';
 
 
 const QuickActions = () => {
@@ -254,6 +267,8 @@ const QuickActions = () => {
     const [chatLoading, setChatLoading] = useState(false);
     const [chatSending, setChatSending] = useState(false);
     const [chatSelectedFile, setChatSelectedFile] = useState(null);
+    const [chatSelectedInternalDoc, setChatSelectedInternalDoc] = useState(null);
+    const [showChatInternalDocSelector, setShowChatInternalDocSelector] = useState(false);
 
     const chatContainerRef = useRef(null);
     const { handleSendMessage, socketRef } = useChatHook();
@@ -718,6 +733,7 @@ const QuickActions = () => {
 
             // Store file reference and message content before clearing
             const fileToUpload = chatSelectedFile;
+            const internalDocToUpload = chatSelectedInternalDoc;
             const messageContent = chatMessageValue.trim();
 
             const data = {
@@ -728,10 +744,10 @@ const QuickActions = () => {
                 content_type: "PLAIN_TEXT",
                 sender_name: user?.name,
                 // Include attachment info in socket data
-                attachment_url: fileToUpload ? 'uploading...' : null,
-                attachment_name: fileToUpload?.name,
-                attachment_size: fileToUpload?.size,
-                attachment_mime_type: fileToUpload?.type
+                attachment_url: (fileToUpload || internalDocToUpload) ? 'uploading...' : null,
+                attachment_name: fileToUpload?.name || internalDocToUpload?.name,
+                attachment_size: fileToUpload?.size || internalDocToUpload?.size,
+                attachment_mime_type: fileToUpload?.type || 'application/pdf'
             };
 
 
@@ -755,16 +771,17 @@ const QuickActions = () => {
                 message_id: data.conversation_id ? tempMessageId : undefined, // For group chat
                 private_message_id: data.private_conversation_id ? tempMessageId : undefined, // For private chat
                 temp_message_id: tempMessageId, // Add temp_message_id for tracking
-                attachment_url: fileToUpload ? 'uploading...' : null,
-                attachment_name: fileToUpload?.name,
-                attachment_size: fileToUpload?.size,
-                attachment_mime_type: fileToUpload?.type
+                attachment_url: (fileToUpload || internalDocToUpload) ? 'uploading...' : null,
+                attachment_name: fileToUpload?.name || internalDocToUpload?.name,
+                attachment_size: fileToUpload?.size || internalDocToUpload?.size,
+                attachment_mime_type: fileToUpload?.type || 'application/pdf'
             };
             setChatMessages(prev => [...prev, messageWithTempId]);
             setChatMessageValue('');
 
-            // Clear selected file immediately
+            // Clear selected files immediately
             setChatSelectedFile(null);
+            setChatSelectedInternalDoc(null);
 
             // Clear the file input
             const fileInput = document.getElementById('chat-file-upload');
@@ -781,10 +798,22 @@ const QuickActions = () => {
 
             if (fileToUpload) {
                 formData.append('file', fileToUpload);
+            } else if (internalDocToUpload) {
+                // For internal documents, we need to fetch the file data
+                try {
+                    const fileResponse = await fetch(internalDocToUpload.path);
+                    const fileData = await fileResponse.arrayBuffer();
+                    const blob = new Blob([fileData], { type: 'application/pdf' });
+                    formData.append('file', blob, internalDocToUpload.name);
+                } catch (error) {
+                    console.error('Error fetching internal document:', error);
+                    toast.error('Failed to attach internal document');
+                    return;
+                }
             }
 
             // Save to database (for file attachments only)
-            if (fileToUpload) {
+            if (fileToUpload || internalDocToUpload) {
                 savePrivateMessageRequest(formData).then(res => {
                     // Update message with real message_id from database and attachment info
                     const updatedMessage = {
@@ -1561,7 +1590,13 @@ const QuickActions = () => {
                 return;
             }
             setChatSelectedFile(file);
+            setChatSelectedInternalDoc(null); // Clear internal doc when PC file is selected
         }
+    };
+
+    const handleChatInternalDocSelect = (doc) => {
+        setChatSelectedInternalDoc(doc);
+        setChatSelectedFile(null); // Clear PC file when internal doc is selected
     };
 
     // Handle send mail
@@ -1937,6 +1972,14 @@ const QuickActions = () => {
                                                 </span>
                                                 {doc.file_url && (
                                                     <div className="flex gap-2 ml-auto">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => viewFile(doc.file_url, doc.filename)}
+                                                            className="h-6 px-2 text-xs"
+                                                        >
+                                                            View
+                                                        </Button>
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
@@ -2577,22 +2620,29 @@ const QuickActions = () => {
                                             {/* Message Input - Fixed at bottom */}
                                             <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0">
                                                 {/* File Attachment Preview */}
-                                                {chatSelectedFile && (
+                                                {(chatSelectedFile || chatSelectedInternalDoc) && (
                                                     <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-center gap-2">
                                                                 <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                                                                 </svg>
-                                                                <span className="text-sm font-medium text-blue-900">{chatSelectedFile.name}</span>
-                                                                <span className="text-xs text-blue-700">
-                                                                    ({(chatSelectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                                                                <span className="text-sm font-medium text-blue-900">
+                                                                    {chatSelectedFile ? chatSelectedFile.name : chatSelectedInternalDoc?.name}
                                                                 </span>
+                                                                {chatSelectedFile && (
+                                                                    <span className="text-xs text-blue-700">
+                                                                        ({(chatSelectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                onClick={() => setChatSelectedFile(null)}
+                                                                onClick={() => {
+                                                                    setChatSelectedFile(null);
+                                                                    setChatSelectedInternalDoc(null);
+                                                                }}
                                                                 className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
                                                             >
                                                                 <X className="w-3 h-3" />
@@ -2611,7 +2661,7 @@ const QuickActions = () => {
                                                         disabled={chatSending}
                                                     />
 
-                                                    {/* File Upload Button */}
+                                                    {/* File Upload Buttons */}
                                                     <input
                                                         id="chat-file-upload"
                                                         type="file"
@@ -2629,6 +2679,16 @@ const QuickActions = () => {
                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                                                         </svg>
+                                                    </Button>
+                                                    
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        className="px-3"
+                                                        disabled={chatSending}
+                                                        onClick={() => setShowChatInternalDocSelector(true)}
+                                                    >
+                                                        <FileText className="w-4 h-4" />
                                                     </Button>
 
                                                     <Button
@@ -3074,6 +3134,14 @@ const QuickActions = () => {
                 setSearchTerm={setSearchTerm}
                 selectedProjectForTimeline={selectedProjectForTimeline}
                 setSelectedProjectForTimeline={setSelectedProjectForTimeline}
+            />
+            
+            {/* Internal Document Selector for Chat */}
+            <InternalDocumentSelector
+                isOpen={showChatInternalDocSelector}
+                onClose={() => setShowChatInternalDocSelector(false)}
+                onSelect={handleChatInternalDocSelect}
+                selectedFile={chatSelectedInternalDoc}
             />
         </>
     );

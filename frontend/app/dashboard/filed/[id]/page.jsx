@@ -317,7 +317,8 @@ import {
     TrendingUp,
     Pause,
     Play,
-    Ban
+    Ban,
+    X
 } from 'lucide-react'
 import { useUser } from '@/providers/UserProvider';
 import { Button } from '@/components/Button';
@@ -326,6 +327,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'react-toastify';
+import InternalDocumentSelector from '@/components/InternalDocumentSelector';
 import { createFiledRequest, getFilledRequest, updateFiledStatusRequest, updateStatusRequest } from '@/lib/http/client';
 import Loader from '@/components/Loader';
 import moment from 'moment';
@@ -393,6 +395,8 @@ const page = ({ params }) => {
         project_client_id: id,
         file: null,
     });
+    const [selectedInternalDoc, setSelectedInternalDoc] = useState(null);
+    const [showInternalDocSelector, setShowInternalDocSelector] = useState(false);
     const { user } = useUser();
 
     const getFiled = useCallback(async () => {
@@ -419,7 +423,24 @@ const page = ({ params }) => {
         e.preventDefault();
         setSubmitLoading(true);
         try {
-            const res = await createFiledRequest(formdata);
+            // Prepare form data with either PC file or internal document
+            const submitData = { ...formdata };
+            
+            if (selectedInternalDoc) {
+                // For internal documents, we need to fetch the file data
+                try {
+                    const fileResponse = await fetch(selectedInternalDoc.path);
+                    const fileData = await fileResponse.arrayBuffer();
+                    const blob = new Blob([fileData], { type: 'application/pdf' });
+                    submitData.file = blob;
+                } catch (error) {
+                    console.error('Error fetching internal document:', error);
+                    toast.error('Failed to attach internal document');
+                    return;
+                }
+            }
+            
+            const res = await createFiledRequest(submitData);
             toast.success(res.data?.message);
             setFormdata({
                 name: '',
@@ -429,6 +450,7 @@ const page = ({ params }) => {
                 project_client_id: id,
                 file: null,
             });
+            setSelectedInternalDoc(null);
         } catch (error) {
             toast.error(error?.response?.data?.message || error?.message);
         } finally {
@@ -436,7 +458,7 @@ const page = ({ params }) => {
             setSubmitLoading(false);
             getFiled();
         }
-    }, [formdata, id]);
+    }, [formdata, selectedInternalDoc, id]);
 
     const handleUpdateStatus = useCallback(async (status, filled_id) => {
         try {
@@ -457,7 +479,13 @@ const page = ({ params }) => {
     const handleDocumentChange = useCallback((e) => {
         const file = e.target.files[0];
         setFormdata(prev => ({ ...prev, file }));
+        setSelectedInternalDoc(null); // Clear internal doc when PC file is selected
     }, []);
+
+    const handleInternalDocSelect = (doc) => {
+        setSelectedInternalDoc(doc);
+        setFormdata(prev => ({ ...prev, file: null })); // Clear PC file when internal doc is selected
+    };
 
     // Filter filings based on search and status
     const filteredFilings = filed.filter(file => {
@@ -912,16 +940,56 @@ const page = ({ params }) => {
                             <Label htmlFor="document" className="text-sm font-medium text-gray-700">
                                 Supporting Document <span className="text-gray-500">(optional)</span>
                             </Label>
-                            <div className="relative">
-                                <Input
-                                    id="document"
-                                    type="file"
-                                    onChange={handleDocumentChange}
-                                    className="h-10"
-                                />
-                                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                                    <Upload className="h-4 w-4 text-gray-400" />
+                            <div className="space-y-3">
+                                <div className="relative">
+                                    <Input
+                                        id="document"
+                                        type="file"
+                                        onChange={handleDocumentChange}
+                                        className="h-10"
+                                    />
+                                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                        <Upload className="h-4 w-4 text-gray-400" />
+                                    </div>
                                 </div>
+                                
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-px bg-gray-200"></div>
+                                    <span className="text-xs text-gray-500 px-2">OR</span>
+                                    <div className="flex-1 h-px bg-gray-200"></div>
+                                </div>
+                                
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setShowInternalDocSelector(true)}
+                                    className="w-full h-10 flex items-center gap-2"
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    Select Internal Document
+                                </Button>
+                                
+                                {(formdata.file || selectedInternalDoc) && (
+                                    <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <FileText className="h-4 w-4 text-blue-600" />
+                                                <span className="text-sm text-blue-800">
+                                                    {formdata.file ? formdata.file.name : selectedInternalDoc?.name}
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setFormdata(prev => ({ ...prev, file: null }));
+                                                    setSelectedInternalDoc(null);
+                                                }}
+                                                className="text-blue-600 hover:text-blue-800"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <p className="text-xs text-gray-500">Attach any relevant documents or forms</p>
                         </div>
@@ -957,6 +1025,14 @@ const page = ({ params }) => {
                     </form>
                 </div>
             </BigDialog>
+            
+            {/* Internal Document Selector */}
+            <InternalDocumentSelector
+                isOpen={showInternalDocSelector}
+                onClose={() => setShowInternalDocSelector(false)}
+                onSelect={handleInternalDocSelect}
+                selectedFile={selectedInternalDoc}
+            />
         </>
     )
 }
