@@ -24,6 +24,7 @@ import BigDialog from "./Dialogs/BigDialog"
 import AddWorkDescription from "./AddWorkDescription"
 import { TaskDetailModal } from "./TaskDetailModal"
 import InternalDocumentSelector from "./InternalDocumentSelector"
+import { usePhaseFolders } from '@/hooks/usePhaseFolders'
 import {
     Pause,
     Play,
@@ -53,6 +54,7 @@ import {
     Download
 } from 'lucide-react'
 import { useUser } from '@/providers/UserProvider'
+import { useTimer } from '@/providers/TimerProvider'
 import { toast } from 'react-toastify'
 import Link from "next/link"
 import UpdateTask from "./Dialogs/UpdateTask";
@@ -142,12 +144,18 @@ const statuses = [
 ]
 
 // Review Submission Modal Component
-const ReviewSubmissionModal = ({ isOpen, onClose, onSubmit, isLoading }) => {
+const ReviewSubmissionModal = ({ isOpen, onClose, onSubmit, isLoading, task, project }) => {
     const [description, setDescription] = useState('')
     const [selectedFile, setSelectedFile] = useState(null)
     const [selectedInternalDoc, setSelectedInternalDoc] = useState(null)
     const [showInternalDocSelector, setShowInternalDocSelector] = useState(false)
     const fileInputRef = useRef(null)
+
+    // Check if the task's phase has associated folders
+    const { hasFolders: phaseHasFolders, isLoading: checkingPhaseFolders } = usePhaseFolders(
+        project?.project_id,
+        task?.phase
+    );
 
     const handleFileSelect = (e) => {
         const file = e.target.files[0]
@@ -237,7 +245,7 @@ const ReviewSubmissionModal = ({ isOpen, onClose, onSubmit, isLoading }) => {
                                 className="flex items-center gap-2 px-3 py-2 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors text-blue-700"
                             >
                                 <FileText className="w-4 h-4" />
-                                Internal Document
+                                {task?.phase && phaseHasFolders ? `Phase Documents (${task.phase})` : 'Internal Document'}
                             </button>
                             {(selectedFile || selectedInternalDoc) && (
                                 <div className="flex items-center gap-2">
@@ -286,6 +294,8 @@ const ReviewSubmissionModal = ({ isOpen, onClose, onSubmit, isLoading }) => {
                 onClose={() => setShowInternalDocSelector(false)}
                 onSelect={handleInternalDocSelect}
                 selectedFile={selectedInternalDoc}
+                phase={task?.phase}
+                projectId={project?.project_id}
             />
         </div>
     )
@@ -846,9 +856,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
     // Kanban view states
     const [showPhaseDropdown, setShowPhaseDropdown] = useState({})
     const [phases, setPhases] = useState([])
-    const [timesTasks, setTimesTasks] = useState({})
-    const [loadingTask, setLoadingTask] = useState(null)
-    const [loadingStopTask, setLoadingStopTask] = useState(null)
     const [stopTimeOpen, setStopTimeOpen] = useState(null)
     const [selectedTask, setSelectedTask] = useState(null)
     const [taskDetailOpen, setTaskDetailOpen] = useState(false)
@@ -883,6 +890,7 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
 
 
     const { user, loadUser } = useUser()
+    const { activeTimer, startTimer, stopTimer, loadingStart, loadingStop } = useTimer()
 
     const isTeamLeader = user?.user_id === project?.created_by
 
@@ -974,18 +982,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
             }
         }
     }, [ccproject, checkAndUpdateOverdueTasks])
-
-    useEffect(() => {
-        if (!user) return
-        let timesTasks = {}
-        // Add safety check for user.Time - it might be undefined after auth middleware optimization
-        if (user.Time && Array.isArray(user.Time)) {
-            user.Time.forEach(time =>
-                timesTasks[time.task_id] = time.start
-            )
-        }
-        setTimesTasks(timesTasks)
-    }, [user])
 
     // Filter and sort tasks
     const filteredAndSortedTasks = useMemo(() => {
@@ -1332,40 +1328,21 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
     }, [project])
 
     // Time tracking handlers
-    const handleStartTime = useCallback(async (task_id) => {
+    const handleStartTime = useCallback(async (task_id, task_name) => {
         try {
-            setLoadingTask(task_id)
-            const res = await createTimeRequest(task_id)
-            await loadUser()
-            toast.success(res.data.message)
+            await startTimer(task_id, task_name, project.project_id, project.name)
         } catch (error) {
             toast.error(error?.response?.data?.message || error.message)
-        } finally {
-            setLoadingTask(null)
         }
-    }, [loadUser])
+    }, [startTimer, project])
 
     const handleStopTime = useCallback(async (task_id, description) => {
         try {
-            setLoadingStopTask(task_id)
-            // Add safety check for user.Time
-            if (!user.Time || !Array.isArray(user.Time)) {
-                toast.error('Time data not available');
-                return;
-            }
-            const time = user.Time.find(time => time.task_id == task_id)
-            if (!time) return
-
-            const formdata = { description }
-            const res = await stopTimeRequest(time.time_id, formdata)
-            await loadUser()
-            toast.success(res.data.message)
+            await stopTimer(description)
         } catch (error) {
             toast.error(error?.response?.data?.message || error.message)
-        } finally {
-            setLoadingStopTask(null)
         }
-    }, [user, loadUser])
+    }, [stopTimer])
 
     const handleTaskClick = useCallback((task, event) => {
         if (event.target.closest('button')) {
@@ -1701,10 +1678,10 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                                     </div>
                                                                 ) : (
                                                                     <>
-                                                                        {timesTasks.hasOwnProperty(task.task_id) ? (
+                                                                        {activeTimer?.task_id === task.task_id ? (
                                                                             <>
                                                                                 <div className="flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md">
-                                                                                    <Timer startTime={timesTasks[task.task_id]} className="text-xs" />
+                                                                                    <Timer startTime={activeTimer.start_time} className="text-xs" />
                                                                                 </div>
                                                                                 <Button
                                                                                     size="sm"
@@ -1714,10 +1691,10 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                                                         e.stopPropagation()
                                                                                         setStopTimeOpen(task.task_id)
                                                                                     }}
-                                                                                    disabled={loadingStopTask === task.task_id}
-                                                                                    isLoading={loadingStopTask === task.task_id}
+                                                                                    disabled={loadingStop === activeTimer.time_id}
+                                                                                    isLoading={loadingStop === activeTimer.time_id}
                                                                                 >
-                                                                                    {loadingStopTask !== task.task_id && <Pause className="w-3 h-3" />}
+                                                                                    {loadingStop !== activeTimer.time_id && <Pause className="w-3 h-3" />}
                                                                                 </Button>
                                                                             </>
                                                                         ) : (
@@ -1727,12 +1704,12 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                                                 className="w-8 h-8 p-0 hover:bg-green-50"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation()
-                                                                                    handleStartTime(task.task_id)
+                                                                                    handleStartTime(task.task_id, task.name)
                                                                                 }}
-                                                                                disabled={loadingTask === task.task_id}
-                                                                                isLoading={loadingTask === task.task_id}
+                                                                                disabled={loadingStart === task.task_id}
+                                                                                isLoading={loadingStart === task.task_id}
                                                                             >
-                                                                                {loadingTask !== task.task_id && <Play className="w-3 h-3" />}
+                                                                                {loadingStart !== task.task_id && <Play className="w-3 h-3" />}
                                                                             </Button>
                                                                         )}
 
@@ -1928,10 +1905,10 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                         </div>
                                                     ) : (
                                                         <>
-                                                            {timesTasks.hasOwnProperty(task.task_id) ? (
+                                                            {activeTimer?.task_id === task.task_id ? (
                                                                 <>
                                                                     <div className="flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md">
-                                                                        <Timer startTime={timesTasks[task.task_id]} className="text-xs" />
+                                                                        <Timer startTime={activeTimer.start_time} className="text-xs" />
                                                                     </div>
                                                                     <Button
                                                                         size="sm"
@@ -1941,10 +1918,10 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                                             e.stopPropagation()
                                                                             setStopTimeOpen(task.task_id)
                                                                         }}
-                                                                        disabled={loadingStopTask === task.task_id}
-                                                                        isLoading={loadingStopTask === task.task_id}
+                                                                        disabled={loadingStop === activeTimer.time_id}
+                                                                        isLoading={loadingStop === activeTimer.time_id}
                                                                     >
-                                                                        {loadingStopTask !== task.task_id && <Pause className="w-3 h-3" />}
+                                                                        {loadingStop !== activeTimer.time_id && <Pause className="w-3 h-3" />}
                                                                     </Button>
                                                                 </>
                                                             ) : (
@@ -1954,12 +1931,12 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                                     className="w-8 h-8 p-0 hover:bg-green-50"
                                                                     onClick={(e) => {
                                                                         e.stopPropagation()
-                                                                        handleStartTime(task.task_id)
+                                                                        handleStartTime(task.task_id, task.name)
                                                                     }}
-                                                                    disabled={loadingTask === task.task_id}
-                                                                    isLoading={loadingTask === task.task_id}
+                                                                    disabled={loadingStart === task.task_id}
+                                                                    isLoading={loadingStart === task.task_id}
                                                                 >
-                                                                    {loadingTask !== task.task_id && <Play className="w-3 h-3" />}
+                                                                    {loadingStart !== task.task_id && <Play className="w-3 h-3" />}
                                                                 </Button>
                                                             )}
                                                         </>
@@ -2069,6 +2046,8 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                 onClose={handleReviewSubmissionClose}
                 onSubmit={handleReviewSubmission}
                 isLoading={reviewSubmissionModal.isLoading}
+                task={reviewSubmissionModal.task}
+                project={project}
             />
 
             {/* Review Actions Modal */}
@@ -2114,7 +2093,7 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
             {/* Stop Time Modal */}
             <BigDialog open={!!stopTimeOpen} onClose={() => setStopTimeOpen(null)} width={34}>
                 <AddWorkDescription
-                    task_id={stopTimeOpen}
+                    task_id={activeTimer?.task_id}
                     handleStop={handleStopTime}
                     close={() => setStopTimeOpen(null)}
                 />

@@ -19,6 +19,7 @@ import { useUser } from '@/providers/UserProvider'
 import { Textarea } from '../ui/textarea'
 import { Label } from '../ui/label'
 import InternalDocumentSelector from '../InternalDocumentSelector'
+import { usePhaseFolders } from '@/hooks/usePhaseFolders'
 
 const AddTaskModal = ({ open, onClose }) => {
     const [selectedMember, setSelectedMember] = useState([]);
@@ -124,6 +125,12 @@ const AddTaskModal = ({ open, onClose }) => {
     const hasPhases = useMemo(() => {
         return currentProject?.phases && Array.isArray(currentProject.phases) && currentProject.phases.length > 0;
     }, [currentProject]);
+
+    // Check if the selected phase has associated folders
+    const { hasFolders: phaseHasFolders, isLoading: checkingPhaseFolders } = usePhaseFolders(
+        selectedProject ? parseInt(selectedProject) : null,
+        formdata.phase
+    );
 
     // Update task name when project changes (but preserve user's phase selection)
     useEffect(() => {
@@ -532,7 +539,9 @@ const AddTaskModal = ({ open, onClose }) => {
                                     className="flex items-center gap-2 px-4 py-2 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors text-blue-700"
                                 >
                                     <FileText className="h-4 w-4" />
-                                    <span className="text-sm">Internal Document</span>
+                                    <span className="text-sm">
+                                        {formdata.phase && phaseHasFolders ? `Phase Documents (${formdata.phase})` : 'Internal Document'}
+                                    </span>
                                 </button>
                                 {(selectedFile || selectedInternalDoc) && (
                                     <button
@@ -589,6 +598,8 @@ const AddTaskModal = ({ open, onClose }) => {
                 onClose={() => setShowInternalDocSelector(false)}
                 onSelect={handleInternalDocSelect}
                 selectedFile={selectedInternalDoc}
+                phase={formdata.phase}
+                projectId={selectedProject}
             />
         </div>
     )

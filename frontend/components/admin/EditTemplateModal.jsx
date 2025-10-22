@@ -24,7 +24,7 @@ const EditTemplateModal = ({ template, onClose, onUpdateTemplate }) => {
 
     const [templateData, setTemplateData] = useState(normalizeTemplate(template));
     const [newPhase, setNewPhase] = useState({ name: '', description: '', estimated_days: '' });
-    const [newFolder, setNewFolder] = useState({ name: '', description: '', parent_id: null });
+    const [newFolder, setNewFolder] = useState({ name: '', description: '', parent_id: null, phase_id: null });
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [selectedFolder, setSelectedFolder] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -66,8 +66,15 @@ const EditTemplateModal = ({ template, onClose, onUpdateTemplate }) => {
                     files: []
                 }]
             }));
-            setNewFolder({ name: '', description: '', parent_id: null });
+            setNewFolder({ name: '', description: '', parent_id: null, phase_id: null });
         }
+    };
+
+    const handleDeleteFolder = (folderId) => {
+        setTemplateData(prev => ({
+            ...prev,
+            folders: (prev.folders || []).filter(folder => folder.folder_id !== folderId)
+        }));
     };
 
     const handleFileUpload = (event) => {
@@ -82,13 +89,44 @@ const EditTemplateModal = ({ template, onClose, onUpdateTemplate }) => {
     const handleSaveTemplate = async () => {
         setIsLoading(true);
         try {
-            const updatedTemplate = {
-                ...templateData,
-                phases_count: (templateData.phases || []).length,
-                documents_count: (templateData.documents_count || 0) + selectedFiles.length,
-                updated_at: new Date().toISOString()
-            };
-            onUpdateTemplate(updatedTemplate);
+            // Create FormData for file upload
+            const formData = new FormData();
+            
+            // Add template basic info
+            formData.append('name', templateData.name);
+            formData.append('description', templateData.description);
+            formData.append('category', templateData.category);
+            formData.append('default_priority', templateData.default_priority);
+            formData.append('estimated_duration', templateData.estimated_duration);
+            
+            // Add phases
+            formData.append('phases', JSON.stringify((templateData.phases || []).map((phase, index) => ({
+                name: phase.name,
+                description: phase.description,
+                order: index + 1,
+                estimated_days: parseInt(phase.estimated_days) || 0
+            }))));
+            
+            // Add folders
+            formData.append('folders', JSON.stringify((templateData.folders || []).map(folder => ({
+                name: folder.name,
+                description: folder.description,
+                parent_id: folder.parent_id,
+                phase_id: folder.phase_id,
+                order: folder.order || 0,
+                temp_id: folder.folder_id || folder.temp_id // Include temporary ID for file-folder mapping
+            }))));
+            
+            // Add new files with folder associations
+            selectedFiles.forEach((file, index) => {
+                formData.append('files', file);
+                // Add folder association if a folder is selected
+                if (selectedFolder) {
+                    formData.append(`file_${index}_folder_id`, selectedFolder);
+                }
+            });
+            
+            onUpdateTemplate(formData);
         } catch (error) {
             console.error('Error updating template:', error);
         } finally {
@@ -285,6 +323,18 @@ const EditTemplateModal = ({ template, onClose, onUpdateTemplate }) => {
                                     className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     placeholder="Folder name"
                                 />
+                                <select
+                                    value={newFolder.phase_id || ''}
+                                    onChange={(e) => setNewFolder(prev => ({ ...prev, phase_id: e.target.value || null }))}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="">Select Phase (Optional)</option>
+                                    {(templateData.phases || []).map(phase => (
+                                        <option key={phase.order} value={phase.order}>
+                                            {phase.name}
+                                        </option>
+                                    ))}
+                                </select>
                                 <textarea
                                     value={newFolder.description}
                                     onChange={(e) => setNewFolder(prev => ({ ...prev, description: e.target.value }))}
@@ -372,25 +422,39 @@ const EditTemplateModal = ({ template, onClose, onUpdateTemplate }) => {
                             <div className="bg-gray-50 p-4 rounded-lg">
                                 <h3 className="font-semibold text-gray-900 mb-3">Template Folders</h3>
                                 <div className="space-y-2">
-                                    {templateData.folders.map(folder => (
-                                        <div key={folder.folder_id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
-                                            <div className="flex items-center">
-                                                <FolderPlus className="w-4 h-4 text-gray-400 mr-2" />
-                                                <div>
-                                                    <div className="font-medium text-gray-900">{folder.name}</div>
-                                                    {folder.description && (
-                                                        <div className="text-sm text-gray-600">{folder.description}</div>
-                                                    )}
+                                    {templateData.folders.map(folder => {
+                                        const phase = templateData.phases.find(p => p.order === folder.phase_id);
+                                        return (
+                                            <div key={folder.folder_id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                                                <div className="flex items-center">
+                                                    <FolderPlus className="w-4 h-4 text-gray-400 mr-2" />
+                                                    <div>
+                                                        <div className="font-medium text-gray-900">{folder.name}</div>
+                                                        {folder.description && (
+                                                            <div className="text-sm text-gray-600">{folder.description}</div>
+                                                        )}
+                                                        {phase && (
+                                                            <div className="text-xs text-blue-600 mt-1">
+                                                                Phase: {phase.name}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-gray-500">{folder.files?.length || 0} files</span>
+                                                    <Button className="bg-blue-100 hover:bg-blue-200 text-blue-700 p-1">
+                                                        <Eye className="w-3 h-3" />
+                                                    </Button>
+                                                    <Button
+                                                        onClick={() => handleDeleteFolder(folder.folder_id)}
+                                                        className="bg-red-100 hover:bg-red-200 text-red-700 p-1"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </Button>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs text-gray-500">{folder.files?.length || 0} files</span>
-                                                <Button className="bg-blue-100 hover:bg-blue-200 text-blue-700 p-1">
-                                                    <Eye className="w-3 h-3" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}

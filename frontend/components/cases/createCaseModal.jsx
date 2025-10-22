@@ -4,10 +4,11 @@
 
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, X, Calendar, User, FileText, AlertCircle, Briefcase, Layers, Users, ChevronDown } from 'lucide-react';
+import { Plus, X, Calendar, User, FileText, AlertCircle, Briefcase, Layers, Users, ChevronDown, BookTemplate } from 'lucide-react';
 import { useUser } from '@/providers/UserProvider';
 import { createProjectRequest } from '@/lib/http/project';
 import { getTeamMembersRequest } from '@/lib/http/auth';
+import { getAllCaseTemplatesRequest, useTemplateForProjectRequest } from '@/lib/http/caseTemplate';
 
 import { toast } from 'react-toastify';
 import Loader from '../Loader';
@@ -23,6 +24,9 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
     const [teamMembers, setTeamMembers] = useState([]);
     const [selectedTeamMembers, setSelectedTeamMembers] = useState([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [templates, setTemplates] = useState([]);
+    const [selectedTemplate, setSelectedTemplate] = useState(null);
+    const [showTemplateSelector, setShowTemplateSelector] = useState(false);
     const [caseData, setCaseData] = useState({
         name: '',
         opposing: '',
@@ -52,6 +56,20 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
             }
         };
         loadTeamMembers();
+    }, []);
+
+    useEffect(() => {
+        const loadTemplates = async () => {
+            try {
+                const response = await getAllCaseTemplatesRequest();
+                if (response.data.success) {
+                    setTemplates(response.data.templates || []);
+                }
+            } catch (error) {
+                console.error('Error loading templates:', error);
+            }
+        };
+        loadTemplates();
     }, []);
 
     // Handle prefill data from AI assistant
@@ -144,6 +162,53 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
         }
     };
 
+    const handleTemplateSelect = (template) => {
+        setSelectedTemplate(template);
+        setCaseData(prev => ({
+            ...prev,
+            priority: template.default_priority,
+            phases: template.phases ? template.phases.map(phase => phase.name) : [],
+            description: template.description || prev.description
+        }));
+        setShowTemplateSelector(false);
+        toast.success(`Template "${template.name}" selected!`);
+    };
+
+    const handleUseTemplate = async () => {
+        if (!selectedTemplate) {
+            toast.error('Please select a template first');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const projectData = {
+                ...caseData,
+                selectedTeamMembers,
+                projectName: caseData.name,
+                projectDescription: caseData.description,
+                clientName: caseData.client_name,
+                clientAddress: caseData.client_address
+            };
+
+            const response = await useTemplateForProjectRequest(selectedTemplate.template_id, projectData);
+            
+            if (response.data.success) {
+                toast.success('Case created from template successfully!');
+                await loadUser();
+                router.push(`/dashboard/project/${response.data.project.project_id}`);
+                onClose();
+            } else {
+                toast.error('Failed to create case from template');
+            }
+        } catch (error) {
+            console.error('Error creating case from template:', error);
+            toast.error(error?.response?.data?.message || 'Failed to create case from template');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <Modal title="Create New Case" onClose={onClose}>
             <div className="space-y-6">
@@ -161,6 +226,108 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                             placeholder="Enter case title"
                             required
                         />
+                    </div>
+
+                    {/* Template Selection */}
+                    <div className="space-y-2 md:col-span-2">
+                        <label className="flex items-center text-base font-semibold text-slate-700 mb-2">
+                            <BookTemplate className="w-4 h-4 mr-2 text-slate-500" />
+                            Use Case Template (Optional)
+                        </label>
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowTemplateSelector(!showTemplateSelector)}
+                                className="flex-1 p-3 border border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors bg-white text-left flex items-center justify-between"
+                            >
+                                <span className="text-slate-700">
+                                    {selectedTemplate ? selectedTemplate.name : "Select a template"}
+                                </span>
+                                <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showTemplateSelector ? 'rotate-180' : ''}`} />
+                            </button>
+                            {selectedTemplate && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedTemplate(null);
+                                        setCaseData(prev => ({
+                                            ...prev,
+                                            priority: 'Medium',
+                                            phases: [],
+                                            description: ''
+                                        }));
+                                    }}
+                                    className="px-4 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Template Selector Dropdown */}
+                        {showTemplateSelector && (
+                            <div className="border border-slate-300 rounded-lg shadow-lg bg-white max-h-60 overflow-y-auto">
+                                <div className="p-3 border-b border-slate-200">
+                                    <p className="text-sm text-slate-600">Select a template to auto-fill case phases and settings:</p>
+                                </div>
+                                <div className="p-2">
+                                    {templates.length === 0 ? (
+                                        <div className="text-center py-4 text-slate-500">
+                                            <BookTemplate className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                            <p className="text-sm">No templates available</p>
+                                        </div>
+                                    ) : (
+                                        templates.map((template) => (
+                                            <div
+                                                key={template.template_id}
+                                                className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-md cursor-pointer"
+                                                onClick={() => handleTemplateSelect(template)}
+                                            >
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-slate-900">{template.name}</div>
+                                                    <div className="text-sm text-slate-600">{template.description}</div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                                            template.category === 'Real Estate' ? 'bg-green-100 text-green-800' :
+                                                            template.category === 'Personal Injury' ? 'bg-red-100 text-red-800' :
+                                                            template.category === 'Business Law' ? 'bg-blue-100 text-blue-800' :
+                                                            'bg-gray-100 text-gray-800'
+                                                        }`}>
+                                                            {template.category}
+                                                        </span>
+                                                        <span className="text-xs text-slate-500">
+                                                            {template.phases_count} phases
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-sm font-medium text-slate-900">
+                                                        {template.default_priority} Priority
+                                                    </div>
+                                                    <div className="text-xs text-slate-500">
+                                                        {template.estimated_duration}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {selectedTemplate && (
+                            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center mb-2">
+                                    <BookTemplate className="w-4 h-4 text-blue-600 mr-2" />
+                                    <span className="font-medium text-blue-900">Selected Template: {selectedTemplate.name}</span>
+                                </div>
+                                <div className="text-sm text-blue-700">
+                                    <p>• Priority: {selectedTemplate.default_priority}</p>
+                                    <p>• Phases: {selectedTemplate.phases_count}</p>
+                                    <p>• Duration: {selectedTemplate.estimated_duration}</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-2">
@@ -448,13 +615,23 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                     >
                         Cancel
                     </button>
-                    <button
-                        type="button"
-                        onClick={handleSubmit}
-                        className="px-6 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium shadow-sm"
-                    >
-                        Create Case
-                    </button>
+                    {selectedTemplate ? (
+                        <button
+                            type="button"
+                            onClick={handleUseTemplate}
+                            className="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium shadow-sm"
+                        >
+                            Create Case from Template
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleSubmit}
+                            className="px-6 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium shadow-sm"
+                        >
+                            Create Case
+                        </button>
+                    )}
                 </div>
             </div>
             {isLoading && (

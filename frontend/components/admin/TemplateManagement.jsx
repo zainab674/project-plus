@@ -6,6 +6,13 @@ import { Button } from '../Button';
 import CreateTemplateModal from './CreateTemplateModal';
 import EditTemplateModal from './EditTemplateModal';
 import TemplatePreviewModal from './TemplatePreviewModal';
+import { 
+    getAllCaseTemplatesRequest, 
+    createCaseTemplateRequest, 
+    updateCaseTemplateRequest, 
+    deleteCaseTemplateRequest 
+} from '@/lib/http/caseTemplate';
+import { toast } from 'react-toastify';
 
 const TemplateManagement = () => {
     const [templates, setTemplates] = useState([]);
@@ -17,78 +24,29 @@ const TemplateManagement = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState('all');
 
-    // Mock data for now
-    const mockTemplates = [
-        {
-            template_id: '1',
-            name: 'Foreclosure Defense',
-            description: 'Complete template for foreclosure defense cases',
-            category: 'Real Estate',
-            default_priority: 'High',
-            estimated_duration: '6-12 months',
-            phases_count: 5,
-            documents_count: 12,
-            usage_count: 45,
-            is_active: true,
-            created_at: '2024-01-15',
-            phases: [
-                { name: 'Initial Assessment', order: 1, estimated_days: 7 },
-                { name: 'Document Review', order: 2, estimated_days: 14 },
-                { name: 'Motion Practice', order: 3, estimated_days: 21 },
-                { name: 'Settlement Negotiation', order: 4, estimated_days: 30 },
-                { name: 'Trial Preparation', order: 5, estimated_days: 14 }
-            ]
-        },
-        {
-            template_id: '2',
-            name: 'Personal Injury',
-            description: 'Comprehensive template for personal injury cases',
-            category: 'Personal Injury',
-            default_priority: 'Medium',
-            estimated_duration: '12-24 months',
-            phases_count: 6,
-            documents_count: 15,
-            usage_count: 23,
-            is_active: true,
-            created_at: '2024-01-10',
-            phases: [
-                { name: 'Initial Consultation', order: 1, estimated_days: 3 },
-                { name: 'Investigation', order: 2, estimated_days: 30 },
-                { name: 'Medical Records Review', order: 3, estimated_days: 14 },
-                { name: 'Demand Letter', order: 4, estimated_days: 7 },
-                { name: 'Litigation', order: 5, estimated_days: 60 },
-                { name: 'Settlement/Trial', order: 6, estimated_days: 90 }
-            ]
-        },
-        {
-            template_id: '3',
-            name: 'Contract Disputes',
-            description: 'Template for business contract dispute cases',
-            category: 'Business Law',
-            default_priority: 'Medium',
-            estimated_duration: '3-6 months',
-            phases_count: 4,
-            documents_count: 8,
-            usage_count: 12,
-            is_active: true,
-            created_at: '2024-01-05',
-            phases: [
-                { name: 'Contract Analysis', order: 1, estimated_days: 7 },
-                { name: 'Breach Documentation', order: 2, estimated_days: 14 },
-                { name: 'Negotiation', order: 3, estimated_days: 21 },
-                { name: 'Resolution', order: 4, estimated_days: 14 }
-            ]
-        }
-    ];
 
     useEffect(() => {
-        // Simulate API call
-        setIsLoading(true);
-        setTimeout(() => {
-            setTemplates(mockTemplates);
-            setIsLoading(false);
-        }, 1000);
+        fetchTemplates();
     }, []);
+
+    const fetchTemplates = async () => {
+        setIsLoading(true);
+        try {
+            const response = await getAllCaseTemplatesRequest();
+            if (response.data.success) {
+                setTemplates(response.data.templates);
+            } else {
+                toast.error('Failed to fetch templates');
+                setTemplates([]);
+            }
+        } catch (error) {
+            console.error('Error fetching templates:', error);
+            toast.error('Failed to fetch templates');
+            setTemplates([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const categories = ['all', 'Real Estate', 'Personal Injury', 'Business Law', 'Criminal Law', 'Family Law'];
 
@@ -109,23 +67,56 @@ const TemplateManagement = () => {
         setShowPreviewModal(true);
     };
 
-    const handleDeleteTemplate = (templateId) => {
+    const handleDeleteTemplate = async (templateId) => {
         if (window.confirm('Are you sure you want to delete this template? This action cannot be undone.')) {
-            setTemplates(prev => prev.filter(t => t.template_id !== templateId));
+            try {
+                const response = await deleteCaseTemplateRequest(templateId);
+                if (response.data.success) {
+                    setTemplates(prev => prev.filter(t => t.template_id !== templateId));
+                    toast.success('Template deleted successfully');
+                } else {
+                    toast.error('Failed to delete template');
+                }
+            } catch (error) {
+                console.error('Error deleting template:', error);
+                toast.error('Failed to delete template');
+            }
         }
     };
 
-    const handleCreateTemplate = (newTemplate) => {
-        setTemplates(prev => [...prev, { ...newTemplate, template_id: Date.now().toString() }]);
-        setShowCreateModal(false);
+    const handleCreateTemplate = async (formData) => {
+        try {
+            const response = await createCaseTemplateRequest(formData);
+            if (response.data.success) {
+                setTemplates(prev => [...prev, response.data.template]);
+                setShowCreateModal(false);
+                toast.success('Template created successfully');
+            } else {
+                toast.error('Failed to create template');
+            }
+        } catch (error) {
+            console.error('Error creating template:', error);
+            toast.error('Failed to create template');
+        }
     };
 
-    const handleUpdateTemplate = (updatedTemplate) => {
-        setTemplates(prev => prev.map(t => 
-            t.template_id === updatedTemplate.template_id ? updatedTemplate : t
-        ));
-        setShowEditModal(false);
-        setSelectedTemplate(null);
+    const handleUpdateTemplate = async (formData) => {
+        try {
+            const response = await updateCaseTemplateRequest(selectedTemplate.template_id, formData);
+            if (response.data.success) {
+                setTemplates(prev => prev.map(t => 
+                    t.template_id === selectedTemplate.template_id ? response.data.template : t
+                ));
+                setShowEditModal(false);
+                setSelectedTemplate(null);
+                toast.success('Template updated successfully');
+            } else {
+                toast.error('Failed to update template');
+            }
+        } catch (error) {
+            console.error('Error updating template:', error);
+            toast.error('Failed to update template');
+        }
     };
 
     if (isLoading) {
@@ -338,5 +329,6 @@ const TemplateManagement = () => {
 };
 
 export default TemplateManagement;
+
 
 

@@ -7,3 +7,4 @@ export const uploadMediaRequest = async (formdata) => api.post(`/media/upload/`,
         "Content-Type": "multipart/form-data"
     }
 });
+export const deleteMediaRequest = async (mediaId) => api.delete(`/media/delete/${mediaId}`);

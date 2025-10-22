@@ -18,6 +18,7 @@ import {
     createFolder,
     fileUpload,
     getFolderTreeByTemplateDocument,
+    checkPhaseHasFolders,
     sendToLawyer,
     getTemplateDocumentFiles,
     updateFileUpload,
@@ -55,6 +56,7 @@ router.route('/file/:file_id').delete(authMiddleware, deleteFile);
 router.route('/file/update').put(authMiddleware, singleUpload, updateFileUpload);
 router.route('/tree').get(authMiddleware, getFolderTreeByTemplateDocument);
 router.route('/tree/:project_id').get(authMiddleware, getFolderTreeByTemplateDocument);
+router.route('/check-phase-folders/:project_id').get(authMiddleware, checkPhaseHasFolders);
 
 // Project-specific routes (must come after specific routes)
 router.route('/:id').get(authMiddleware, getProjectById).patch(authMiddleware, updateProject).delete(authMiddleware, deleteProject);

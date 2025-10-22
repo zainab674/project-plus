@@ -102,3 +102,63 @@ export const getMediaByTaskId = catchAsyncError(async (req, res, next) => {
         media
     });
 });
+
+export const deleteMedia = catchAsyncError(async (req, res, next) => {
+    const { media_id } = req.params;
+    const user_id = req.user?.user_id;
+
+    if (!media_id) {
+        next(new ErrorHandler('Media ID is required', 400));
+        return;
+    }
+
+    // Check if media exists and user has permission to delete it
+    const media = await prisma.media.findUnique({
+        where: {
+            media_id: media_id
+        },
+        include: {
+            task: {
+                include: {
+                    assignees: true
+                }
+            }
+        }
+    });
+
+    if (!media) {
+        next(new ErrorHandler('Media not found', 404));
+        return;
+    }
+
+    // Check if user is the uploader or has access to the task
+    const hasAccess = media.user_id === user_id || 
+                     media.task.assignees.some(assignee => assignee.user_id === user_id);
+
+    if (!hasAccess) {
+        next(new ErrorHandler('You do not have permission to delete this media', 403));
+        return;
+    }
+
+    // Delete the media record
+    await prisma.media.delete({
+        where: {
+            media_id: media_id
+        }
+    });
+
+    // Create task progress entry for the deletion
+    await prisma.taskProgress.create({
+        data: {
+            message: `Removed attachment: "${media.filename}"`,
+            user_id: user_id,
+            task_id: media.task_id,
+            type: "MEDIA"
+        }
+    });
+
+    res.status(200).json({
+        success: true,
+        message: 'Media deleted successfully'
+    });
+});

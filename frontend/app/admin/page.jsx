@@ -21,7 +21,9 @@ import {
     MessageSquare,
     UserPlus,
     Shield,
-    AlertTriangle
+    AlertTriangle,
+    FileText,
+    User
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import {
@@ -35,10 +37,12 @@ import {
     createAdminUser,
     deleteAdminUser
 } from '@/lib/http/auth';
+import EditUserModal from '@/components/admin/EditUserModal';
 import UserTreeView from '@/components/ui/tree';
 import { UserContext } from '@/providers/UserProvider';
 import { useRouter } from 'next/navigation';
 import BackButton from '@/components/BackButton';
+import TemplateManagement from '@/components/admin/TemplateManagement';
 
 const AdminPage = () => {
     const { user, isAuth, isLoading } = useContext(UserContext);
@@ -126,6 +130,10 @@ const AdminPage = () => {
     // Delete user states
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [userToDelete, setUserToDelete] = useState(null);
+
+    // Edit user states
+    const [showEditUserModal, setShowEditUserModal] = useState(false);
+    const [userToEdit, setUserToEdit] = useState(null);
 
     // Fetch dashboard stats
     const fetchStats = async () => {
@@ -260,6 +268,23 @@ const AdminPage = () => {
             console.error('Error deleting user:', error);
             toast.error('Failed to delete user');
         }
+    };
+
+    // Edit user
+    const handleEditUser = (user) => {
+        setUserToEdit(user);
+        setShowEditUserModal(true);
+    };
+
+    const handleUserUpdated = (updatedUser) => {
+        // Update the user in the users list
+        setUsers(prevUsers => 
+            prevUsers.map(user => 
+                user.user_id === updatedUser.user_id ? updatedUser : user
+            )
+        );
+        setShowEditUserModal(false);
+        setUserToEdit(null);
     };
 
     // Get role badge
@@ -411,7 +436,8 @@ const AdminPage = () => {
                         <nav className="-mb-px flex space-x-8">
                             {[
                                 { id: 'requests', name: 'Registration Requests', icon: UserPlus },
-                                { id: 'users', name: 'User Management', icon: Users }
+                                { id: 'users', name: 'User Management', icon: Users },
+                                { id: 'templates', name: 'Template Management', icon: FileText }
                             ].map((tab) => (
                                 <button
                                     key={tab.id}
@@ -859,6 +885,15 @@ const AdminPage = () => {
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
+                                                                onClick={() => handleEditUser(user)}
+                                                                className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                                                            >
+                                                                <User className="w-4 h-4 mr-1" />
+                                                                Edit
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
                                                                 onClick={() => {
                                                                     console.log('User ID:', user.user_id);
 
@@ -924,6 +959,11 @@ const AdminPage = () => {
                     </div>
                 )}
             </div>
+
+                {/* Template Management Tab */}
+                {activeTab === 'templates' && (
+                    <TemplateManagement />
+                )}
 
             {/* Delete User Confirmation Modal */}
             <Dialog open={showDeleteConfirmModal} onOpenChange={(open) => {
@@ -1042,6 +1082,17 @@ const AdminPage = () => {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Edit User Modal */}
+            <EditUserModal
+                isOpen={showEditUserModal}
+                onClose={() => {
+                    setShowEditUserModal(false);
+                    setUserToEdit(null);
+                }}
+                user={userToEdit}
+                onUserUpdated={handleUserUpdated}
+            />
         </div>
     );
 };

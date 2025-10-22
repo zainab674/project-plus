@@ -143,25 +143,39 @@ const MonthYearSelector = () => {
   const { 
     availableMonths, 
     selectedMonthYear, 
+    selectedMonthRange,
     setSelectedMonthYear, 
+    setSelectedMonthRange,
     isLoading 
   } = useDashboardFilter();
 
   const handleMonthSelect = (monthYear) => {
     setSelectedMonthYear(monthYear);
+    // Clear range selection when selecting single month
+    setSelectedMonthRange(null);
+  };
+
+  const handleRangeSelect = (range) => {
+    setSelectedMonthRange(range);
+    // Clear single month selection when selecting range
+    setSelectedMonthYear(null);
   };
 
   const handleClearSelection = () => {
     setSelectedMonthYear(null);
+    setSelectedMonthRange(null);
   };
 
   return (
     <CalendarSelector
       selectedMonthYear={selectedMonthYear}
+      selectedMonthRange={selectedMonthRange}
       onSelect={handleMonthSelect}
+      onRangeSelect={handleRangeSelect}
       onClear={handleClearSelection}
       isLoading={isLoading}
       availableMonths={availableMonths}
+      isRange={true}
     />
   );
 };

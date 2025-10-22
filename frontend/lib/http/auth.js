@@ -70,6 +70,10 @@ export const updateAdminUserRole = async (userId, role) => {
     return api.put(`/admin/users/${userId}/role`, { role });
 };
 
+export const updateAdminUserInfo = async (userId, userData) => {
+    return api.put(`/admin/users/${userId}`, userData);
+};
+
 export const createAdminUser = async (userData) => {
     return api.post('/admin/users/create-admin', userData);
 };

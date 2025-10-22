@@ -21,6 +21,7 @@ import dynamic from 'next/dynamic'
 import InternalDocumentSelector from '../InternalDocumentSelector'
 import { useUser } from '@/providers/UserProvider'
 import { Textarea } from '../ui/textarea'
+import { usePhaseFolders } from '@/hooks/usePhaseFolders'
 const JoditEditor = dynamic(
     () => import('jodit-react'),
     { ssr: false }
@@ -51,6 +52,12 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
     const hasPhases = useMemo(() => {
         return project?.phases && Array.isArray(project.phases) && project.phases.length > 0;
     }, [project]);
+
+    // Check if the selected phase has associated folders
+    const { hasFolders: phaseHasFolders, isLoading: checkingPhaseFolders } = usePhaseFolders(
+        project?.project_id,
+        formdata.phase
+    );
 
     useEffect(() => {
         console.log('🔍 CreateTask: Project prop received:', project);
@@ -422,7 +429,9 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
                                 className="flex items-center gap-2 px-4 py-2 border border-blue-300 rounded-md hover:bg-blue-50 transition-colors text-blue-700"
                             >
                                 <FileText className="h-4 w-4" />
-                                <span className="text-sm">Internal Document</span>
+                                <span className="text-sm">
+                                    {formdata.phase && phaseHasFolders ? `Phase Documents (${formdata.phase})` : 'Internal Document'}
+                                </span>
                             </button>
                             {(selectedFile || selectedInternalDoc) && (
                                 <button
@@ -480,6 +489,8 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
                 onClose={() => setShowInternalDocSelector(false)}
                 onSelect={handleInternalDocSelect}
                 selectedFile={selectedInternalDoc}
+                phase={formdata.phase}
+                projectId={project?.project_id}
             />
         </div>
     )

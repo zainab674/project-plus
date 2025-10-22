@@ -17,6 +17,7 @@ import adminRouter from './adminRoute.js'
 import callRouter from './callRoute.js'
 import contactRouter from './contactRoute.js'
 import transcriptionRouter from './transcriptionRoute.js'
+import caseTemplateRouter from './caseTemplateRoute.js'
 
 router.use('/user',userRouter);
 router.use('/project',projectRouter);
@@ -35,6 +36,7 @@ router.use('/admin',adminRouter);
 router.use('/calls',callRouter);
 router.use('/contacts',contactRouter);
 router.use('/transcription',transcriptionRouter);
+router.use('/case-templates',caseTemplateRouter);
 
 
 export default router;

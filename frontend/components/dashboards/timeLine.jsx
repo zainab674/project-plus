@@ -10,6 +10,25 @@ import { getHourMinDiff } from '@/utils/calculateTIme';
 import dayjs from 'dayjs';
 import { TaskDetailModal } from '../TaskDetailModal';
 
+// Utility function to highlight search terms in text
+const highlightSearchTerm = (text, searchTerm) => {
+    if (!searchTerm || !text) return text;
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, index) => {
+        if (regex.test(part)) {
+            return (
+                <mark key={index} className="bg-yellow-200 px-1 rounded">
+                    {part}
+                </mark>
+            );
+        }
+        return part;
+    });
+};
+
 // Test dayjs functionality
 console.log('Dayjs test:', {
     now: dayjs().format('DD-MM-YYYY'),
@@ -905,15 +924,15 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between">
                                                         <h5 className="font-medium text-gray-900 truncate">
-                                                            {item.project} - {item.task}
+                                                            {highlightSearchTerm(item.project, searchTerm)} - {highlightSearchTerm(item.task, searchTerm)}
                                                         </h5>
                                                         <span className="text-sm text-gray-500">
                                                             {dayjs(item.timestamp).format('MMM DD, YYYY HH:mm')}
                                                         </span>
                                                     </div>
-                                                    <p className="text-sm text-gray-600 mt-1">{item.message}</p>
+                                                    <p className="text-sm text-gray-600 mt-1">{highlightSearchTerm(item.message, searchTerm)}</p>
                                                     <div className="flex items-center justify-between mt-2">
-                                                        <span className="text-xs text-gray-500">By: {item.user}</span>
+                                                        <span className="text-xs text-gray-500">By: {highlightSearchTerm(item.user, searchTerm)}</span>
                                                         <div className="flex items-center gap-2">
                                                             {item.type === 'time' && (
                                                                 <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
@@ -993,17 +1012,17 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                             <tbody>
                                                 {detailedRows.map((row, i) => (
                                                     <tr key={i} className="border-b hover:bg-gray-50">
-                                                        <td className="py-2 px-3">{row.projectName}</td>
+                                                        <td className="py-2 px-3">{highlightSearchTerm(row.projectName, searchTerm)}</td>
                                                         <td className="py-2 px-3">
                                                             {row.task && row.task.task_id ? (
                                                                 <button
                                                                     onClick={() => handleTaskClick(row.task, row.project)}
                                                                     className="text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer"
                                                                 >
-                                                                    {row.taskName}
+                                                                    {highlightSearchTerm(row.taskName, searchTerm)}
                                                                 </button>
                                                             ) : (
-                                                                <span>{row.taskName}</span>
+                                                                <span>{highlightSearchTerm(row.taskName, searchTerm)}</span>
                                                             )}
                                                         </td>
                                                         <td className="py-2 px-3">
@@ -1013,7 +1032,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                             {row.end ? row.end.replace('T', ' ').split('.')[0] : 'N/A'}
                                                         </td>
                                                         <td className="py-2 px-3 text-right">{row.hours}h</td>
-                                                        <td className="py-2 px-3">{row.description}</td>
+                                                        <td className="py-2 px-3">{highlightSearchTerm(row.description, searchTerm)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -1177,7 +1196,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-medium text-gray-800">{item.message}</span>
+                                                        <span className="font-medium text-gray-800">{highlightSearchTerm(item.message, searchTerm)}</span>
                                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                                             ${item.type === 'time' ? 'bg-blue-100 text-blue-800' :
                                                                 item.type === 'progress' ? (item.progressType === 'MEDIA' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800') :
@@ -1186,7 +1205,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                         </span>
                                                     </div>
                                                     <div className="text-sm text-gray-600">
-                                                        <span className="font-medium">{item.user}</span> • {item.project} • {item.task}
+                                                        <span className="font-medium">{highlightSearchTerm(item.user, searchTerm)}</span> • {highlightSearchTerm(item.project, searchTerm)} • {highlightSearchTerm(item.task, searchTerm)}
                                                     </div>
                                                     <div className="text-xs text-gray-500 mt-1">
                                                         {dayjs(item.timestamp).format('MMM DD, YYYY HH:mm')}

@@ -13,7 +13,7 @@ import {
   Check
 } from 'lucide-react'
 
-const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile }) => {
+const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, phase, projectId }) => {
   const [documents, setDocuments] = useState([])
   const [expandedFolders, setExpandedFolders] = useState({})
   const [searchTerm, setSearchTerm] = useState('')
@@ -24,7 +24,7 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile }) =
     if (isOpen) {
       fetchDocuments()
     }
-  }, [isOpen])
+  }, [isOpen, phase, projectId])
 
   useEffect(() => {
     if (searchTerm) {
@@ -38,7 +38,16 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile }) =
   const fetchDocuments = async () => {
     setIsLoading(true)
     try {
-      const response = await getFilesRequest()
+      // Build query parameters
+      const params = {}
+      if (phase) {
+        params.phase = phase
+      }
+      if (projectId) {
+        params.id = projectId
+      }
+      
+      const response = await getFilesRequest(params)
       if (response.data.success) {
         setDocuments(response.data.folders)
         setFilteredDocuments(response.data.folders)
@@ -172,7 +181,7 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile }) =
               Select Internal Document
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              Choose from your existing documents
+              {phase ? `Documents for phase: ${phase}` : 'Choose from your existing documents'}
             </p>
           </div>
           <button

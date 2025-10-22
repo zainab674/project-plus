@@ -4,7 +4,9 @@ import { ToastContainer, Bounce } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { UserProvider } from "@/providers/UserProvider";
 import { EmailNotificationProvider } from "@/providers/EmailNotificationProvider";
+import { TimerProvider } from "@/providers/TimerProvider";
 import RoleSelectionWrapper from "@/components/RoleSelectionWrapper";
+import TimerBanner from "@/components/TimerBanner";
 import { Suspense } from "react";
 import ConditionalAIChatbot from "@/components/ConditionalAIChatbot";
 
@@ -19,12 +21,15 @@ export default function RootLayout({ children }) {
       <body>
         <Suspense>
           <UserProvider>
-            <EmailNotificationProvider>
-              <RoleSelectionWrapper>
-                {children}
-                <ConditionalAIChatbot />
-              </RoleSelectionWrapper>
-            </EmailNotificationProvider>
+            <TimerProvider>
+              <EmailNotificationProvider>
+                <RoleSelectionWrapper>
+                  <TimerBanner />
+                  {children}
+                  <ConditionalAIChatbot />
+                </RoleSelectionWrapper>
+              </EmailNotificationProvider>
+            </TimerProvider>
           </UserProvider>
 
           <ToastContainer

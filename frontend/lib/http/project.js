@@ -28,12 +28,33 @@ export const updateFileRequest = async (formdata) => api.put(`/project/file/upda
         'Content-Type': 'application/form-data'
     }
 });
-export const getFilesRequest = async (id) => {
-    if (id) {
-        return api.get(`/project/tree/${id}`);
-    } else {
-        return api.get(`/project/tree`);
+export const getFilesRequest = async (params = {}) => {
+    const { id, phase } = params;
+    
+    // Build query string
+    const queryParams = new URLSearchParams();
+    if (phase) {
+        queryParams.append('phase', phase);
     }
+    
+    const queryString = queryParams.toString();
+    const url = id ? `/project/tree/${id}` : `/project/tree`;
+    const finalUrl = queryString ? `${url}?${queryString}` : url;
+    
+    return api.get(finalUrl);
+};
+
+export const checkPhaseHasFoldersRequest = async (projectId, phase) => {
+    const queryParams = new URLSearchParams();
+    if (phase) {
+        queryParams.append('phase', phase);
+    }
+    
+    const queryString = queryParams.toString();
+    const url = `/project/check-phase-folders/${projectId}`;
+    const finalUrl = queryString ? `${url}?${queryString}` : url;
+    
+    return api.get(finalUrl);
 };
 export const getTemplateFileRequest = async () => api.get(`/project/get-file`);
 export const sendToLawyerRequest = async (formdata) => api.post(`/project/send`, formdata, {

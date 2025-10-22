@@ -137,66 +137,179 @@ const TemplatePreviewModal = ({ template, onClose }) => {
                             Template Documents
                         </h3>
                         
-                        {/* Mock document structure */}
-                        <div className="space-y-3">
-                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                <div className="flex items-center mb-2">
-                                    <FolderOpen className="w-4 h-4 text-gray-500 mr-2" />
-                                    <span className="font-medium text-gray-900">Initial Documents</span>
-                                </div>
-                                <div className="ml-6 space-y-1">
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <FileText className="w-3 h-3 mr-2" />
-                                        Foreclosure Complaint Checklist.pdf
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <FileText className="w-3 h-3 mr-2" />
-                                        Client Intake Form.docx
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <FileText className="w-3 h-3 mr-2" />
-                                        Property Research Checklist.pdf
-                                    </div>
-                                </div>
-                            </div>
+                        {/* Real template documents organized by phases */}
+                        <div className="space-y-4">
+                            {/* Group folders by phases */}
+                            {template.phases && template.phases.length > 0 ? (
+                                template.phases.map((phase, phaseIndex) => {
+                                    const phaseFolders = template.folders?.filter(folder => folder.phase_id === phase.order) || [];
+                                    const foldersWithoutPhase = template.folders?.filter(folder => !folder.phase_id) || [];
+                                    
+                                    return (
+                                        <div key={phaseIndex} className="space-y-3">
+                                            {/* Phase Header */}
+                                            <div className="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                                <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium mr-3">
+                                                    {phase.order}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h4 className="font-semibold text-gray-900">{phase.name}</h4>
+                                                    {phase.description && (
+                                                        <p className="text-sm text-gray-600 mt-1">{phase.description}</p>
+                                                    )}
+                                                </div>
+                                                <div className="text-sm text-gray-500">
+                                                    {phaseFolders.length} folder{phaseFolders.length !== 1 ? 's' : ''}
+                                                </div>
+                                            </div>
 
-                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                <div className="flex items-center mb-2">
-                                    <FolderOpen className="w-4 h-4 text-gray-500 mr-2" />
-                                    <span className="font-medium text-gray-900">Legal Forms</span>
-                                </div>
-                                <div className="ml-6 space-y-1">
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <FileText className="w-3 h-3 mr-2" />
-                                        Answer Template.docx
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <FileText className="w-3 h-3 mr-2" />
-                                        Motion to Dismiss Template.pdf
-                                    </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <FileText className="w-3 h-3 mr-2" />
-                                        Discovery Request Template.docx
-                                    </div>
-                                </div>
-                            </div>
+                                            {/* Folders for this phase */}
+                                            {phaseFolders.length > 0 ? (
+                                                phaseFolders.map((folder, folderIndex) => (
+                                                    <div key={folderIndex} className="p-4 bg-gray-50 rounded-lg border border-gray-200 ml-4">
+                                                        <div className="flex items-center mb-2">
+                                                            <FolderOpen className="w-4 h-4 text-gray-500 mr-2" />
+                                                            <span className="font-medium text-gray-900">{folder.name}</span>
+                                                            {folder.description && (
+                                                                <span className="text-sm text-gray-500 ml-2">- {folder.description}</span>
+                                                            )}
+                                                        </div>
+                                                        {folder.files && folder.files.length > 0 ? (
+                                                            <div className="ml-6 space-y-1">
+                                                                {folder.files.map((file, fileIndex) => (
+                                                                    <div key={fileIndex} className="flex items-center text-sm text-gray-600">
+                                                                        <FileText className="w-3 h-3 mr-2" />
+                                                                        <span>{file.name}</span>
+                                                                        {file.file_size && (
+                                                                            <span className="text-xs text-gray-400 ml-2">
+                                                                                ({Math.round(file.file_size / 1024)} KB)
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="ml-6 text-sm text-gray-400 italic">No files in this folder</div>
+                                                        )}
+                                                        
+                                                        {/* Render subfolders recursively */}
+                                                        {folder.subfolders && folder.subfolders.length > 0 && (
+                                                            <div className="ml-6 mt-2 space-y-2">
+                                                                {folder.subfolders.map((subfolder, subIndex) => (
+                                                                    <div key={subIndex} className="p-3 bg-white rounded border border-gray-200">
+                                                                        <div className="flex items-center mb-1">
+                                                                            <FolderOpen className="w-3 h-3 text-gray-400 mr-2" />
+                                                                            <span className="text-sm font-medium text-gray-800">{subfolder.name}</span>
+                                                                            {subfolder.description && (
+                                                                                <span className="text-xs text-gray-500 ml-1">- {subfolder.description}</span>
+                                                                            )}
+                                                                        </div>
+                                                                        {subfolder.files && subfolder.files.length > 0 ? (
+                                                                            <div className="ml-5 space-y-1">
+                                                                                {subfolder.files.map((file, fileIndex) => (
+                                                                                    <div key={fileIndex} className="flex items-center text-xs text-gray-600">
+                                                                                        <FileText className="w-2 h-2 mr-1" />
+                                                                                        <span>{file.name}</span>
+                                                                                        {file.file_size && (
+                                                                                            <span className="text-xs text-gray-400 ml-1">
+                                                                                                ({Math.round(file.file_size / 1024)} KB)
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="ml-5 text-xs text-gray-400 italic">No files</div>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="ml-4 text-sm text-gray-400 italic">No folders assigned to this phase</div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : null}
 
-                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                <div className="flex items-center mb-2">
-                                    <FolderOpen className="w-4 h-4 text-gray-500 mr-2" />
-                                    <span className="font-medium text-gray-900">Settlement Documents</span>
-                                </div>
-                                <div className="ml-6 space-y-1">
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <FileText className="w-3 h-3 mr-2" />
-                                        Settlement Agreement Template.docx
+                            {/* Folders without phase assignment */}
+                            {template.folders && template.folders.some(folder => !folder.phase_id) && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                        <div className="w-8 h-8 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center text-sm font-medium mr-3">
+                                            ?
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-gray-900">General Documents</h4>
+                                            <p className="text-sm text-gray-600 mt-1">Documents not assigned to specific phases</p>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center text-sm text-gray-600">
-                                        <FileText className="w-3 h-3 mr-2" />
-                                        Release Form Template.pdf
+                                    
+                                    {template.folders.filter(folder => !folder.phase_id).map((folder, folderIndex) => (
+                                        <div key={folderIndex} className="p-4 bg-gray-50 rounded-lg border border-gray-200 ml-4">
+                                            <div className="flex items-center mb-2">
+                                                <FolderOpen className="w-4 h-4 text-gray-500 mr-2" />
+                                                <span className="font-medium text-gray-900">{folder.name}</span>
+                                                {folder.description && (
+                                                    <span className="text-sm text-gray-500 ml-2">- {folder.description}</span>
+                                                )}
+                                            </div>
+                                            {folder.files && folder.files.length > 0 ? (
+                                                <div className="ml-6 space-y-1">
+                                                    {folder.files.map((file, fileIndex) => (
+                                                        <div key={fileIndex} className="flex items-center text-sm text-gray-600">
+                                                            <FileText className="w-3 h-3 mr-2" />
+                                                            <span>{file.name}</span>
+                                                            {file.file_size && (
+                                                                <span className="text-xs text-gray-400 ml-2">
+                                                                    ({Math.round(file.file_size / 1024)} KB)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="ml-6 text-sm text-gray-400 italic">No files in this folder</div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Render root files (files not in folders) */}
+                            {template.files && template.files.length > 0 && (
+                                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div className="flex items-center mb-2">
+                                        <FileText className="w-4 h-4 text-gray-500 mr-2" />
+                                        <span className="font-medium text-gray-900">Root Files</span>
+                                    </div>
+                                    <div className="ml-6 space-y-1">
+                                        {template.files.map((file, fileIndex) => (
+                                            <div key={fileIndex} className="flex items-center text-sm text-gray-600">
+                                                <FileText className="w-3 h-3 mr-2" />
+                                                <span>{file.name}</span>
+                                                {file.file_size && (
+                                                    <span className="text-xs text-gray-400 ml-2">
+                                                        ({Math.round(file.file_size / 1024)} KB)
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            </div>
+                            )}
+
+                            {/* Show message if no documents at all */}
+                            {(!template.folders || template.folders.length === 0) && 
+                             (!template.files || template.files.length === 0) && (
+                                <div className="text-center py-8 text-gray-500">
+                                    <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                                    <p>No documents in this template</p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -242,5 +355,6 @@ const TemplatePreviewModal = ({ template, onClose }) => {
 };
 
 export default TemplatePreviewModal;
+
 
 

@@ -24,6 +24,12 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
     const [isLoading, setIsLoading] = useState(false);
     const [fullUserData, setFullUserData] = useState(null);
     const [specificProject, setSpecificProject] = useState(null);
+    const [fetchedClients, setFetchedClients] = useState(null);
+
+    // Debug logging
+    console.log('CreateMeetingClient - Clients prop:', Clients);
+    console.log('CreateMeetingClient - Clients length:', Clients?.length);
+    console.log('CreateMeetingClient - project_id:', project_id);
 
     // Load full user data when component mounts or when user changes
     useEffect(() => {
@@ -65,7 +71,18 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
     useEffect(() => {
         setSelectedTask('');
         setHeading('');
-    }, [selectProject]);
+        setSelectedClient('');
+        
+        // If no Clients prop provided (opened from dashboard), fetch clients for selected project
+        if (!Clients && selectProject && selectProject !== '') {
+            getProjectRequest(selectProject).then(res => {
+                setFetchedClients(res.data.project?.Clients || []);
+            }).catch(error => {
+                console.error('CreateMeetingClient - Error fetching project clients:', error);
+                setFetchedClients([]);
+            });
+        }
+    }, [selectProject, Clients]);
 
     const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
@@ -110,6 +127,13 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
 
     // Get current project details
     const currentProject = userWithProjects?.Projects?.find(project => project?.project_id == selectProject);
+    
+    // Use Clients prop if available, otherwise use fetched clients
+    const availableClients = Clients || fetchedClients;
+    
+    // Debug logging
+    console.log('CreateMeetingClient - fetchedClients:', fetchedClients);
+    console.log('CreateMeetingClient - availableClients:', availableClients);
 
     // Don't render until user data is loaded OR specific project is loaded
     if (!userWithProjects || (!userWithProjects.Projects && !specificProject)) {
@@ -181,14 +205,26 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
                                 <SelectContent className="bg-white border-primary">
                                     <SelectGroup>
                                         <SelectLabel className="text-gray-400">Clients</SelectLabel>
-                                        {
-                                            Clients?.map((client, index) => (
+                                        {availableClients && availableClients.length > 0 ? (
+                                            availableClients.map((client, index) => (
                                                 <SelectItem value={client.user.user_id.toString()} key={`${client.user_id}`} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">{client?.user.name}</SelectItem>
                                             ))
-                                        }
+                                        ) : (
+                                            <SelectItem value="no-clients" disabled className="text-gray-400">
+                                                No clients found for this project
+                                            </SelectItem>
+                                        )}
                                     </SelectGroup>
                                 </SelectContent>
                             </Select>
+                            {(!availableClients || availableClients.length === 0) && (
+                                <p className="text-sm text-gray-500 mt-1">
+                                    No clients are currently associated with this project. 
+                                    <span className="text-blue-600 cursor-pointer hover:underline ml-1" onClick={() => {/* You can add navigation to invite clients here */}}>
+                                        Invite clients to the project first.
+                                    </span>
+                                </p>
+                            )}
                         </div>
 
                         <div className="space-y-2">

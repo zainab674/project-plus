@@ -1403,13 +1403,25 @@ export const updateFileUpload = catchAsyncError(async (req, res, next) => {
 
 export const getFolderTreeByTemplateDocument = catchAsyncError(async (req, res, next) => {
     const { project_id } = req.params;
+    const { phase } = req.query; // Get phase from query parameter
 
     const user = req.user;
 
     let user_id = user.Role == "TEAM" ? user.leader_id : user.user_id
 
-    // If project_id is provided, use it; otherwise, use user_id
-    const owner_id = project_id ? parseInt(project_id) : user_id;
+    let owner_id = user_id; // Default to current user
+
+    // If project_id is provided, get the project creator's user_id
+    if (project_id) {
+        const project = await prisma.project.findUnique({
+            where: { project_id: parseInt(project_id) },
+            select: { created_by: true }
+        });
+        
+        if (project) {
+            owner_id = project.created_by; // Use project creator's user_id
+        }
+    }
 
     let template_document = await prisma.templateDocument.findFirst({
         where: {
@@ -1431,9 +1443,17 @@ export const getFolderTreeByTemplateDocument = catchAsyncError(async (req, res, 
         return next(new ErrorHandler("template_document_id is required", 400));
     }
 
+    // Build where clause for folder filtering
+    const whereClause = { template_document_id: String(template_document_id) };
+    
+    // If phase is provided, filter folders by phase name
+    if (phase) {
+        whereClause.phase_name = phase;
+    }
+
     // Fetch all folders and files for that template
     const folders = await prisma.folder.findMany({
-        where: { template_document_id: String(template_document_id) },
+        where: whereClause,
         include: { files: true }
     });
 
@@ -1458,6 +1478,62 @@ export const getFolderTreeByTemplateDocument = catchAsyncError(async (req, res, 
     res.status(200).json({
         success: true,
         folders: rootFolders
+    });
+});
+
+// Check if a phase has associated folders
+export const checkPhaseHasFolders = catchAsyncError(async (req, res, next) => {
+    const { project_id } = req.params;
+    const { phase } = req.query;
+
+    if (!phase) {
+        return next(new ErrorHandler("Phase parameter is required", 400));
+    }
+
+    const user = req.user;
+    let user_id = user.Role == "TEAM" ? user.leader_id : user.user_id;
+    let owner_id = user_id;
+
+    // If project_id is provided, get the project creator's user_id
+    if (project_id) {
+        const project = await prisma.project.findUnique({
+            where: { project_id: parseInt(project_id) },
+            select: { created_by: true }
+        });
+        
+        if (project) {
+            owner_id = project.created_by;
+        }
+    }
+
+    // Find template document for the owner
+    let template_document = await prisma.templateDocument.findFirst({
+        where: {
+            owner_id: owner_id
+        }
+    });
+
+    if (!template_document) {
+        // If no template document exists, phase has no folders
+        return res.status(200).json({
+            success: true,
+            hasFolders: false,
+            folderCount: 0
+        });
+    }
+
+    // Check if there are any folders for this phase
+    const folderCount = await prisma.folder.count({
+        where: {
+            template_document_id: template_document.template_document_id,
+            phase_name: phase
+        }
+    });
+
+    res.status(200).json({
+        success: true,
+        hasFolders: folderCount > 0,
+        folderCount: folderCount
     });
 });
 

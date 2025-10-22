@@ -23,20 +23,41 @@ const CalendarSelector = ({
   onClear, 
   isLoading = false,
   availableMonths = [],
-  className = ""
+  className = "",
+  isRange = false,
+  selectedMonthRange = null,
+  onRangeSelect = null
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentYear, setCurrentYear] = useState(dayjs().year());
   const [currentMonth, setCurrentMonth] = useState(dayjs().month());
+  const [tempRange, setTempRange] = useState({ from: null, to: null });
 
   // Generate months for the current year
   const monthsInYear = useMemo(() => {
     const months = [];
     for (let i = 0; i < 12; i++) {
-      const month = dayjs().month(i);
+      const month = dayjs().year(currentYear).month(i);
       const monthYear = month.format('MMMM YYYY');
       const isAvailable = availableMonths.includes(monthYear);
-      const isSelected = selectedMonthYear === monthYear;
+      
+      let isSelected = false;
+      let isInRange = false;
+      let isRangeStart = false;
+      let isRangeEnd = false;
+      
+      if (isRange && selectedMonthRange) {
+        const monthDate = dayjs(monthYear, 'MMMM YYYY');
+        const fromDate = dayjs(selectedMonthRange.from, 'MMMM YYYY');
+        const toDate = dayjs(selectedMonthRange.to, 'MMMM YYYY');
+        
+        isSelected = monthYear === selectedMonthRange.from || monthYear === selectedMonthRange.to;
+        isInRange = monthDate.isBetween(fromDate, toDate, 'month', '[]');
+        isRangeStart = monthYear === selectedMonthRange.from;
+        isRangeEnd = monthYear === selectedMonthRange.to;
+      } else if (!isRange) {
+        isSelected = selectedMonthYear === monthYear;
+      }
       
       months.push({
         month: i,
@@ -44,11 +65,14 @@ const CalendarSelector = ({
         shortName: month.format('MMM'),
         monthYear,
         isAvailable,
-        isSelected
+        isSelected,
+        isInRange,
+        isRangeStart,
+        isRangeEnd
       });
     }
     return months;
-  }, [currentYear, availableMonths, selectedMonthYear]);
+  }, [currentYear, availableMonths, selectedMonthYear, isRange, selectedMonthRange]);
 
   // Generate years (current year ± 5 years)
   const availableYears = useMemo(() => {
@@ -61,13 +85,46 @@ const CalendarSelector = ({
   }, []);
 
   const handleMonthSelect = (monthData) => {
-    if (monthData.isAvailable) {
+    if (!monthData.isAvailable) return;
+    
+    if (isRange && onRangeSelect) {
+      // Handle range selection
+      if (!tempRange.from) {
+        // First selection - set from date
+        setTempRange({ from: monthData.monthYear, to: null });
+      } else if (!tempRange.to) {
+        // Second selection - set to date
+        const fromDate = dayjs(tempRange.from, 'MMMM YYYY');
+        const toDate = dayjs(monthData.monthYear, 'MMMM YYYY');
+        
+        // Ensure from is before to
+        if (fromDate.isAfter(toDate)) {
+          setTempRange({ from: monthData.monthYear, to: tempRange.from });
+        } else {
+          setTempRange({ from: tempRange.from, to: monthData.monthYear });
+        }
+        
+        // Apply the range selection
+        onRangeSelect({
+          from: fromDate.isAfter(toDate) ? monthData.monthYear : tempRange.from,
+          to: fromDate.isAfter(toDate) ? tempRange.from : monthData.monthYear
+        });
+        setIsOpen(false);
+      } else {
+        // Reset and start new selection
+        setTempRange({ from: monthData.monthYear, to: null });
+      }
+    } else {
+      // Handle single month selection
       onSelect(monthData.monthYear);
       setIsOpen(false);
     }
   };
 
   const handleClear = () => {
+    if (isRange) {
+      setTempRange({ from: null, to: null });
+    }
     onClear();
     setIsOpen(false);
   };
@@ -85,7 +142,9 @@ const CalendarSelector = ({
   };
 
   const getDisplayText = () => {
-    if (selectedMonthYear) {
+    if (isRange && selectedMonthRange) {
+      return `${selectedMonthRange.from} - ${selectedMonthRange.to}`;
+    } else if (selectedMonthYear) {
       return selectedMonthYear;
     }
     return "All Time";
@@ -113,9 +172,11 @@ const CalendarSelector = ({
         <div className="p-4">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-sm font-semibold text-gray-900">Select Month & Year</h4>
+            <h4 className="text-sm font-semibold text-gray-900">
+              {isRange ? "Select Month Range" : "Select Month & Year"}
+            </h4>
             <div className="flex items-center gap-2">
-              {selectedMonthYear && (
+              {(selectedMonthYear || (isRange && selectedMonthRange)) && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -176,9 +237,11 @@ const CalendarSelector = ({
                 className={`h-10 text-xs font-medium ${
                   monthData.isSelected 
                     ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                    : monthData.isAvailable
-                      ? 'hover:bg-gray-100 text-gray-700'
-                      : 'text-gray-400 cursor-not-allowed opacity-50'
+                    : monthData.isInRange && isRange
+                      ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                      : monthData.isAvailable
+                        ? 'hover:bg-gray-100 text-gray-700'
+                        : 'text-gray-400 cursor-not-allowed opacity-50'
                 }`}
               >
                 <div className="flex flex-col items-center">
@@ -186,10 +249,30 @@ const CalendarSelector = ({
                   {monthData.isSelected && (
                     <Check className="h-3 w-3 mt-1" />
                   )}
+                  {isRange && monthData.isRangeStart && (
+                    <span className="text-xs mt-1">From</span>
+                  )}
+                  {isRange && monthData.isRangeEnd && (
+                    <span className="text-xs mt-1">To</span>
+                  )}
                 </div>
               </Button>
             ))}
           </div>
+
+          {/* Range Selection Instructions */}
+          {isRange && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-700">
+                {!tempRange.from 
+                  ? "Select the starting month for your range"
+                  : !tempRange.to 
+                    ? "Now select the ending month for your range"
+                    : "Range selected! Click any month to start a new range."
+                }
+              </p>
+            </div>
+          )}
 
           {/* Quick Actions */}
           <div className="border-t pt-3">

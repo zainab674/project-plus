@@ -1114,6 +1114,87 @@ export const updateUserRole = catchAsyncError(async (req, res, next) => {
     }
 });
 
+/** -------- UPDATE USER INFORMATION -------- */
+export const updateUserInfo = catchAsyncError(async (req, res, next) => {
+    try {
+        const { userId } = req.params;
+        const { name, email, phone, address, account_name, focus, bring, teams_member_count, hear_about_as } = req.body;
+        const currentAdminId = req.user?.user_id;
+
+        // Check if current user is admin
+        const currentUser = await prisma.user.findUnique({
+            where: { user_id: parseInt(currentAdminId) },
+            select: { Role: true }
+        });
+
+        if (!currentUser || currentUser.Role !== 'ADMIN') {
+            return next(new ErrorHandler('Only admins can update user information', 403));
+        }
+
+        // Check if user exists
+        const existingUser = await prisma.user.findUnique({
+            where: { user_id: parseInt(userId) },
+            select: { user_id: true, email: true }
+        });
+
+        if (!existingUser) {
+            return next(new ErrorHandler('User not found', 404));
+        }
+
+        // Check if email is being changed and if it already exists
+        if (email && email !== existingUser.email) {
+            const emailExists = await prisma.user.findUnique({
+                where: { email }
+            });
+
+            if (emailExists) {
+                return next(new ErrorHandler('Email already exists', 400));
+            }
+        }
+
+        // Prepare update data
+        const updateData = {};
+        if (name !== undefined) updateData.name = name;
+        if (email !== undefined) updateData.email = email;
+        if (phone !== undefined) updateData.phone = phone;
+        if (address !== undefined) updateData.address = address;
+        if (account_name !== undefined) updateData.account_name = account_name;
+        if (focus !== undefined) updateData.focus = focus;
+        if (bring !== undefined) updateData.bring = bring;
+        if (teams_member_count !== undefined) updateData.teams_member_count = teams_member_count;
+        if (hear_about_as !== undefined) updateData.hear_about_as = hear_about_as;
+
+        // Update user
+        const updatedUser = await prisma.user.update({
+            where: { user_id: parseInt(userId) },
+            data: updateData,
+            select: {
+                user_id: true,
+                name: true,
+                email: true,
+                phone: true,
+                address: true,
+                account_name: true,
+                Role: true,
+                focus: true,
+                bring: true,
+                teams_member_count: true,
+                hear_about_as: true,
+                created_at: true,
+                updated_at: true
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'User information updated successfully',
+            data: { user: updatedUser }
+        });
+    } catch (error) {
+        return next(new ErrorHandler(`Failed to update user information: ${error.message}`, 500));
+    }
+});
+
 /** -------- GET SYSTEM OVERVIEW -------- */
 export const getSystemOverview = catchAsyncError(async (req, res, next) => {
     try {

@@ -9,6 +9,7 @@ import {
     getAllUsers,
     getUserDetails,
     updateUserRole,
+    updateUserInfo,
     getSystemOverview,
     getAllProjects,
     getAllTasks,
@@ -37,6 +38,9 @@ router.route('/users/:userId').get(getUserDetails);
 
 // Update user role
 router.route('/users/:userId/role').put(updateUserRole);
+
+// Update user information
+router.route('/users/:userId').put(updateUserInfo);
 
 // Create new admin user
 router.route('/users/create-admin').post(createAdminUser);

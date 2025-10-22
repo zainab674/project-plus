@@ -3,7 +3,27 @@ import path from "path";
 
 
 export const fileToUri = (file) => {
-  const parser = new DataUriParser();
-  const extName = path.extname(file.originalname).toString();
-  return parser.format(extName, file.buffer);
+  try {
+    if (!file || !file.buffer || !file.originalname) {
+      throw new Error('Invalid file object provided to fileToUri');
+    }
+    
+    const parser = new DataUriParser();
+    const extName = path.extname(file.originalname).toString();
+    
+    if (!extName) {
+      throw new Error('File has no extension');
+    }
+    
+    const result = parser.format(extName, file.buffer);
+    
+    if (!result || !result.content) {
+      throw new Error('Failed to generate data URI');
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error in fileToUri:', error);
+    throw new Error(`File processing failed: ${error.message || error.toString()}`);
+  }
 };

@@ -4,14 +4,14 @@
 "use client"
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, User, Calendar, FileText, ChevronRight, MoreVertical, UserPlus, Users, Mail, FileIcon, Image, Menu, X, ArrowBigLeft, ArrowLeft, AlertCircle, Ellipsis, Users2, MailPlus, Link, Trash2, Play, MessageCircle } from 'lucide-react';
+import { Plus, User, Calendar, FileText, ChevronRight, MoreVertical, UserPlus, Users, Mail, FileIcon, Image, Menu, X, ArrowBigLeft, ArrowLeft, AlertCircle, Ellipsis, Users2, MailPlus, Link, Trash2, Play, MessageCircle, ChevronDown, Briefcase } from 'lucide-react';
 import CaseDetail from '@/components/caseDetail';
 
 import CreateCaseModal from '@/components/cases/createCaseModal';
 import { useUser } from '@/providers/UserProvider';
 import BigDialog from '@/components/Dialogs/BigDialog';
 import CreateTask from '@/components/Dialogs/CreateTask';
-import { getProjectRequest, deleteProjectRequest, updateProjectRequest } from '@/lib/http/project';
+import { getProjectRequest, deleteProjectRequest, updateProjectRequest, getAllProjectRequest } from '@/lib/http/project';
 import UpdateCaseModal from '@/components/cases/updateCaseModal';
 import Loader from '@/components/Loader';
 import RenderMembers from '@/components/RenderMembers';
@@ -49,6 +49,8 @@ export default function Page({ params }) {
 
   const { user, loadUser } = useUser();
   const [project, setProject] = useState(null);
+  const [allCases, setAllCases] = useState([]);
+  const [selectedCase, setSelectedCase] = useState(null);
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [viewMember, setViewMember] = useState(false);
@@ -69,6 +71,7 @@ export default function Page({ params }) {
     try {
       const res = await getProjectRequest(params.id);
       setProject(res?.data?.project);
+      setSelectedCase(res?.data?.project); // Set current project as selected case
       console.log("res?.data?.project", res?.data?.project);
     } catch (error) {
       setProject(null);
@@ -77,6 +80,16 @@ export default function Page({ params }) {
       setIsLoading(false);
     }
   }, [id]); // Added dependency
+
+  const getAllCases = useCallback(async () => {
+    try {
+      const res = await getAllProjectRequest();
+      setAllCases(res?.data?.projects || []);
+    } catch (error) {
+      console.log(error?.response?.data?.message || error?.message);
+      setAllCases([]);
+    }
+  }, []);
 
   const handleDeleteProject = useCallback(async () => {
     setIsDeleting(true);
@@ -107,7 +120,8 @@ export default function Page({ params }) {
 
   useEffect(() => {
     getProjectDetails();
-  }, [getProjectDetails]); // Added dependency
+    getAllCases();
+  }, [getProjectDetails, getAllCases]); // Added dependency
 
   if (isLoading) {
     return (
@@ -290,9 +304,69 @@ export default function Page({ params }) {
             </div>
           </div>
 
-          {project &&
-            <CaseDetail selectedCase={project} />
+          {/* Case Selection Dropdown */}
+          <div className="mb-6">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700">Select Case:</label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <Briefcase className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm font-medium">
+                      {selectedCase ? selectedCase.name : "Select a case"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-80 max-h-96 overflow-y-auto bg-white border border-gray-200 shadow-lg">
+                  <div className="px-3 py-2 border-b border-gray-100">
+                    <h4 className="text-sm font-semibold text-gray-900">All Cases</h4>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {allCases.length} cases available
+                    </p>
+                  </div>
+                  
+                  {allCases.length === 0 ? (
+                    <div className="px-3 py-4 text-center text-gray-500 text-sm">
+                      No cases found
+                    </div>
+                  ) : (
+                    allCases.map((caseItem) => (
+                      <DropdownMenuItem
+                        key={caseItem.project_id}
+                        onClick={() => router.push(`/dashboard/project/${caseItem.project_id}`)}
+                        className={`px-3 py-2 cursor-pointer ${
+                          selectedCase?.project_id === caseItem.project_id
+                            ? 'bg-blue-50 text-blue-700 font-medium'
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex flex-col w-full">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium truncate">{caseItem.name}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              caseItem.status === 'Active' ? 'bg-green-100 text-green-800' :
+                              caseItem.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                              caseItem.status === 'Closed' ? 'bg-gray-100 text-gray-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {caseItem.status}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500 truncate mt-1">
+                            {caseItem.client_name} • ID: {caseItem.project_id}
+                          </span>
+                        </div>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
 
+          {selectedCase &&
+            <CaseDetail selectedCase={selectedCase} />
           }
 
 
@@ -355,6 +429,8 @@ export default function Page({ params }) {
       />
       {console.log('Project page - project data:', project)}
       {console.log('Project page - project_id being passed:', project?.project_id)}
+      {console.log('Project page - Clients data:', project?.Clients)}
+      {console.log('Project page - Clients length:', project?.Clients?.length)}
 
       <CreateMeetingClient
         open={createMeetingClient}

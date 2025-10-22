@@ -90,6 +90,9 @@ model User {
   // Admin approval relations
   AdminApprovals UserRegistrationRequest[] @relation("AdminApprovals")
 
+  // Case template relations
+  caseTemplates CaseTemplate[] @relation("UserCaseTemplates")
+
   // Add indexes for better performance
   @@index([email])
   @@index([leader_id])
@@ -141,6 +144,10 @@ model Project {
   billingConfig   BillingConfig?
   invoices        Invoice[]        @relation("ProjectInvoices")
   caseAssignments CaseAssignment[] @relation("ProjectCaseAssignments")
+  
+  // Case template relation
+  template_id     String?
+  caseTemplate    CaseTemplate?     @relation("ProjectCaseTemplates", fields: [template_id], references: [template_id])
 
   // Add indexes for better performance
   @@index([created_by])
@@ -188,6 +195,7 @@ model Folder {
   parent     Folder?   @relation("Subfolders", fields: [parent_id], references: [folder_id])
   subfolders Folder[]  @relation("Subfolders")
   file_type  FileTypes @default(FOLDER)
+  phase_name String?   // Store the phase name for filtering
 
   template_document_id String
   templateDocument     TemplateDocument @relation(fields: [template_document_id], references: [template_document_id], onDelete: Cascade)
@@ -1065,4 +1073,97 @@ model Contact {
 enum CallType {
   INCOMING
   OUTGOING
+}
+
+// Case Template System - Separate from TemplateDocument
+model CaseTemplate {
+  template_id        String   @id @default(uuid())
+  name               String   @db.VarChar(255)
+  description         String?  @db.Text
+  category            String   @db.VarChar(100) // Real Estate, Personal Injury, etc.
+  default_priority    String   @default("Medium") // High, Medium, Low
+  estimated_duration  String?  @db.VarChar(50) // e.g., "6-12 months"
+  phases_count        Int      @default(0)
+  documents_count     Int      @default(0)
+  usage_count         Int      @default(0)
+  is_active           Boolean  @default(true)
+  created_by          Int
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  // Relations
+  creator User              @relation("UserCaseTemplates", fields: [created_by], references: [user_id], onDelete: Cascade)
+  phases  CaseTemplatePhase[]
+  folders CaseTemplateFolder[]
+  files   CaseTemplateFile[]
+  projects Project[]        @relation("ProjectCaseTemplates")
+
+  @@index([created_by])
+  @@index([category])
+  @@index([is_active])
+  @@index([created_at])
+}
+
+model CaseTemplatePhase {
+  phase_id     String   @id @default(uuid())
+  template_id  String
+  name         String   @db.VarChar(255)
+  description  String?  @db.Text
+  order        Int      // Phase order in the workflow
+  estimated_days Int?   // Estimated days for this phase
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  // Relations
+  template CaseTemplate        @relation(fields: [template_id], references: [template_id], onDelete: Cascade)
+  folders  CaseTemplateFolder[]
+
+  @@index([template_id])
+  @@index([order])
+}
+
+model CaseTemplateFolder {
+  folder_id    String   @id @default(uuid())
+  template_id  String
+  phase_id     String?  // Link to phase
+  name         String   @db.VarChar(255)
+  description  String?  @db.Text
+  parent_id    String?  // For nested folders
+  order        Int      @default(0) // Display order
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  // Relations
+  template  CaseTemplate        @relation(fields: [template_id], references: [template_id], onDelete: Cascade)
+  phase     CaseTemplatePhase?  @relation(fields: [phase_id], references: [phase_id], onDelete: SetNull)
+  parent    CaseTemplateFolder? @relation("Subfolders", fields: [parent_id], references: [folder_id])
+  subfolders CaseTemplateFolder[] @relation("Subfolders")
+  files     CaseTemplateFile[]
+
+  @@index([template_id])
+  @@index([phase_id])
+  @@index([parent_id])
+  @@index([order])
+}
+
+model CaseTemplateFile {
+  file_id     String   @id @default(uuid())
+  template_id String
+  folder_id   String?
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  file_url    String?  // URL to the template file
+  file_size   Int?     // File size in bytes
+  mime_type   String?  // MIME type
+  order       Int      @default(0) // Display order
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  template CaseTemplate        @relation(fields: [template_id], references: [template_id], onDelete: Cascade)
+  folder   CaseTemplateFolder? @relation(fields: [folder_id], references: [folder_id], onDelete: Cascade)
+
+  @@index([template_id])
+  @@index([folder_id])
+  @@index([order])
 }

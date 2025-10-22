@@ -15,6 +15,7 @@ const FILTER_ACTIONS = {
   SET_PROJECTS: 'SET_PROJECTS',
   SET_SELECTED_CASE: 'SET_SELECTED_CASE',
   SET_SELECTED_MONTH_YEAR: 'SET_SELECTED_MONTH_YEAR',
+  SET_SELECTED_MONTH_RANGE: 'SET_SELECTED_MONTH_RANGE',
   SET_TIMELINE_DATA: 'SET_TIMELINE_DATA',
   SET_ERROR: 'SET_ERROR',
   RESET_FILTERS: 'RESET_FILTERS',
@@ -31,6 +32,7 @@ const initialState = {
   // Filters
   selectedCase: null,
   selectedMonthYear: null,
+  selectedMonthRange: null,
   
   // UI State
   isLoading: false,
@@ -60,6 +62,9 @@ const filterReducer = (state, action) => {
     case FILTER_ACTIONS.SET_SELECTED_MONTH_YEAR:
       return { ...state, selectedMonthYear: action.payload };
       
+    case FILTER_ACTIONS.SET_SELECTED_MONTH_RANGE:
+      return { ...state, selectedMonthRange: action.payload };
+      
     case FILTER_ACTIONS.SET_TIMELINE_DATA:
       return { ...state, timelineData: action.payload };
       
@@ -71,6 +76,7 @@ const filterReducer = (state, action) => {
         ...state, 
         selectedCase: null, 
         selectedMonthYear: null,
+        selectedMonthRange: null,
         error: null 
       };
       
@@ -128,7 +134,7 @@ export const DashboardFilterProvider = ({ children }) => {
       );
     }
 
-    // Filter by selected month-year
+    // Filter by selected month-year (single month)
     if (state.selectedMonthYear) {
       filtered = filtered.filter(project => {
         if (!project.created_at) return false;
@@ -137,8 +143,20 @@ export const DashboardFilterProvider = ({ children }) => {
       });
     }
 
+    // Filter by selected month range
+    if (state.selectedMonthRange) {
+      const fromDate = dayjs(state.selectedMonthRange.from, 'MMMM YYYY').startOf('month');
+      const toDate = dayjs(state.selectedMonthRange.to, 'MMMM YYYY').endOf('month');
+      
+      filtered = filtered.filter(project => {
+        if (!project.created_at) return false;
+        const projectDate = dayjs(project.created_at);
+        return projectDate.isBetween(fromDate, toDate, 'day', '[]');
+      });
+    }
+
     return filtered;
-  }, [state.projects, state.selectedCase, state.selectedMonthYear]);
+  }, [state.projects, state.selectedCase, state.selectedMonthYear, state.selectedMonthRange]);
 
   // Memoized filtered timeline data
   const filteredTimelineData = useMemo(() => {
@@ -148,6 +166,7 @@ export const DashboardFilterProvider = ({ children }) => {
       hasTimelineData: !!state.timelineData,
       selectedCase: state.selectedCase?.name,
       selectedMonthYear: state.selectedMonthYear,
+      selectedMonthRange: state.selectedMonthRange,
       originalTimesLength: state.timelineData.times?.length || 0,
       originalProgressLength: state.timelineData.progress?.length || 0,
       originalDocumentsLength: state.timelineData.documents?.length || 0
@@ -167,7 +186,7 @@ export const DashboardFilterProvider = ({ children }) => {
       filteredDocuments = documents.filter(project => project.project_id === caseId);
     }
 
-    // Filter by selected month-year
+    // Filter by selected month-year (single month)
     if (state.selectedMonthYear) {
       const [month, year] = state.selectedMonthYear.split(' ');
       const startOfMonth = dayjs(`${year}-${dayjs().month(month).format('MM')}-01`);
@@ -205,6 +224,43 @@ export const DashboardFilterProvider = ({ children }) => {
       })).filter(project => project.Clients.length > 0);
     }
 
+    // Filter by selected month range
+    if (state.selectedMonthRange) {
+      const fromDate = dayjs(state.selectedMonthRange.from, 'MMMM YYYY').startOf('month');
+      const toDate = dayjs(state.selectedMonthRange.to, 'MMMM YYYY').endOf('month');
+
+      // Filter timeline data by creation date within range
+      filteredTimes = filteredTimes.map(project => ({
+        ...project,
+        Time: project.Time?.filter(timeEntry => {
+          const entryDate = dayjs(timeEntry.created_at);
+          return entryDate.isBetween(fromDate, toDate, 'day', '[]');
+        }) || []
+      })).filter(project => project.Time.length > 0);
+
+      filteredProgress = filteredProgress.map(project => ({
+        ...project,
+        Tasks: project.Tasks?.map(task => ({
+          ...task,
+          Progress: task.Progress?.filter(progressEntry => {
+            const entryDate = dayjs(progressEntry.created_at);
+            return entryDate.isBetween(fromDate, toDate, 'day', '[]');
+          }) || []
+        })).filter(task => task.Progress.length > 0) || []
+      })).filter(project => project.Tasks.length > 0);
+
+      filteredDocuments = filteredDocuments.map(project => ({
+        ...project,
+        Clients: project.Clients?.map(client => ({
+          ...client,
+          Documents: client.Documents?.filter(doc => {
+            const docDate = dayjs(doc.created_at);
+            return docDate.isBetween(fromDate, toDate, 'day', '[]');
+          }) || []
+        })).filter(client => client.Documents.length > 0) || []
+      })).filter(project => project.Clients.length > 0);
+    }
+
     console.log('Filtered timeline data result:', {
       filteredTimesLength: filteredTimes?.length || 0,
       filteredProgressLength: filteredProgress?.length || 0,
@@ -216,7 +272,7 @@ export const DashboardFilterProvider = ({ children }) => {
       progress: filteredProgress,
       documents: filteredDocuments
     };
-  }, [state.timelineData, state.selectedCase, state.selectedMonthYear]);
+  }, [state.timelineData, state.selectedCase, state.selectedMonthYear, state.selectedMonthRange]);
 
   // Action creators
   const setLoading = useCallback((loading) => {
@@ -233,6 +289,10 @@ export const DashboardFilterProvider = ({ children }) => {
 
   const setSelectedMonthYear = useCallback((selectedMonthYear) => {
     dispatch({ type: FILTER_ACTIONS.SET_SELECTED_MONTH_YEAR, payload: selectedMonthYear });
+  }, []);
+
+  const setSelectedMonthRange = useCallback((selectedMonthRange) => {
+    dispatch({ type: FILTER_ACTIONS.SET_SELECTED_MONTH_RANGE, payload: selectedMonthRange });
   }, []);
 
   const setTimelineData = useCallback((timelineData) => {
@@ -283,7 +343,8 @@ export const DashboardFilterProvider = ({ children }) => {
         endDate,
         projectId,
         selectedCase: state.selectedCase?.name,
-        selectedMonthYear: state.selectedMonthYear
+        selectedMonthYear: state.selectedMonthYear,
+        selectedMonthRange: state.selectedMonthRange
       });
 
       const response = await getAllTaskProgressRequest(startDate, endDate, null, projectId);
@@ -296,7 +357,7 @@ export const DashboardFilterProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [state.selectedCase, state.selectedMonthYear, setLoading, setError, setTimelineData]);
+  }, [state.selectedCase, state.selectedMonthYear, state.selectedMonthRange, setLoading, setError, setTimelineData]);
 
   // Fetch projects on mount
   useEffect(() => {
@@ -308,12 +369,12 @@ export const DashboardFilterProvider = ({ children }) => {
     if (state.projects.length > 0) {
       fetchTimelineData();
     }
-  }, [state.selectedCase, state.selectedMonthYear, fetchTimelineData]);
+  }, [state.selectedCase, state.selectedMonthYear, state.selectedMonthRange, fetchTimelineData]);
 
   // Computed values
   const hasActiveFilters = useMemo(() => {
-    return state.selectedCase !== null || state.selectedMonthYear !== null;
-  }, [state.selectedCase, state.selectedMonthYear]);
+    return state.selectedCase !== null || state.selectedMonthYear !== null || state.selectedMonthRange !== null;
+  }, [state.selectedCase, state.selectedMonthYear, state.selectedMonthRange]);
 
   const activeCasesCount = useMemo(() => {
     return state.projects.filter(project => project.status === 'Active').length;
@@ -338,6 +399,7 @@ export const DashboardFilterProvider = ({ children }) => {
     // Actions
     setSelectedCase,
     setSelectedMonthYear,
+    setSelectedMonthRange,
     resetFilters,
     fetchProjects,
     fetchTimelineData,
@@ -351,6 +413,7 @@ export const DashboardFilterProvider = ({ children }) => {
     filteredCasesCount,
     setSelectedCase,
     setSelectedMonthYear,
+    setSelectedMonthRange,
     resetFilters,
     fetchProjects,
     fetchTimelineData,
