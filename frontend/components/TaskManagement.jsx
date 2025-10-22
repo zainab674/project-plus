@@ -59,6 +59,7 @@ import { toast } from 'react-toastify'
 import Link from "next/link"
 import UpdateTask from "./Dialogs/UpdateTask";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import PhaseTasksModal from './modals/PhaseTasksModal';
 
 // Portal Dropdown Component
 const PortalDropdown = ({ isOpen, anchorRef, children, className = "" }) => {
@@ -860,6 +861,11 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
     const [selectedTask, setSelectedTask] = useState(null)
     const [taskDetailOpen, setTaskDetailOpen] = useState(false)
     
+    // Phase modal states
+    const [phaseModalOpen, setPhaseModalOpen] = useState(false)
+    const [selectedPhaseName, setSelectedPhaseName] = useState('')
+    const [selectedPhaseTasks, setSelectedPhaseTasks] = useState([])
+    
     // Phase dropdown refs for portal positioning
     const phaseButtonRefs = useRef({})
     
@@ -1216,6 +1222,28 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
     // Handle reason modal close
     const handleReasonModalClose = useCallback(() => {
         setReasonModal({ isOpen: false, task: null, targetStatus: null, isLoading: false })
+    }, [])
+
+    // Handle phase modal open
+    const handlePhaseClick = useCallback((phaseName) => {
+        const phaseTasks = filteredAndSortedTasks.filter(task => task.phase === phaseName)
+        setSelectedPhaseName(phaseName)
+        setSelectedPhaseTasks(phaseTasks)
+        setPhaseModalOpen(true)
+    }, [filteredAndSortedTasks])
+
+    // Handle phase modal close
+    const handlePhaseModalClose = useCallback(() => {
+        setPhaseModalOpen(false)
+        setSelectedPhaseName('')
+        setSelectedPhaseTasks([])
+    }, [])
+
+    // Handle task click from phase modal
+    const handleTaskClickFromPhase = useCallback((task) => {
+        setSelectedTask(task)
+        setTaskDetailOpen(true)
+        setPhaseModalOpen(false) // Close phase modal when opening task detail
     }, [])
 
     // Phase change handler
@@ -1853,13 +1881,24 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                         }}
                                                         className="flex items-center justify-center space-x-1 px-3 py-1 text-xs bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors w-full"
                                                     >
-                                                        <span className="truncate">{task.phase}</span>
+                                                        <span className="truncate max-w-[120px]" title={task.phase}>{task.phase}</span>
                                                         {showPhaseDropdown[task.task_id] ? (
                                                             <ChevronUp className="h-3 w-3 flex-shrink-0" />
                                                         ) : (
                                                             <ChevronDown className="h-3 w-3 flex-shrink-0" />
                                                         )}
                                                     </button>
+                                                    
+                                                    {/* Phase name clickable area for modal */}
+                                                    <div 
+                                                        className="absolute inset-0 cursor-pointer z-10"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            e.preventDefault()
+                                                            handlePhaseClick(task.phase)
+                                                        }}
+                                                        title={`Click to view all tasks in ${task.phase}`}
+                                                    />
                                                 </div>
                                             </TableCell>
 
@@ -2080,6 +2119,15 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                 task={selectedTask}
                 isOpen={taskDetailOpen}
                 onClose={closeTaskDetail}
+            />
+
+            {/* Phase Tasks Modal */}
+            <PhaseTasksModal
+                isOpen={phaseModalOpen}
+                onClose={handlePhaseModalClose}
+                phaseName={selectedPhaseName}
+                tasks={selectedPhaseTasks}
+                onTaskClick={handleTaskClickFromPhase}
             />
 
             <UpdateTask

@@ -172,167 +172,403 @@ const DocumentManager = () => {
 
   // User-friendly folder/file rendering with large, clear action buttons
   const renderTree = (folders = items, level = 0) => {
-    return folders.map(folder => (
-      <div key={folder.folder_id} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
-        {/* Folder Card */}
-        <div className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-lg transition-all duration-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => {
-                  setExpandedFolders(prev => ({
-                    ...prev,
-                    [folder.folder_id]: !prev[folder.folder_id]
-                  }));
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
-              >
-                {expandedFolders[folder.folder_id] ? (
-                  <ChevronDown className="w-6 h-6 text-gray-600" />
-                ) : (
-                  <ChevronRight className="w-6 h-6 text-gray-600" />
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  setExpandedFolders(prev => ({
-                    ...prev,
-                    [folder.folder_id]: !prev[folder.folder_id]
-                  }));
-                }}
-                className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
-                title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
-              >
-                <FolderOpen className="w-8 h-8 text-blue-500" />
-              </button>
-              <button
-                onClick={() => {
-                  setExpandedFolders(prev => ({
-                    ...prev,
-                    [folder.folder_id]: !prev[folder.folder_id]
-                  }));
-                }}
-                className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
-                title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
-              >
-                <h3 className="text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors">
-                  {folder.name}
-                </h3>
-                <p className="text-sm text-gray-500">
-                  {folder.files?.length || 0} files
-                  {folder.subfolders?.length > 0 && ` • ${folder.subfolders.length} subfolders`}
-                </p>
-              </button>
-            </div>
-            
-            {/* Folder Action Buttons */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => createFolder(folder.folder_id)}
-                className="flex items-center space-x-2 bg-emerald-300 text-emerald-800 px-4 py-2 rounded-lg hover:bg-emerald-400 transition-colors text-sm font-medium"
-                title="Create a new folder inside this folder"
-              >
-                <Plus className="w-4 h-4" />
-                <span>New Folder</span>
-              </button>
-              <button
-                onClick={() => uploadFile(folder.folder_id)}
-                className="flex items-center space-x-2 bg-cyan-300 text-cyan-800 px-4 py-2 rounded-lg hover:bg-cyan-400 transition-colors text-sm font-medium"
-                title="Upload a file to this folder"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Upload File</span>
-              </button>
-              <button
-                onClick={() => deleteItem(folder.folder_id, 'folder', folder.name)}
-                className="flex items-center space-x-2 bg-rose-300 text-rose-800 px-4 py-2 rounded-lg hover:bg-rose-400 transition-colors text-sm font-medium"
-                title="Delete this folder"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Delete</span>
-              </button>
+    // Group folders by project_name
+    const groupedByProject = folders.reduce((acc, folder) => {
+      let groupKey;
+      
+      if (folder.project_name) {
+        // Use project name as group key
+        groupKey = folder.project_name;
+      } else {
+        // For folders without project name, group by folder name
+        groupKey = `folder_${folder.name}`;
+      }
+      
+      if (!acc[groupKey]) {
+        acc[groupKey] = [];
+      }
+      acc[groupKey].push(folder);
+      return acc;
+    }, {});
+
+    return Object.entries(groupedByProject).map(([groupKey, projectFolders]) => {
+      // Determine if this should be shown as a group
+      const shouldGroup = projectFolders.length > 1;
+      
+      // Determine the display name for the group
+      const displayName = groupKey.startsWith('folder_') 
+        ? projectFolders[0].name 
+        : groupKey;
+
+      if (!shouldGroup) {
+        // Single folder - show directly
+        const folder = projectFolders[0];
+        return (
+          <div key={folder.folder_id} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
+            {/* Folder Card */}
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-lg transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={() => {
+                      setExpandedFolders(prev => ({
+                        ...prev,
+                        [folder.folder_id]: !prev[folder.folder_id]
+                      }));
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                  >
+                    {expandedFolders[folder.folder_id] ? (
+                      <ChevronDown className="w-6 h-6 text-gray-600" />
+                    ) : (
+                      <ChevronRight className="w-6 h-6 text-gray-600" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setExpandedFolders(prev => ({
+                        ...prev,
+                        [folder.folder_id]: !prev[folder.folder_id]
+                      }));
+                    }}
+                    className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                    title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                  >
+                    <FolderOpen className="w-8 h-8 text-blue-500" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setExpandedFolders(prev => ({
+                        ...prev,
+                        [folder.folder_id]: !prev[folder.folder_id]
+                      }));
+                    }}
+                    className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
+                    title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors">
+                      {folder.name}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {folder.files?.length || 0} files
+                      {folder.subfolders?.length > 0 && ` • ${folder.subfolders.length} subfolders`}
+                    </p>
+                  </button>
+                </div>
+                
+                {/* Folder Action Buttons */}
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => createFolder(folder.folder_id)}
+                    className="flex items-center space-x-2 bg-emerald-300 text-emerald-800 px-4 py-2 rounded-lg hover:bg-emerald-400 transition-colors text-sm font-medium"
+                    title="Create a new folder inside this folder"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>New Folder</span>
+                  </button>
+                  <button
+                    onClick={() => uploadFile(folder.folder_id)}
+                    className="flex items-center space-x-2 bg-cyan-300 text-cyan-800 px-4 py-2 rounded-lg hover:bg-cyan-400 transition-colors text-sm font-medium"
+                    title="Upload a file to this folder"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Upload File</span>
+                  </button>
+                  <button
+                    onClick={() => deleteItem(folder.folder_id, 'folder', folder.name)}
+                    className="flex items-center space-x-2 bg-rose-300 text-rose-800 px-4 py-2 rounded-lg hover:bg-rose-400 transition-colors text-sm font-medium"
+                    title="Delete this folder"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Expanded Content */}
+              {expandedFolders[folder.folder_id] && (
+                <div className="mt-4 space-y-3">
+                  {/* Files in this folder */}
+                  {folder.files && folder.files.map(file => (
+                    <div
+                      key={file.file_id}
+                      className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <button
+                            onClick={() => {
+                              // You can add file preview functionality here later
+                              toast.info(`📄 ${file.name} - Click an action button to work with this file`);
+                            }}
+                            className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
+                            title="Click to see file info"
+                          >
+                            <FileText className="w-6 h-6 text-gray-600 hover:text-blue-600 transition-colors" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              // You can add file preview functionality here later
+                              toast.info(`📄 ${file.name} - Click an action button to work with this file`);
+                            }}
+                            className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
+                            title="Click to see file info"
+                          >
+                            <h4 className="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors">
+                              {file.name}
+                            </h4>
+                            <p className="text-sm text-gray-500">
+                              {formatFileSize(file.size)}
+                            </p>
+                          </button>
+                        </div>
+                        
+                        {/* File Action Buttons */}
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleEditSend(file)}
+                            className="flex items-center space-x-2 bg-amber-300 text-amber-800 px-3 py-2 rounded-lg hover:bg-amber-400 transition-colors text-sm font-medium"
+                            title="Edit this file"
+                          >
+                            <Edit className="w-4 h-4" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleFileAction(file)}
+                            className="flex items-center space-x-2 bg-violet-300 text-violet-800 px-3 py-2 rounded-lg hover:bg-violet-400 transition-colors text-sm font-medium"
+                            title="Send this file to your lawyer"
+                          >
+                            <Send className="w-4 h-4" />
+                            <span>Send to Lawyer</span>
+                          </button>
+                          <button
+                            onClick={() => deleteItem(file.file_id, 'file', file.name)}
+                            className="flex items-center space-x-2 bg-pink-300 text-pink-800 px-3 py-2 rounded-lg hover:bg-pink-400 transition-colors text-sm font-medium"
+                            title="Delete this file"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Subfolders recursively */}
+                  {folder.subfolders && folder.subfolders.length > 0 &&
+                    renderTree(folder.subfolders, level + 1)
+                  }
+                </div>
+              )}
             </div>
           </div>
+        );
+      }
 
-          {/* Expanded Content */}
-          {expandedFolders[folder.folder_id] && (
-            <div className="mt-4 space-y-3">
-              {/* Files in this folder */}
-              {folder.files && folder.files.map(file => (
-                <div
-                  key={file.file_id}
-                  className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <button
-                        onClick={() => {
-                          // You can add file preview functionality here later
-                          toast.info(`📄 ${file.name} - Click an action button to work with this file`);
-                        }}
-                        className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
-                        title="Click to see file info"
-                      >
-                        <FileText className="w-6 h-6 text-gray-600 hover:text-blue-600 transition-colors" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          // You can add file preview functionality here later
-                          toast.info(`📄 ${file.name} - Click an action button to work with this file`);
-                        }}
-                        className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
-                        title="Click to see file info"
-                      >
-                        <h4 className="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors">
-                          {file.name}
-                        </h4>
-                        <p className="text-sm text-gray-500">
-                          {formatFileSize(file.size)}
-                        </p>
-                      </button>
+      // Multiple folders - show grouped with dropdown
+      return (
+        <div key={groupKey} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
+          {/* Project Group Header */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-4 shadow-sm">
+            <button
+              onClick={() => {
+                setExpandedFolders(prev => ({
+                  ...prev,
+                  [groupKey]: !prev[groupKey]
+                }))
+              }}
+              className="flex items-center justify-between w-full hover:bg-blue-100 rounded-lg p-2 -m-2 transition-colors"
+            >
+              <div className="flex items-center space-x-4">
+                {expandedFolders[groupKey] ? (
+                  <ChevronDown className="w-6 h-6 text-blue-600" />
+                ) : (
+                  <ChevronRight className="w-6 h-6 text-blue-600" />
+                )}
+                <Folder className="w-8 h-8 text-blue-600" />
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    {displayName}
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    {projectFolders.length} folder{projectFolders.length !== 1 ? 's' : ''} • {projectFolders.reduce((total, folder) => total + (folder.files?.length || 0), 0)} files
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* Expanded Project Folders */}
+          {expandedFolders[groupKey] && (
+            <div className="ml-8 mt-4 space-y-4">
+              {projectFolders.map((folder, index) => (
+                <div key={folder.folder_id} className="relative">
+                  {/* Folder Card */}
+                  <div className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-lg transition-all duration-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <button
+                          onClick={() => {
+                            setExpandedFolders(prev => ({
+                              ...prev,
+                              [folder.folder_id]: !prev[folder.folder_id]
+                            }));
+                          }}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                          title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                        >
+                          {expandedFolders[folder.folder_id] ? (
+                            <ChevronDown className="w-6 h-6 text-gray-600" />
+                          ) : (
+                            <ChevronRight className="w-6 h-6 text-gray-600" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setExpandedFolders(prev => ({
+                              ...prev,
+                              [folder.folder_id]: !prev[folder.folder_id]
+                            }));
+                          }}
+                          className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                          title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                        >
+                          <FolderOpen className="w-8 h-8 text-blue-500" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setExpandedFolders(prev => ({
+                              ...prev,
+                              [folder.folder_id]: !prev[folder.folder_id]
+                            }));
+                          }}
+                          className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
+                          title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                        >
+                          <h4 className="text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors">
+                            {folder.name}
+                          </h4>
+                          <p className="text-sm text-gray-500">
+                            {folder.phase_name && `Phase: ${folder.phase_name} • `}
+                            {folder.files?.length || 0} files
+                            {folder.subfolders?.length > 0 && ` • ${folder.subfolders.length} subfolders`}
+                          </p>
+                        </button>
+                      </div>
+                      
+                      {/* Folder Action Buttons */}
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => createFolder(folder.folder_id)}
+                          className="flex items-center space-x-2 bg-emerald-300 text-emerald-800 px-4 py-2 rounded-lg hover:bg-emerald-400 transition-colors text-sm font-medium"
+                          title="Create a new folder inside this folder"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>New Folder</span>
+                        </button>
+                        <button
+                          onClick={() => uploadFile(folder.folder_id)}
+                          className="flex items-center space-x-2 bg-cyan-300 text-cyan-800 px-4 py-2 rounded-lg hover:bg-cyan-400 transition-colors text-sm font-medium"
+                          title="Upload a file to this folder"
+                        >
+                          <Upload className="w-4 h-4" />
+                          <span>Upload File</span>
+                        </button>
+                        <button
+                          onClick={() => deleteItem(folder.folder_id, 'folder', folder.name)}
+                          className="flex items-center space-x-2 bg-rose-300 text-rose-800 px-4 py-2 rounded-lg hover:bg-rose-400 transition-colors text-sm font-medium"
+                          title="Delete this folder"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
                     </div>
-                    
-                    {/* File Action Buttons */}
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleEditSend(file)}
-                        className="flex items-center space-x-2 bg-amber-300 text-amber-800 px-3 py-2 rounded-lg hover:bg-amber-400 transition-colors text-sm font-medium"
-                        title="Edit this file"
-                      >
-                        <Edit className="w-4 h-4" />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        onClick={() => handleFileAction(file)}
-                        className="flex items-center space-x-2 bg-violet-300 text-violet-800 px-3 py-2 rounded-lg hover:bg-violet-400 transition-colors text-sm font-medium"
-                        title="Send this file to your lawyer"
-                      >
-                        <Send className="w-4 h-4" />
-                        <span>Send to Lawyer</span>
-                      </button>
-                      <button
-                        onClick={() => deleteItem(file.file_id, 'file', file.name)}
-                        className="flex items-center space-x-2 bg-pink-300 text-pink-800 px-3 py-2 rounded-lg hover:bg-pink-400 transition-colors text-sm font-medium"
-                        title="Delete this file"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
+
+                    {/* Expanded Content */}
+                    {expandedFolders[folder.folder_id] && (
+                      <div className="mt-4 space-y-3">
+                        {/* Files in this folder */}
+                        {folder.files && folder.files.map(file => (
+                          <div
+                            key={file.file_id}
+                            className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <button
+                                  onClick={() => {
+                                    // You can add file preview functionality here later
+                                    toast.info(`📄 ${file.name} - Click an action button to work with this file`);
+                                  }}
+                                  className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
+                                  title="Click to see file info"
+                                >
+                                  <FileText className="w-6 h-6 text-gray-600 hover:text-blue-600 transition-colors" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    // You can add file preview functionality here later
+                                    toast.info(`📄 ${file.name} - Click an action button to work with this file`);
+                                  }}
+                                  className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
+                                  title="Click to see file info"
+                                >
+                                  <h5 className="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors">
+                                    {file.name}
+                                  </h5>
+                                  <p className="text-sm text-gray-500">
+                                    {formatFileSize(file.size)}
+                                  </p>
+                                </button>
+                              </div>
+                              
+                              {/* File Action Buttons */}
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleEditSend(file)}
+                                  className="flex items-center space-x-2 bg-amber-300 text-amber-800 px-3 py-2 rounded-lg hover:bg-amber-400 transition-colors text-sm font-medium"
+                                  title="Edit this file"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  onClick={() => handleFileAction(file)}
+                                  className="flex items-center space-x-2 bg-violet-300 text-violet-800 px-3 py-2 rounded-lg hover:bg-violet-400 transition-colors text-sm font-medium"
+                                  title="Send this file to your lawyer"
+                                >
+                                  <Send className="w-4 h-4" />
+                                  <span>Send to Lawyer</span>
+                                </button>
+                                <button
+                                  onClick={() => deleteItem(file.file_id, 'file', file.name)}
+                                  className="flex items-center space-x-2 bg-pink-300 text-pink-800 px-3 py-2 rounded-lg hover:bg-pink-400 transition-colors text-sm font-medium"
+                                  title="Delete this file"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Subfolders recursively */}
+                        {folder.subfolders && folder.subfolders.length > 0 &&
+                          renderTree(folder.subfolders, level + 1)
+                        }
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
-
-              {/* Subfolders recursively */}
-              {folder.subfolders && folder.subfolders.length > 0 &&
-                renderTree(folder.subfolders, level + 1)
-              }
             </div>
           )}
         </div>
-      </div>
-    ));
+      );
+    });
   };
 
   // No more context menu listeners needed

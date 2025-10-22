@@ -96,36 +96,61 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
   }
 
   const renderDocuments = (folders = filteredDocuments, level = 0) => {
-    return folders.map(folder => (
-      <div key={folder.folder_id} className={`${level > 0 ? 'ml-6' : ''} mb-2`}>
-        {/* Folder */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => {
-                  setExpandedFolders(prev => ({
-                    ...prev,
-                    [folder.folder_id]: !prev[folder.folder_id]
-                  }))
-                }}
-                className="p-1 hover:bg-gray-200 rounded transition-colors"
-              >
-                {expandedFolders[folder.folder_id] ? (
-                  <ChevronDown className="w-4 h-4 text-gray-600" />
-                ) : (
-                  <ChevronRight className="w-4 h-4 text-gray-600" />
-                )}
-              </button>
-              <FolderOpen className="w-5 h-5 text-blue-500" />
-              <span className="text-sm font-medium text-gray-800">
-                {folder.name}
-              </span>
-              <span className="text-xs text-gray-500">
-                ({folder.files?.length || 0} files)
-              </span>
-            </div>
+    // Group folders by project_name
+    const groupedByProject = folders.reduce((acc, folder) => {
+      const projectName = folder.project_name || 'General Documents';
+      if (!acc[projectName]) {
+        acc[projectName] = [];
+      }
+      acc[projectName].push(folder);
+      return acc;
+    }, {});
+
+    return Object.entries(groupedByProject).map(([projectName, projectFolders]) => (
+      <div key={projectName} className="mb-4">
+        {/* Project Header */}
+        <div className="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200 mb-3">
+          <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium mr-3">
+            {projectName.charAt(0).toUpperCase()}
           </div>
+          <div className="flex-1">
+            <h4 className="font-semibold text-gray-900">{projectName}</h4>
+            <p className="text-sm text-gray-600">{projectFolders.length} folder{projectFolders.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        {/* Folders for this project */}
+        <div className="ml-4 space-y-2">
+          {projectFolders.map(folder => (
+            <div key={folder.folder_id} className={`${level > 0 ? 'ml-6' : ''} mb-2`}>
+              {/* Folder */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => {
+                        setExpandedFolders(prev => ({
+                          ...prev,
+                          [folder.folder_id]: !prev[folder.folder_id]
+                        }))
+                      }}
+                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                    >
+                      {expandedFolders[folder.folder_id] ? (
+                        <ChevronDown className="w-4 h-4 text-gray-600" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-600" />
+                      )}
+                    </button>
+                    <FolderOpen className="w-5 h-5 text-blue-500" />
+                    <span className="text-sm font-medium text-gray-800">
+                      {folder.name}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ({folder.files?.length || 0} files)
+                    </span>
+                  </div>
+                </div>
 
           {/* Expanded Content */}
           {expandedFolders[folder.folder_id] && (
@@ -164,6 +189,9 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
               }
             </div>
           )}
+        </div>
+      </div>
+          ))}
         </div>
       </div>
     ))

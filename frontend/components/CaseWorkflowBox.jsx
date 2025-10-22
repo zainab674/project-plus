@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Workflow, Calendar, Users, FileText, Clock } from 'lucide-react';
+import PhaseTasksModal from './modals/PhaseTasksModal';
+import { useRouter } from 'next/navigation';
 
 const CaseWorkflowBox = ({ 
   selectedCase = null, 
@@ -9,9 +11,15 @@ const CaseWorkflowBox = ({
   onCaseSelect = null,
   className = "" 
 }) => {
+  const router = useRouter();
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentCase, setCurrentCase] = useState(selectedCase);
   const [workflowData, setWorkflowData] = useState(null);
+  
+  // Phase modal states
+  const [phaseModalOpen, setPhaseModalOpen] = useState(false);
+  const [selectedPhaseName, setSelectedPhaseName] = useState('');
+  const [selectedPhaseTasks, setSelectedPhaseTasks] = useState([]);
 
   // Update current case when selectedCase prop changes
   useEffect(() => {
@@ -118,6 +126,31 @@ const CaseWorkflowBox = ({
     return mermaidText;
   };
 
+  // Handle phase click to open modal
+  const handlePhaseClick = (phaseName) => {
+    const tasks = currentCase?.Tasks?.filter(task => task.phase === phaseName) || [];
+    setSelectedPhaseName(phaseName);
+    setSelectedPhaseTasks(tasks);
+    setPhaseModalOpen(true);
+  };
+
+  // Handle phase modal close
+  const handlePhaseModalClose = () => {
+    setPhaseModalOpen(false);
+    setSelectedPhaseName('');
+    setSelectedPhaseTasks([]);
+  };
+
+  // Handle task click from phase modal
+  const handleTaskClickFromPhase = (task) => {
+    // Navigate to the case detail page where the task is located
+    if (currentCase?.project_id) {
+      router.push(`/dashboard/project/${currentCase.project_id}`);
+    }
+    // Close the phase modal
+    setPhaseModalOpen(false);
+  };
+
   const renderWorkflowChart = () => {
     if (!workflowData) {
       return (
@@ -189,16 +222,20 @@ const CaseWorkflowBox = ({
                 <div key={index} className="flex items-center">
                   {/* Phase Node */}
                   <div className="flex flex-col items-center">
-                    <div className={`w-24 h-20 border-2 rounded-xl flex items-center justify-center shadow-sm ${
-                      phase.status === 'completed' ? 'bg-gray-200 border-gray-500' :
-                      phase.status === 'in-progress' ? 'bg-gray-100 border-gray-400' :
-                      'bg-white border-gray-300'
-                    }`}>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-gray-800">
-                          {phase.name}
+                    <div 
+                      className={`w-24 h-20 border-2 rounded-xl flex items-center justify-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+                        phase.status === 'completed' ? 'bg-gray-200 border-gray-500' :
+                        phase.status === 'in-progress' ? 'bg-gray-100 border-gray-400' :
+                        'bg-white border-gray-300'
+                      }`}
+                      onClick={() => handlePhaseClick(phase.name)}
+                      title={`Click to view tasks in ${phase.name}`}
+                    >
+                      <div className="text-center px-1">
+                        <div className="text-xs font-bold text-gray-800 leading-tight break-words">
+                          {phase.name.length > 12 ? `${phase.name.substring(0, 12)}...` : phase.name}
                         </div>
-                        <div className="text-xs text-gray-600">
+                        <div className="text-xs text-gray-600 mt-1">
                           {phase.progress}%
                         </div>
                       </div>
@@ -313,6 +350,15 @@ const CaseWorkflowBox = ({
       <div className="bg-white rounded-lg border border-gray-200 p-3 min-h-[300px]">
         {renderWorkflowChart()}
       </div>
+
+      {/* Phase Tasks Modal */}
+      <PhaseTasksModal
+        isOpen={phaseModalOpen}
+        onClose={handlePhaseModalClose}
+        phaseName={selectedPhaseName}
+        tasks={selectedPhaseTasks}
+        onTaskClick={handleTaskClickFromPhase}
+      />
 
     </div>
   );

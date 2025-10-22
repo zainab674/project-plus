@@ -14,7 +14,7 @@ import {
 } from '../schema/caseTemplateSchema.js';
 
 // Helper function to copy template documents to user's personal space
-const copyTemplateDocumentsToProject = async (template, projectId, userId) => {
+const copyTemplateDocumentsToProject = async (template, projectId, userId, projectName) => {
     try {
         // Create or get TemplateDocument for the USER (not the project)
         let templateDocument = await prisma.templateDocument.findFirst({
@@ -33,7 +33,7 @@ const copyTemplateDocumentsToProject = async (template, projectId, userId) => {
         const folderIdMap = new Map();
 
         // Helper function to recursively copy folders maintaining hierarchy
-        const copyFolderRecursively = async (templateFolder, parentProjectFolderId) => {
+        const copyFolderRecursively = async (templateFolder, parentProjectFolderId, projectName) => {
             // Find the phase name for this folder
             const phaseName = templateFolder.phase ? templateFolder.phase.name : null;
             
@@ -42,7 +42,8 @@ const copyTemplateDocumentsToProject = async (template, projectId, userId) => {
                     name: templateFolder.name,
                     parent_id: parentProjectFolderId,
                     phase_name: phaseName,
-                    template_document_id: templateDocumentId
+                    template_document_id: templateDocumentId,
+                    project_name: projectName // Store the project/case name
                 }
             });
             
@@ -55,7 +56,7 @@ const copyTemplateDocumentsToProject = async (template, projectId, userId) => {
             // Recursively copy subfolders
             if (templateFolder.subfolders && templateFolder.subfolders.length > 0) {
                 for (const subfolder of templateFolder.subfolders) {
-                    await copyFolderRecursively(subfolder, projectFolder.folder_id);
+                    await copyFolderRecursively(subfolder, projectFolder.folder_id, projectName);
                 }
             }
 
@@ -66,7 +67,7 @@ const copyTemplateDocumentsToProject = async (template, projectId, userId) => {
         // The copyFolderRecursively function handles the entire folder tree
         const rootFolders = template.folders.filter(folder => !folder.parent_id);
         for (const templateFolder of rootFolders) {
-            await copyFolderRecursively(templateFolder, null);
+            await copyFolderRecursively(templateFolder, null, projectName);
         }
 
         // Copy root files (files not in any folder)
@@ -1100,7 +1101,7 @@ export const useTemplateForProject = catchAsyncError(async (req, res, next) => {
     });
 
     // Copy template documents to project
-    await copyTemplateDocumentsToProject(template, project.project_id, user_id);
+    await copyTemplateDocumentsToProject(template, project.project_id, user_id, projectName);
 
     // Add project creator as PROVIDER
     await prisma.projectMember.create({

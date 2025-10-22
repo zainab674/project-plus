@@ -196,6 +196,7 @@ model Folder {
   subfolders Folder[]  @relation("Subfolders")
   file_type  FileTypes @default(FOLDER)
   phase_name String?   // Store the phase name for filtering
+  project_name String? // Store the project/case name for grouping
 
   template_document_id String
   templateDocument     TemplateDocument @relation(fields: [template_document_id], references: [template_document_id], onDelete: Cascade)

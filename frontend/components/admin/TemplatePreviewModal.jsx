@@ -1,10 +1,19 @@
 "use client"
 
-import React from 'react';
-import { X, Calendar, FileText, Users, Clock, FolderOpen, Download, Eye } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Calendar, FileText, Users, Clock, FolderOpen, Download, Eye, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '../Button';
 
 const TemplatePreviewModal = ({ template, onClose }) => {
+    const [expandedPhases, setExpandedPhases] = useState({});
+
+    const togglePhase = (phaseId) => {
+        setExpandedPhases(prev => ({
+            ...prev,
+            [phaseId]: !prev[phaseId]
+        }));
+    };
+
     const getPriorityColor = (priority) => {
         switch (priority) {
             case 'High': return 'bg-red-100 text-red-800 border-red-200';
@@ -137,18 +146,48 @@ const TemplatePreviewModal = ({ template, onClose }) => {
                             Template Documents
                         </h3>
                         
+                        {/* Document Summary */}
+                        {template.phases && template.phases.length > 0 && (
+                            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                                <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                                    <FileText className="w-5 h-5 mr-2 text-blue-600" />
+                                    Document Summary by Phase
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {template.phases.map((phase) => {
+                                        const phaseFolders = template.folders?.filter(folder => folder.phase_id === phase.phase_id) || [];
+                                        const totalDocuments = phaseFolders.reduce((total, folder) => total + (folder.files?.length || 0), 0);
+                                        return (
+                                            <div key={phase.phase_id} className="bg-white p-3 rounded-lg border border-blue-200">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <div className="font-medium text-gray-900">{phase.name}</div>
+                                                        <div className="text-sm text-gray-600">{phaseFolders.length} folder{phaseFolders.length !== 1 ? 's' : ''}</div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-lg font-bold text-blue-600">{totalDocuments}</div>
+                                                        <div className="text-xs text-gray-500">documents</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Real template documents organized by phases */}
                         <div className="space-y-4">
                             {/* Group folders by phases */}
                             {template.phases && template.phases.length > 0 ? (
                                 template.phases.map((phase, phaseIndex) => {
-                                    const phaseFolders = template.folders?.filter(folder => folder.phase_id === phase.order) || [];
+                                    const phaseFolders = template.folders?.filter(folder => folder.phase_id === phase.phase_id) || [];
                                     const foldersWithoutPhase = template.folders?.filter(folder => !folder.phase_id) || [];
                                     
                                     return (
                                         <div key={phaseIndex} className="space-y-3">
                                             {/* Phase Header */}
-                                            <div className="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                            <div className="flex items-center p-3 bg-blue-50 rounded-lg border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors" onClick={() => togglePhase(phase.phase_id)}>
                                                 <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium mr-3">
                                                     {phase.order}
                                                 </div>
@@ -158,14 +197,28 @@ const TemplatePreviewModal = ({ template, onClose }) => {
                                                         <p className="text-sm text-gray-600 mt-1">{phase.description}</p>
                                                     )}
                                                 </div>
-                                                <div className="text-sm text-gray-500">
-                                                    {phaseFolders.length} folder{phaseFolders.length !== 1 ? 's' : ''}
+                                                <div className="flex items-center gap-3">
+                                                    <div className="text-sm text-gray-500">
+                                                        {phaseFolders.length} folder{phaseFolders.length !== 1 ? 's' : ''}
+                                                        {phaseFolders.length > 0 && (
+                                                            <span className="ml-2">
+                                                                • {phaseFolders.reduce((total, folder) => total + (folder.files?.length || 0), 0)} document{phaseFolders.reduce((total, folder) => total + (folder.files?.length || 0), 0) !== 1 ? 's' : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {expandedPhases[phase.phase_id] ? (
+                                                        <ChevronDown className="w-4 h-4 text-gray-500" />
+                                                    ) : (
+                                                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                                                    )}
                                                 </div>
                                             </div>
 
                                             {/* Folders for this phase */}
-                                            {phaseFolders.length > 0 ? (
-                                                phaseFolders.map((folder, folderIndex) => (
+                                            {expandedPhases[phase.phase_id] && (
+                                                <div className="space-y-3">
+                                                    {phaseFolders.length > 0 ? (
+                                                        phaseFolders.map((folder, folderIndex) => (
                                                     <div key={folderIndex} className="p-4 bg-gray-50 rounded-lg border border-gray-200 ml-4">
                                                         <div className="flex items-center mb-2">
                                                             <FolderOpen className="w-4 h-4 text-gray-500 mr-2" />
@@ -227,8 +280,10 @@ const TemplatePreviewModal = ({ template, onClose }) => {
                                                         )}
                                                     </div>
                                                 ))
-                                            ) : (
-                                                <div className="ml-4 text-sm text-gray-400 italic">No folders assigned to this phase</div>
+                                                    ) : (
+                                                        <div className="ml-4 text-sm text-gray-400 italic">No folders assigned to this phase</div>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     );
