@@ -114,7 +114,8 @@ import {
     FileText,
     Bell,
     BellOff,
-    GitBranch
+    GitBranch,
+    GitCompare
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
@@ -193,6 +194,7 @@ const QuickActions = () => {
         { name: 'Chat', icon: MessageCircle, route: '', color: 'bg-yellow-200' },
         { name: 'Team', icon: Users, route: '/dashboard/team', color: 'bg-emerald-200' },
         { name: 'TemplateDocs', icon: FileText, route: '/dashboard/template-documents', color: 'bg-indigo-200' },
+        { name: 'Compare Docs', icon: GitCompare, route: '/document-comparison', color: 'bg-violet-200' },
         { name: 'Flowchart', icon: GitBranch, route: '/dashboard/flowchart', color: 'bg-cyan-200' },
         { name: 'Phone System', icon: Phone, route: '/dashboard/phone', color: 'bg-teal-200' },
         // { name: 'My Files', icon: FileText, route: `/dashboard/clients/${user?.user_id}`, color: 'bg-indigo-200' },

@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Clock, BarChart3, TrendingUp, Calendar, FileText, Users, Gavel, DollarSign, ChevronRight, Activity, Mail, MessageSquare, Video, FileText as FileTextIcon } from 'lucide-react';
+import { Clock, BarChart3, TrendingUp, Calendar, FileText, Users, Gavel, DollarSign, ChevronRight, Activity, Mail, MessageSquare, Video, FileText as FileTextIcon, Workflow } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { getAllProjectWithTasksRequest } from '@/lib/http/project';
 import Loader from '../Loader';
 import Link from 'next/link';
-import CaseDetail from '../modals/TimelineCase';
+import CaseWorkflowBox from '../CaseWorkflowBox';
 import { useUser } from '@/providers/UserProvider';
 import { getHourMinDiff } from '@/utils/calculateTIme';
 import dayjs from 'dayjs';
@@ -1313,6 +1313,23 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                         </div>
                     </div>
 
+                    {/* Case Workflow Section */}
+                    <div className="bg-indigo-200 p-6 mt-4 rounded-lg shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-semibold text-gray-800">Case Workflow</h2>
+                            <Workflow className="text-indigo-500" size={24} />
+                        </div>
+                        <div
+                            className="bg-white p-4 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                            onClick={() => setActiveModal('workflow')}
+                        >
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="font-medium">View Case Workflows</span>
+                                <Workflow className="text-indigo-500" size={20} />
+                            </div>
+                        </div>
+                    </div>
+
 
                 </div>
             </div>
@@ -1321,6 +1338,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
             {activeModal === 'timeline' && <TimelineModal />}
             {activeModal === 'cases' && <CaseTimelineModal />}
             {activeModal === 'billing' && <BillingModal />}
+            {activeModal === 'workflow' && <CaseWorkflowModal onClose={() => setActiveModal(null)} />}
             {isTaskModalOpen && selectedTask && (
                 <TaskDetailModal
                     task={selectedTask}
@@ -1332,6 +1350,85 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                     }}
                 />
             )}
+        </div>
+    );
+};
+
+// Case Workflow Modal Component
+const CaseWorkflowModal = ({ onClose }) => {
+    const [selectedCase, setSelectedCase] = useState(null);
+    const [allCases, setAllCases] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchCases();
+    }, []);
+
+    const fetchCases = async () => {
+        try {
+            const response = await getAllProjectWithTasksRequest();
+            console.log('Fetched cases response:', response);
+            
+            if (response && response.data) {
+                const { projects, collaboratedProjects } = response.data;
+                const allProjects = [...(projects || []), ...(collaboratedProjects || [])];
+                console.log('All projects:', allProjects);
+                
+                setAllCases(allProjects);
+                // Set default to most recent case
+                if (allProjects.length > 0) {
+                    const recentCase = allProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+                    setSelectedCase(recentCase);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching cases:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCaseSelect = (caseItem) => {
+        setSelectedCase(caseItem);
+    };
+
+    if (loading) {
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-8">
+                    <Loader />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-900">Case Workflow Dashboard</h3>
+                        <p className="text-sm text-gray-600">View and manage case workflows</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-gray-600 text-2xl"
+                    >
+                        ×
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6">
+                    <CaseWorkflowBox
+                        selectedCase={selectedCase}
+                        allCases={allCases}
+                        onCaseSelect={handleCaseSelect}
+                        className="mb-6"
+                    />
+                </div>
+            </div>
         </div>
     );
 };

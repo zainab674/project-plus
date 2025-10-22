@@ -1572,7 +1572,8 @@ export const createTime = catchAsyncError(async (req, res, next) => {
 
     res.status(200).json({
         success: true,
-        message: "Time start successfully"
+        message: "Time start successfully",
+        time_id: taskTime.time_id
     });
 });
 
@@ -1580,6 +1581,20 @@ export const createTime = catchAsyncError(async (req, res, next) => {
 export const stopTime = catchAsyncError(async (req, res, next) => {
     const time_id = req.params.time_id;
     const description = req.body.description;
+
+    // Check if the TaskTime record exists before updating
+    const existingTaskTime = await prisma.taskTime.findUnique({
+        where: {
+            time_id
+        }
+    });
+
+    if (!existingTaskTime) {
+        return res.status(404).json({
+            success: false,
+            message: "Timer record not found. It may have already been stopped or deleted."
+        });
+    }
 
     await prisma.taskTime.update({
         where: {
