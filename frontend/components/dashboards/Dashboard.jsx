@@ -97,7 +97,7 @@ const DashboardContent = () => {
   return (
     <>
       <TopNavigation />
-      <QuickActions />
+      {/* <QuickActions /> */}
 
       {/* Show Client Dashboard for CLIENT role */}
       {user?.Role === 'CLIENT' ? (

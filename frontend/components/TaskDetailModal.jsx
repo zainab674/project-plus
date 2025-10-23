@@ -30,6 +30,7 @@ import {
     FileIcon
 } from 'lucide-react'
 import { useUser } from '@/providers/UserProvider'
+import { useTimer } from '@/providers/TimerProvider'
 import { toast } from 'react-toastify'
 import Timer from './Timer'
 import BigDialog from './Dialogs/BigDialog'
@@ -38,6 +39,7 @@ import TaskComments from './TaskComments'
 import UpdateTask from './Dialogs/UpdateTask'
 import moment from 'moment'
 import { getMediaByTaskIdRequest } from '@/lib/http/media'
+import { getTemplatesByTaskIdRequest } from '@/lib/http/caseTemplate'
 
 // Utility function to view files in new tab with proper filename
 const viewFile = async (url, filename) => {
@@ -390,7 +392,7 @@ const ReasonCard = ({ type, reason }) => {
     )
 }
 
-const AttachmentsCard = ({ task, media, loadingMedia }) => {
+const AttachmentsCard = ({ task, media, loadingMedia, onEditDocument }) => {
     const [showAttachments, setShowAttachments] = useState(false)
     
     // Debug logging to understand the data structure (remove in production)
@@ -526,6 +528,13 @@ const AttachmentsCard = ({ task, media, loadingMedia }) => {
                                             View
                                         </button>
                                         <button
+                                            onClick={() => onEditDocument(attachment)}
+                                            className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium transition-colors"
+                                        >
+                                            <PenIcon className="w-3 h-3" />
+                                            Edit
+                                        </button>
+                                        <button
                                             onClick={() => handleDownload(attachment)}
                                             className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
                                         >
@@ -635,10 +644,144 @@ const RejectionCard = ({ task }) => {
     )
 }
 
+const EditedTemplatesCard = ({ task, templates, loadingTemplates }) => {
+    const [showTemplates, setShowTemplates] = useState(false)
+    
+    // Show loading state
+    if (loadingTemplates) {
+        return (
+            <InfoCard
+                icon={FileText}
+                title="Edited Templates"
+                gradient="from-purple-50 to-indigo-50"
+            >
+                <div className="flex items-center gap-2 text-gray-500 text-sm">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                    Loading templates...
+                </div>
+            </InfoCard>
+        )
+    }
+
+    if (!templates || templates.length === 0) return null
+
+    const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes'
+        const k = 1024
+        const sizes = ['Bytes', 'KB', 'MB', 'GB']
+        const i = Math.floor(Math.log(bytes) / Math.log(k))
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    }
+
+    const getFileIcon = (mimeType) => {
+        if (mimeType?.includes('pdf')) return '📄'
+        if (mimeType?.includes('image')) return '🖼️'
+        if (mimeType?.includes('word') || mimeType?.includes('document')) return '📝'
+        if (mimeType?.includes('excel') || mimeType?.includes('spreadsheet')) return '📊'
+        if (mimeType?.includes('powerpoint') || mimeType?.includes('presentation')) return '📽️'
+        return '📎'
+    }
+
+    const handleViewTemplate = (template) => {
+        viewFile(template.path, template.name)
+    }
+
+    const handleEditTemplate = (template) => {
+        const editUrl = `/dashboard/edit-file/${template.file_id}?file=${encodeURIComponent(template.path)}&task_id=${task.task_id}&project_name=${encodeURIComponent(task.project?.name || 'Unknown Project')}&filename=${encodeURIComponent(template.name)}`
+        window.open(editUrl, '_blank')
+    }
+
+    return (
+        <InfoCard
+            icon={FileText}
+            title="Edited Templates"
+            gradient="from-purple-50 to-indigo-50"
+        >
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                            {templates.length} {templates.length === 1 ? 'template' : 'templates'}
+                        </span>
+                    </div>
+                    <button
+                        onClick={() => setShowTemplates(!showTemplates)}
+                        className="flex items-center gap-1 text-purple-600 hover:text-purple-700 text-xs font-medium transition-colors"
+                    >
+                        <Eye className="w-3 h-3" />
+                        {showTemplates ? 'Hide' : 'View'} Details
+                    </button>
+                </div>
+
+                {showTemplates && (
+                    <div className="space-y-3 max-h-48 overflow-y-auto">
+                        {templates.map((template, index) => (
+                            <div key={index} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                                <div className="flex items-start justify-between mb-2">
+                                    <div className="flex items-center gap-2 flex-1">
+                                        <span className="text-lg">{getFileIcon(template.type)}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-medium text-purple-700 truncate">
+                                                {template.name}
+                                            </p>
+                                            <p className="text-xs text-purple-600">
+                                                {formatFileSize(template.size)} • {moment(template.createdAt).format('MMM DD, YYYY')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => handleViewTemplate(template)}
+                                            className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
+                                        >
+                                            <Eye className="w-3 h-3" />
+                                            View
+                                        </button>
+                                        <button
+                                            onClick={() => handleEditTemplate(template)}
+                                            className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium transition-colors"
+                                        >
+                                            <PenIcon className="w-3 h-3" />
+                                            Edit
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </InfoCard>
+    )
+}
+
 export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDetails, media }) => {
     const [isEditMode, setIsEditMode] = useState(false)
     const [taskMedia, setTaskMedia] = useState(null)
     const [loadingMedia, setLoadingMedia] = useState(false)
+    const [taskTemplates, setTaskTemplates] = useState(null)
+    const [loadingTemplates, setLoadingTemplates] = useState(false)
+    const [stopTimeOpen, setStopTimeOpen] = useState(null)
+    
+    const { activeTimer, startTimer, stopTimer, loadingStart, loadingStop } = useTimer()
+
+    // Timer handlers - moved to top to avoid hook order issues
+    const handleStartTime = useCallback(async () => {
+        try {
+            await startTimer(task.task_id, task.name, project?.project_id || 1, project?.name || 'Unknown Project')
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error.message)
+        }
+    }, [startTimer, task, project])
+
+    const handleStopTime = useCallback(async (description) => {
+        try {
+            await stopTimer(description)
+            setStopTimeOpen(null)
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error.message)
+        }
+    }, [stopTimer])
 
     const isOverdue = useMemo(() => {
         if (!task || task.status === 'DONE') return false
@@ -658,22 +801,35 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
             // If media is already provided, use it
             if (media) {
                 setTaskMedia(media)
-                return
+            } else {
+                // Otherwise, fetch media data
+                setLoadingMedia(true)
+                getMediaByTaskIdRequest(task.task_id)
+                    .then(response => {
+                        // console.log('Media data fetched:', response.data)
+                        setTaskMedia(response.data)
+                    })
+                    .catch(error => {
+                        // console.log('No media found for task:', error)
+                        setTaskMedia(null)
+                    })
+                    .finally(() => {
+                        setLoadingMedia(false)
+                    })
             }
             
-            // Otherwise, fetch media data
-            setLoadingMedia(true)
-            getMediaByTaskIdRequest(task.task_id)
+            // Fetch templates for this task
+            setLoadingTemplates(true)
+            getTemplatesByTaskIdRequest(task.task_id)
                 .then(response => {
-                    // console.log('Media data fetched:', response.data)
-                    setTaskMedia(response.data)
+                    setTaskTemplates(response.data.templates || [])
                 })
                 .catch(error => {
-                    // console.log('No media found for task:', error)
-                    setTaskMedia(null)
+                    // console.log('No templates found for task:', error)
+                    setTaskTemplates([])
                 })
                 .finally(() => {
-                    setLoadingMedia(false)
+                    setLoadingTemplates(false)
                 })
         }
     }, [isOpen, task, media])
@@ -703,6 +859,12 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
         } catch (err) {
             toast.error('Failed to copy task ID')
         }
+    }
+
+    const handleEditDocument = (attachment) => {
+        // Open document editor with task and project context
+        const editUrl = `/dashboard/edit-file/${attachment.media_id || attachment.id}?file=${encodeURIComponent(attachment.file_url)}&task_id=${task.task_id}&project_name=${encodeURIComponent(project?.name || 'Unknown Project')}&filename=${encodeURIComponent(attachment.filename)}`
+        window.open(editUrl, '_blank')
     }
 
     return (
@@ -822,7 +984,10 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                                 <RejectionCard task={task} />
 
                                 {/* Attachments */}
-                                <AttachmentsCard task={task} media={taskMedia} loadingMedia={loadingMedia} />
+                                <AttachmentsCard task={task} media={taskMedia} loadingMedia={loadingMedia} onEditDocument={handleEditDocument} />
+
+                                {/* Edited Templates */}
+                                <EditedTemplatesCard task={task} templates={taskTemplates} loadingTemplates={loadingTemplates} />
 
                             </div>
 
@@ -871,6 +1036,50 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                                         </div>
                                     </div>
                                 </InfoCard>
+
+                                {/* Timer */}
+                                <InfoCard
+                                    icon={TimerIcon}
+                                    title="Time Tracking"
+                                    gradient="from-blue-50 to-indigo-50"
+                                >
+                                    <div className="space-y-3">
+                                        {activeTimer?.task_id === task.task_id ? (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2 bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                                        <span className="text-green-700 font-medium text-sm">Timer Running</span>
+                                                    </div>
+                                                    <Timer startTime={activeTimer.start_time} className="text-green-600 font-mono text-sm" />
+                                                </div>
+                                                <button
+                                                    onClick={() => setStopTimeOpen(task.task_id)}
+                                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                                    disabled={loadingStop === activeTimer.time_id}
+                                                >
+                                                    <Pause className="w-4 h-4" />
+                                                    {loadingStop === activeTimer.time_id ? 'Stopping...' : 'Stop Timer'}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={handleStartTime}
+                                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                                disabled={loadingStart === task.task_id || !!activeTimer}
+                                            >
+                                                <Play className="w-4 h-4" />
+                                                {loadingStart === task.task_id ? 'Starting...' : 'Start Timer'}
+                                            </button>
+                                        )}
+                                        
+                                        {activeTimer && activeTimer.task_id !== task.task_id && (
+                                            <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                                                Another timer is currently running
+                                            </div>
+                                        )}
+                                    </div>
+                                </InfoCard>
                             </div>
                         </div>
                     </div>
@@ -885,6 +1094,17 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                 isOpen={isEditMode}
                 getProjectDetails={getProjectDetails}
             />
+
+            {/* Stop Time Modal */}
+            <BigDialog open={!!stopTimeOpen} onClose={() => setStopTimeOpen(null)} width={34}>
+                <AddWorkDescription
+                    onSubmit={handleStopTime}
+                    onClose={() => setStopTimeOpen(null)}
+                    isLoading={loadingStop === activeTimer?.time_id}
+                    title="Stop Timer"
+                    description="Add a description for the work completed"
+                />
+            </BigDialog>
         </>
     )
 }

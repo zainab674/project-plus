@@ -966,6 +966,150 @@ export const uploadTemplateFile = catchAsyncError(async (req, res, next) => {
     });
 });
 
+// Get templates by task ID
+export const getTemplatesByTaskId = catchAsyncError(async (req, res, next) => {
+    const { taskId } = req.params;
+    const user = req.user;
+
+    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+
+    try {
+        // Find the task folder for this task ID
+        const taskFolder = await prisma.folder.findFirst({
+            where: {
+                name: `Task ${taskId}`,
+                template_document_id: {
+                    in: await prisma.templateDocument.findMany({
+                        where: { owner_id: user_id },
+                        select: { template_document_id: true }
+                    }).then(docs => docs.map(doc => doc.template_document_id))
+                }
+            },
+            include: {
+                files: {
+                    orderBy: { createdAt: 'desc' }
+                },
+                templateDocument: true
+            }
+        });
+
+        if (!taskFolder) {
+            return res.status(200).json({
+                success: true,
+                templates: [],
+                message: "No templates found for this task"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            templates: taskFolder.files,
+            folder: taskFolder,
+            message: "Templates retrieved successfully"
+        });
+    } catch (error) {
+        console.error('Error fetching templates by task ID:', error);
+        return next(new ErrorHandler(`Failed to fetch templates: ${error.message}`, 500));
+    }
+});
+
+// Save edited document as template with task and project context
+export const saveDocumentAsTemplate = catchAsyncError(async (req, res, next) => {
+    const { task_id, project_name, original_filename } = req.body;
+    const file = req.file;
+    const user = req.user;
+
+    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+
+    if (!file || !task_id || !project_name) {
+        return next(new ErrorHandler("File, task_id, and project_name are required", 400));
+    }
+
+    try {
+        // Upload to Cloudinary
+        const cloudRes = await uploadToCloud(file);
+
+        // Get or create template document for the user
+        let templateDocument = await prisma.templateDocument.findFirst({
+            where: {
+                owner_id: user_id
+            }
+        });
+
+        if (!templateDocument) {
+            templateDocument = await prisma.templateDocument.create({
+                data: {
+                    owner_id: user_id,
+                }
+            });
+        }
+
+        // Create or find project folder
+        let projectFolder = await prisma.folder.findFirst({
+            where: {
+                template_document_id: templateDocument.template_document_id,
+                project_name: project_name,
+                name: project_name
+            }
+        });
+
+        if (!projectFolder) {
+            projectFolder = await prisma.folder.create({
+                data: {
+                    name: project_name,
+                    project_name: project_name,
+                    template_document_id: templateDocument.template_document_id,
+                    file_type: 'FOLDER'
+                }
+            });
+        }
+
+        // Create task subfolder
+        const taskFolderName = `Task ${task_id}`;
+        let taskFolder = await prisma.folder.findFirst({
+            where: {
+                template_document_id: templateDocument.template_document_id,
+                parent_id: projectFolder.folder_id,
+                name: taskFolderName
+            }
+        });
+
+        if (!taskFolder) {
+            taskFolder = await prisma.folder.create({
+                data: {
+                    name: taskFolderName,
+                    parent_id: projectFolder.folder_id,
+                    project_name: project_name,
+                    template_document_id: templateDocument.template_document_id,
+                    file_type: 'FOLDER'
+                }
+            });
+        }
+
+        // Save the file
+        const templateFile = await prisma.file.create({
+            data: {
+                name: original_filename || file.originalname,
+                size: file.size,
+                type: file.mimetype,
+                path: cloudRes.url,
+                folder_id: taskFolder.folder_id,
+                template_document_id: templateDocument.template_document_id,
+                file_type: 'FILE'
+            }
+        });
+
+        res.status(201).json({
+            success: true,
+            file: templateFile,
+            message: "Document saved as template successfully"
+        });
+    } catch (error) {
+        console.error('Error saving document as template:', error);
+        return next(new ErrorHandler(`Failed to save document as template: ${error.message}`, 500));
+    }
+});
+
 // Create template folder
 export const createTemplateFolder = catchAsyncError(async (req, res, next) => {
     const { templateId } = req.params;

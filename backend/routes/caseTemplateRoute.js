@@ -10,7 +10,9 @@ import {
     createTemplateFolder,
     useTemplateForProject,
     getTemplateCategories,
-    getTemplateStats
+    getTemplateStats,
+    saveDocumentAsTemplate,
+    getTemplatesByTaskId
 } from "../controllers/caseTemplateController.js";
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import singleUpload, { multipleUpload } from "../middlewares/multerMiddleware.js";
@@ -59,5 +61,15 @@ router
 router
     .route("/:templateId/use")
     .post(authMiddleware, useTemplateForProject);
+
+// Save edited document as template
+router
+    .route("/save-document")
+    .post(authMiddleware, singleUpload, saveDocumentAsTemplate);
+
+// Get templates by task ID
+router
+    .route("/by-task/:taskId")
+    .get(authMiddleware, getTemplatesByTaskId);
 
 export default router;

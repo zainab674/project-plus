@@ -1446,16 +1446,28 @@ export const getFolderTreeByTemplateDocument = catchAsyncError(async (req, res, 
     // Build where clause for folder filtering
     const whereClause = { template_document_id: String(template_document_id) };
     
-    // If phase is provided, filter folders by phase name
+    // If phase is provided, first try to get folders for that specific phase
     if (phase) {
         whereClause.phase_name = phase;
     }
 
-    // Fetch all folders and files for that template
-    const folders = await prisma.folder.findMany({
+    // Fetch folders for the specific phase (if phase is provided)
+    let folders = await prisma.folder.findMany({
         where: whereClause,
         include: { files: true }
     });
+
+    let showingAllFolders = false;
+
+    // If no folders found for the specific phase, show all folders instead
+    if (phase && folders.length === 0) {
+        const allFoldersWhereClause = { template_document_id: String(template_document_id) };
+        folders = await prisma.folder.findMany({
+            where: allFoldersWhereClause,
+            include: { files: true }
+        });
+        showingAllFolders = true;
+    }
 
     // Convert list to map for easy parent-child lookup
     const folderMap = new Map();
@@ -1477,7 +1489,9 @@ export const getFolderTreeByTemplateDocument = catchAsyncError(async (req, res, 
 
     res.status(200).json({
         success: true,
-        folders: rootFolders
+        folders: rootFolders,
+        showingAllFolders: showingAllFolders, // Indicates if we fell back to showing all folders
+        requestedPhase: phase || null
     });
 });
 

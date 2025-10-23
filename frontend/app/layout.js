@@ -5,10 +5,14 @@ import 'react-toastify/dist/ReactToastify.css';
 import { UserProvider } from "@/providers/UserProvider";
 import { EmailNotificationProvider } from "@/providers/EmailNotificationProvider";
 import { TimerProvider } from "@/providers/TimerProvider";
+import { DashboardFilterProvider } from "@/providers/DashboardFilterProvider";
 import RoleSelectionWrapper from "@/components/RoleSelectionWrapper";
 import TimerBanner from "@/components/TimerBanner";
 import { Suspense } from "react";
 import ConditionalAIChatbot from "@/components/ConditionalAIChatbot";
+import QuickActionsBar from "@/components/QuickActionsBar";
+import { QuickActions } from "@/components/quickActions";
+import TopNavigation from "@/components/TopNavigation";
 
 export const metadata = {
   title: "flexywexy.com",
@@ -23,11 +27,20 @@ export default function RootLayout({ children }) {
           <UserProvider>
             <TimerProvider>
               <EmailNotificationProvider>
-                <RoleSelectionWrapper>
-                  <TimerBanner />
-                  {children}
-                  <ConditionalAIChatbot />
-                </RoleSelectionWrapper>
+                <DashboardFilterProvider>
+                  <RoleSelectionWrapper>
+                    {/* <QuickActionsBar /> */}
+
+                    <QuickActions>
+                      <TimerBanner />
+                      <div className="">
+                        {children}
+                      </div>
+                      <ConditionalAIChatbot />
+                    </QuickActions>
+
+                  </RoleSelectionWrapper>
+                </DashboardFilterProvider>
               </EmailNotificationProvider>
             </TimerProvider>
           </UserProvider>

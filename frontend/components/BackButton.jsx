@@ -4,7 +4,6 @@ import { ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 const BackButton = ({ 
-  destination = '/dashboard', 
   label = 'Back',
   className = '',
   variant = 'outline',
@@ -13,7 +12,7 @@ const BackButton = ({
   const router = useRouter()
 
   const handleBack = () => {
-    router.push(destination)
+    router.back()
   }
 
   return (

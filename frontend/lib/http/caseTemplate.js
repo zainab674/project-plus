@@ -66,3 +66,17 @@ export const getTemplateStatsRequest = async () => {
 export const testDatabaseConnectionRequest = async () => {
     return api.get('/case-templates/test-db');
 };
+
+// Save edited document as template with task and project context
+export const saveDocumentAsTemplateRequest = async (formData) => {
+    return api.post('/case-templates/save-document', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+};
+
+// Get templates by task ID
+export const getTemplatesByTaskIdRequest = async (taskId) => {
+    return api.get(`/case-templates/by-task/${taskId}`);
+};

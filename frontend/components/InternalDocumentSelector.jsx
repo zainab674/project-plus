@@ -19,6 +19,7 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [filteredDocuments, setFilteredDocuments] = useState([])
+  const [showingAllFolders, setShowingAllFolders] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -51,6 +52,7 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
       if (response.data.success) {
         setDocuments(response.data.folders)
         setFilteredDocuments(response.data.folders)
+        setShowingAllFolders(response.data.showingAllFolders || false)
       }
     } catch (error) {
       toast.error('Failed to fetch documents')
@@ -209,7 +211,11 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
               Select Internal Document
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              {phase ? `Documents for phase: ${phase}` : 'Choose from your existing documents'}
+              {phase ? (
+                showingAllFolders ? 
+                  `No documents found for phase "${phase}". Showing all available documents:` :
+                  `Documents for phase: ${phase}`
+              ) : 'Choose from your existing documents'}
             </p>
           </div>
           <button

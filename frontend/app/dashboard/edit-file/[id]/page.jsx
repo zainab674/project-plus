@@ -5,16 +5,18 @@ import { uploadSignRequest } from '@/lib/http/client';
 import { toast } from 'react-toastify';
 import { Button } from '@/components/Button';
 import { sendToLawyerRequest, updateFileRequest } from '@/lib/http/project';
+import { saveDocumentAsTemplateRequest } from '@/lib/http/caseTemplate';
 
 
 
 const page = ({ params, searchParams }) => {
     const { id } = use(params);
-    const { file, type } = use(searchParams);
+    const { file, type, task_id, project_name, filename } = use(searchParams);
     const viewerRef = useRef(null);
     const instanceRef = useRef(null);
     const alreadyRef = useRef(false);
     const [loading,setLoading] = useState(false);
+    const [isTemplateMode, setIsTemplateMode] = useState(!!task_id && !!project_name);
 
 
     useEffect(() => {
@@ -105,6 +107,39 @@ const page = ({ params, searchParams }) => {
         HandleSendToLawyer()
         handleSaveAndUpload()
       };
+
+    const handleSaveAsTemplate = async () => {
+        const instance = instanceRef.current;
+        if (!instance) return;
+      
+        const docViewer = instance.Core.documentViewer;
+        const annotManager = instance.Core.annotationManager;
+        const doc = docViewer.getDocument();
+      
+        try {
+          // Export all annotations (text, signature, etc.)
+          const xfdfString = await annotManager.exportAnnotations();
+      
+          const fileData = await doc.getFileData({
+            xfdfString, 
+          });
+      
+          const blob = new Blob([fileData], { type: 'application/pdf' });
+          const formData = new FormData();
+          formData.append('file', blob, filename || 'edited-document.pdf');
+          formData.append('task_id', task_id);
+          formData.append('project_name', project_name);
+          formData.append('original_filename', filename || 'document');
+      
+          setLoading(true);
+          const res = await saveDocumentAsTemplateRequest(formData);
+          toast.success('Document saved as template successfully!');
+        } catch (error) {
+          toast.error(error?.response?.data?.message || error.message);
+        } finally {
+          setLoading(false);
+        }
+    };
       
 
 
@@ -115,6 +150,11 @@ const page = ({ params, searchParams }) => {
                 <Button className={`bg-blue-500 text-white hover:bg-blue-600`} disabled={loading} isLoading={loading} onClick={handleSaveAndUpload}>Save</Button>
                 <Button className={`bg-blue-500 text-white hover:bg-blue-600`} disabled={loading} isLoading={loading} onClick={HandleSendToLawyer}>Send To Lawyer</Button>
                 <Button className={`bg-blue-500 text-white hover:bg-blue-600`} disabled={loading} isLoading={loading} onClick={handleBoth}>Send To Lawyer And Save</Button>
+                {isTemplateMode && (
+                    <Button className={`bg-purple-500 text-white hover:bg-purple-600`} disabled={loading} isLoading={loading} onClick={handleSaveAsTemplate}>
+                        Save in Template
+                    </Button>
+                )}
             </div>
         </main>
     )

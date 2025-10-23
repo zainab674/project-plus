@@ -115,7 +115,9 @@ import {
     Bell,
     BellOff,
     GitBranch,
-    GitCompare
+    GitCompare,
+    PanelLeft,
+    PanelRight
 } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
@@ -153,9 +155,12 @@ import { formatEmailBody } from './formatEmail';
 import InternalDocumentSelector from './InternalDocumentSelector';
 
 
-const QuickActions = () => {
+const QuickActions = ({ children }) => {
     const router = useRouter();
     const { user, loadUserWithProjects } = useUser();
+
+    // State for sidebar/topbar toggle
+    const [isSidebarMode, setIsSidebarMode] = useState(false);
 
     // Simple date formatting function to replace moment
     const formatTime = (dateString) => {
@@ -189,14 +194,14 @@ const QuickActions = () => {
         { name: 'TimeLine', icon: Clock, route: '/timeline', color: 'bg-orange-200' },
         // { name: 'Case Timeline', icon: Clock, route: '', color: 'bg-blue-200', action: openCaseTimelineManagement },
         { name: 'Meeting', icon: Calendar, route: '/dashboard/meeting', color: 'bg-pink-200' },
-        { name: 'Schedule Meeting', icon: Calendar, route: '/dashboard/schedule-meet', color: 'bg-indigo-200' },
+        { name: 'ScheduleMeeting', icon: Calendar, route: '/dashboard/schedule-meet', color: 'bg-indigo-200' },
         { name: 'Mail', icon: Mail, route: '/mail', color: 'bg-red-200' },
         { name: 'Chat', icon: MessageCircle, route: '', color: 'bg-yellow-200' },
         { name: 'Team', icon: Users, route: '/dashboard/team', color: 'bg-emerald-200' },
         { name: 'TemplateDocs', icon: FileText, route: '/dashboard/template-documents', color: 'bg-indigo-200' },
-        { name: 'Compare Docs', icon: GitCompare, route: '/document-comparison', color: 'bg-violet-200' },
+        { name: 'CompareDocs', icon: GitCompare, route: '/document-comparison', color: 'bg-violet-200' },
         { name: 'Flowchart', icon: GitBranch, route: '/dashboard/flowchart', color: 'bg-cyan-200' },
-        { name: 'Phone System', icon: Phone, route: '/dashboard/phone', color: 'bg-teal-200' },
+        { name: 'Phone', icon: Phone, route: '/dashboard/phone', color: 'bg-teal-200' },
         // { name: 'My Files', icon: FileText, route: `/dashboard/clients/${user?.user_id}`, color: 'bg-indigo-200' },
         // { name: 'Request Signature', icon: FileSignature, route: '', color: 'FileSignature', action: openSignatureModal },
         { name: 'InviteBiller', icon: DollarSign, route: '', color: 'bg-green-200', action: openBillerModal },
@@ -1653,40 +1658,100 @@ const QuickActions = () => {
 
 
 
-    return (
-        <>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 ">
-                <div className="flex gap-1 items-center justify-center mx-auto overflow-x-auto">
-                    {quickActions.map((action, index) => {
-                        const Icon = action.icon;
-
-                        return (
-                            <div key={index} className="relative">
-                                <button
-                                    onClick={() => handleActionClick(action)}
-                                    className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 group"
-                                >
-                                    <div className={`w-12 h-12 ${action.color} rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform duration-200`}>
-                                        <Icon className="w-6 h-6 text-gray-500" />
-                                    </div>
-                                    <span className="text-sm font-medium text-gray-700 text-center">{action.name}</span>
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
+    // Quick Actions Component
+    const QuickActionsContent = () => (
+        <div className={`bg-white ${isSidebarMode ? 'h-full p-4' : 'shadow-sm border border-gray-200 rounded-lg p-8'}`}>
+            {/* Toggle Button */}
+            <div className={`${isSidebarMode ? 'mb-4 mt-16' : 'mb-4 flex justify-end'}`}>
+                <button
+                    onClick={() => setIsSidebarMode(!isSidebarMode)}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 text-sm font-medium text-gray-700"
+                    title={isSidebarMode ? "Switch to horizontal layout" : "Switch to vertical layout"}
+                >
+                    {isSidebarMode ? (
+                        <>
+                            <PanelRight className="w-4 h-4" />
+                            Horizontal
+                        </>
+                    ) : (
+                        <>
+                            <PanelLeft className="w-4 h-4" />
+                            Vertical
+                        </>
+                    )}
+                </button>
             </div>
 
-            {/* Modals */}
-            <CaseModal isOpen={isCaseModalOpen} onClose={closeCasesModal} />
-            <ChatModal isOpen={isChatModalOpen} onClose={closeChatModal} />
-            <MailModal isOpen={isMailModalOpen} onClose={closeMailModal} />
-            <MeetingModal isOpen={isMeetingModalOpen} onClose={closeMeetingModal} />
-            <TemplateModal isOpen={isTemplateModalOpen} onClose={closeTemplateModal} />
-            <TimelineModal isOpen={isTimelineModalOpen} onClose={closeTimelineModal} />
+            {/* Quick Actions List */}
+            <div className={`${isSidebarMode 
+                ? 'flex flex-col gap-0 h-[calc(100vh-180px)] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100' 
+                : 'flex gap-0 items-center justify-center mx-auto overflow-x-auto'
+            }`}>
+                {quickActions.map((action, index) => {
+                    const Icon = action.icon;
 
-            <BillerModal isOpen={isBillerModalOpen} onClose={closeBillerModal} />
-            <AddTaskModal open={isAddTaskModalOpen} onClose={closeAddTaskModal} />
+                    return (
+                        <div key={index} className="relative">
+                            <button
+                                onClick={() => handleActionClick(action)}
+                                className={`${isSidebarMode 
+                                    ? 'flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200 group w-full text-left' 
+                                    : 'flex flex-col items-center p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 group'
+                                }`}
+                            >
+                                <div className={`${isSidebarMode 
+                                    ? 'w-10 h-10' 
+                                    : 'w-12 h-12'
+                                } ${action.color} rounded-lg flex items-center justify-center ${isSidebarMode ? 'flex-shrink-0' : 'mb-2'} group-hover:scale-110 transition-transform duration-200`}>
+                                    <Icon className={`${isSidebarMode ? 'w-5 h-5' : 'w-6 h-6'} text-gray-500`} />
+                                </div>
+                                <span className={`${isSidebarMode 
+                                    ? 'text-sm font-medium text-gray-700' 
+                                    : 'text-sm font-medium text-gray-700 text-center'
+                                }`}>
+                                    {action.name}
+                                </span>
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
+    // If sidebar mode, return sidebar layout with children
+    if (isSidebarMode) {
+        return (
+            <>
+                <div className="fixed inset-0 flex bg-gray-50">
+                    {/* Left Sidebar */}
+                    <div className="w-64 bg-white shadow-lg border-r border-gray-200 flex-shrink-0 z-40">
+                        <QuickActionsContent />
+                    </div>
+                    
+                    {/* Main Content Area */}
+                    <div className="flex-1 overflow-auto bg-white relative">
+                        {children}
+                    </div>
+                </div>
+                
+                {/* Modals */}
+                <CaseModal isOpen={isCaseModalOpen} onClose={closeCasesModal} />
+                <ChatModal isOpen={isChatModalOpen} onClose={closeChatModal} />
+                <MailModal isOpen={isMailModalOpen} onClose={closeMailModal} />
+                <MeetingModal isOpen={isMeetingModalOpen} onClose={closeMeetingModal} />
+                <TemplateModal isOpen={isTemplateModalOpen} onClose={closeTemplateModal} />
+                <TimelineModal isOpen={isTimelineModalOpen} onClose={closeTimelineModal} />
+
+            </>
+        );
+    }
+
+    // If horizontal mode, return normal layout
+    return (
+        <>
+            <QuickActionsContent />
+            {children}
 
             {/* Timeline Cases Modal */}
             {isTimelineCasesModalOpen && (

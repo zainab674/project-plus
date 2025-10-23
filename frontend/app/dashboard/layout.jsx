@@ -24,9 +24,9 @@ const layout = ({ children }) => {
                 <div className="">
                     {/* <Sibebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} /> */}
                     <div className="">
-                        {/* Back Button - positioned at top left */}
+                        {/* Back Button - positioned at top left with proper spacing for sidebar */}
                         {showBackButton && (
-                            <div className="fixed top-4 left-4 z-50">
+                            <div className="fixed top-0 left-4 z-50 p-4">
                                 <BackButton />
                             </div>
                         )}

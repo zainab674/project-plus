@@ -168,6 +168,11 @@ const ProfilePage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
+            {/* Back Button - positioned at top left with no top margin */}
+            <div className="fixed top-0 left-0 z-50 p-4">
+                <BackButton />
+            </div>
+            
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Header */}
                 <div className="mb-8">
@@ -176,7 +181,6 @@ const ProfilePage = () => {
                             <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile</h1>
                             <p className="text-gray-600">Manage your account information and settings</p>
                         </div>
-                        <BackButton />
                     </div>
                 </div>
 

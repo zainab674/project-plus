@@ -409,6 +409,11 @@ const AdminPage = () => {
 
     return (
         <div className="min-h-screen bg-gray-50">
+            {/* Back Button - positioned at top left with no top margin */}
+            <div className="fixed top-0 left-0 z-50 p-4">
+                <BackButton />
+            </div>
+            
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header */}
                 <div className="mb-8">
@@ -418,7 +423,6 @@ const AdminPage = () => {
                             <p className="text-gray-600">Manage user registration requests and system access</p>
                         </div>
                         <div className="flex items-center space-x-3">
-                            <BackButton />
                             <div className="flex items-center space-x-2 bg-blue-50 px-3 py-2 rounded-lg">
                                 <Shield className="h-5 w-5 text-blue-600" />
                                 <span className="text-sm font-medium text-blue-700">Administrator</span>

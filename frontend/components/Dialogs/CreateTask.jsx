@@ -28,7 +28,7 @@ const JoditEditor = dynamic(
 )
 
 
-const CreateTask = ({ project, onClose, prefillData = {} }) => {
+const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
     const [selectedMember, setSelectedMember] = useState([]);
     const [isDisabled, setIsDiabled] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -64,7 +64,7 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
         setFormdata(prev => ({
             ...prev,
             project_id: project?.project_id,
-            name: `Task ${project?.Tasks.length + 1}`,
+            name: project?.Tasks ? `Task ${project.Tasks.length + 1}` : "New Task",
             phase: hasPhases ? project.phases[0] : "" // Set first phase as default if phases exist
         }));
     }, [project, hasPhases]);
@@ -116,6 +116,12 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
         setIsLoading(true);
         try {
             console.log('🔍 CreateTask: Creating task with data:', { formdata, selectedMember, project, selectedFile });
+            
+            // Check if project is available
+            if (!project || !project.project_id) {
+                toast.error('No project selected. Please select a project first.');
+                return;
+            }
             
             // Create FormData for file upload
             const formData = new FormData();
@@ -191,6 +197,8 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
     const config = useMemo(() => ({
         placeholder: "Add description",
     }), []);
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
