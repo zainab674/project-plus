@@ -1737,10 +1737,11 @@ const QuickActions = ({ children }) => {
                 
                 {/* Modals */}
                 <CaseModal isOpen={isCaseModalOpen} onClose={closeCasesModal} />
-                <ChatModal isOpen={isChatModalOpen} onClose={closeChatModal} />
-                <MailModal isOpen={isMailModalOpen} onClose={closeMailModal} />
-                <MeetingModal isOpen={isMeetingModalOpen} onClose={closeMeetingModal} />
-                <TemplateModal isOpen={isTemplateModalOpen} onClose={closeTemplateModal} />
+                <AddTaskModal open={isAddTaskModalOpen} onClose={closeAddTaskModal} />
+                <ChatModal isOpen={isChatModalOpen} onClose={closeChatModal} /> 
+                <MailModal isOpen={isMailModalOpen} onClose={closeMailModal} /> 
+                <MeetingModal isOpen={isMeetingModalOpen} onClose={closeMeetingModal} />                                                                        
+                <TemplateModal isOpen={isTemplateModalOpen} onClose={closeTemplateModal} />                                                                     
                 <TimelineModal isOpen={isTimelineModalOpen} onClose={closeTimelineModal} />
 
             </>
@@ -3213,7 +3214,7 @@ const QuickActions = ({ children }) => {
 
             {/* Modals for horizontal view */}
             <CaseModal isOpen={isCaseModalOpen} onClose={closeCasesModal} />
-            <AddTaskModal isOpen={isAddTaskModalOpen} onClose={closeAddTaskModal} />
+            <AddTaskModal open={isAddTaskModalOpen} onClose={closeAddTaskModal} />
         </>
     );
 };

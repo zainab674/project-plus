@@ -693,7 +693,7 @@ const EditedTemplatesCard = ({ task, templates, loadingTemplates }) => {
             return;
         }
         
-        const editUrl = `/dashboard/edit-file/${template.file_id}?file=${encodeURIComponent(template.path)}&task_id=${task.task_id}&project_name=${encodeURIComponent(task.project?.name || 'Unknown Project')}&filename=${encodeURIComponent(template.name)}`
+        const editUrl = `/dashboard/edit-file/${template.file_id}?file=${encodeURIComponent(template.path)}&task_id=${task.task_id}&project_name=${encodeURIComponent(project?.name || 'Unknown Project')}&filename=${encodeURIComponent(template.name)}`
         window.open(editUrl, '_blank')
     }
 
