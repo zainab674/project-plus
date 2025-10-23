@@ -3210,6 +3210,10 @@ const QuickActions = ({ children }) => {
                 onSelect={handleChatInternalDocSelect}
                 selectedFile={chatSelectedInternalDoc}
             />
+
+            {/* Modals for horizontal view */}
+            <CaseModal isOpen={isCaseModalOpen} onClose={closeCasesModal} />
+            <AddTaskModal isOpen={isAddTaskModalOpen} onClose={closeAddTaskModal} />
         </>
     );
 };
