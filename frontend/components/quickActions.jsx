@@ -1660,9 +1660,9 @@ const QuickActions = ({ children }) => {
 
     // Quick Actions Component
     const QuickActionsContent = () => (
-        <div className={`bg-white ${isSidebarMode ? 'h-full p-4' : 'shadow-sm border border-gray-200 rounded-lg p-8'}`}>
+        <div className={`bg-white ${isSidebarMode ? 'h-full p-1' : 'shadow-sm border border-gray-200 rounded-lg p-8'}`}>
             {/* Toggle Button */}
-            <div className={`${isSidebarMode ? 'mb-4 mt-16' : 'mb-4 flex justify-end'}`}>
+            <div className={`${isSidebarMode ? 'mb-4 mt-8 ml-40' : 'mb-4 flex justify-end'}`}>
                 <button
                     onClick={() => setIsSidebarMode(!isSidebarMode)}
                     className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 text-sm font-medium text-gray-700"
@@ -1671,7 +1671,7 @@ const QuickActions = ({ children }) => {
                     {isSidebarMode ? (
                         <>
                             <PanelRight className="w-4 h-4" />
-                            Horizontal
+                            
                         </>
                     ) : (
                         <>
@@ -1725,7 +1725,7 @@ const QuickActions = ({ children }) => {
             <>
                 <div className="fixed inset-0 flex bg-gray-50">
                     {/* Left Sidebar */}
-                    <div className="w-64 bg-white shadow-lg border-r border-gray-200 flex-shrink-0 z-40">
+                    <div className="w-56 bg-white shadow-lg border-r border-gray-200 flex-shrink-0 z-40">
                         <QuickActionsContent />
                     </div>
                     
