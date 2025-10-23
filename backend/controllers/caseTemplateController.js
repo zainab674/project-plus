@@ -1095,7 +1095,9 @@ export const saveDocumentAsTemplate = catchAsyncError(async (req, res, next) => 
                 path: cloudRes.url,
                 folder_id: taskFolder.folder_id,
                 template_document_id: templateDocument.template_document_id,
-                file_type: 'FILE'
+                file_type: 'FILE',
+                task_id: parseInt(task_id),
+                project_name: project_name
             }
         });
 

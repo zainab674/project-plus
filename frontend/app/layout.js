@@ -13,6 +13,7 @@ import ConditionalAIChatbot from "@/components/ConditionalAIChatbot";
 import QuickActionsBar from "@/components/QuickActionsBar";
 import { QuickActions } from "@/components/quickActions";
 import TopNavigation from "@/components/TopNavigation";
+import ConditionalQuickActions from "@/components/ConditionalQuickActions";
 
 export const metadata = {
   title: "flexywexy.com",
@@ -31,13 +32,13 @@ export default function RootLayout({ children }) {
                   <RoleSelectionWrapper>
                     {/* <QuickActionsBar /> */}
 
-                    <QuickActions>
+                    <ConditionalQuickActions>
                       <TimerBanner />
                       <div className="">
                         {children}
                       </div>
                       <ConditionalAIChatbot />
-                    </QuickActions>
+                    </ConditionalQuickActions>
 
                   </RoleSelectionWrapper>
                 </DashboardFilterProvider>

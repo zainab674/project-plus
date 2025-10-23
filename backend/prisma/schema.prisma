@@ -228,6 +228,10 @@ model File {
   template_document_id String
   templateDocument     TemplateDocument @relation(fields: [template_document_id], references: [template_document_id], onDelete: Cascade)
 
+  // Task and project context for edited documents
+  task_id      Int?
+  project_name String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
