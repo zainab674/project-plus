@@ -133,7 +133,7 @@ const page = ({ params, searchParams }) => {
       
           setLoading(true);
           const res = await saveDocumentAsTemplateRequest(formData);
-          toast.success('Document saved as template successfully!');
+          toast.success(res.data.message || 'Document saved as template successfully!');
         } catch (error) {
           toast.error(error?.response?.data?.message || error.message);
         } finally {

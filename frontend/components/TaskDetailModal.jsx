@@ -687,6 +687,12 @@ const EditedTemplatesCard = ({ task, templates, loadingTemplates }) => {
     }
 
     const handleEditTemplate = (template) => {
+        // Ensure we have the required data for editing
+        if (!template.file_id) {
+            console.error('Template file_id is missing:', template);
+            return;
+        }
+        
         const editUrl = `/dashboard/edit-file/${template.file_id}?file=${encodeURIComponent(template.path)}&task_id=${task.task_id}&project_name=${encodeURIComponent(task.project?.name || 'Unknown Project')}&filename=${encodeURIComponent(template.name)}`
         window.open(editUrl, '_blank')
     }
@@ -715,39 +721,45 @@ const EditedTemplatesCard = ({ task, templates, loadingTemplates }) => {
 
                 {showTemplates && (
                     <div className="space-y-3 max-h-48 overflow-y-auto">
-                        {templates.map((template, index) => (
-                            <div key={index} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                                <div className="flex items-start justify-between mb-2">
-                                    <div className="flex items-center gap-2 flex-1">
-                                        <span className="text-lg">{getFileIcon(template.type)}</span>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs font-medium text-purple-700 truncate">
-                                                {template.name}
-                                            </p>
-                                            <p className="text-xs text-purple-600">
-                                                {formatFileSize(template.size)} • {moment(template.createdAt).format('MMM DD, YYYY')}
-                                            </p>
+                        {templates.map((template, index) => {
+                            // Debug logging to check template structure
+                            console.log('Template data:', template);
+                            
+                            return (
+                                <div key={template.file_id || index} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                                    <div className="flex items-start justify-between mb-2">
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <span className="text-lg">{getFileIcon(template.type)}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-medium text-purple-700 truncate">
+                                                    {template.name}
+                                                </p>
+                                                <p className="text-xs text-purple-600">
+                                                    {formatFileSize(template.size)} • {moment(template.createdAt || template.created_at).format('MMM DD, YYYY')}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => handleViewTemplate(template)}
+                                                className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
+                                            >
+                                                <Eye className="w-3 h-3" />
+                                                View
+                                            </button>
+                                            <button
+                                                onClick={() => handleEditTemplate(template)}
+                                                className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium transition-colors"
+                                                title="Edit this template"
+                                            >
+                                                <PenIcon className="w-3 h-3" />
+                                                Edit
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => handleViewTemplate(template)}
-                                            className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
-                                        >
-                                            <Eye className="w-3 h-3" />
-                                            View
-                                        </button>
-                                        <button
-                                            onClick={() => handleEditTemplate(template)}
-                                            className="flex items-center gap-1 px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium transition-colors"
-                                        >
-                                            <PenIcon className="w-3 h-3" />
-                                            Edit
-                                        </button>
-                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

@@ -1086,25 +1086,55 @@ export const saveDocumentAsTemplate = catchAsyncError(async (req, res, next) => 
             });
         }
 
-        // Save the file
-        const templateFile = await prisma.file.create({
-            data: {
-                name: original_filename || file.originalname,
-                size: file.size,
-                type: file.mimetype,
-                path: cloudRes.url,
+        // Check if a file with the same name already exists in this task folder
+        const existingFile = await prisma.file.findFirst({
+            where: {
                 folder_id: taskFolder.folder_id,
-                template_document_id: templateDocument.template_document_id,
-                file_type: 'FILE',
-                task_id: parseInt(task_id),
-                project_name: project_name
+                name: original_filename || file.originalname,
+                template_document_id: templateDocument.template_document_id
             }
         });
+
+        let templateFile;
+        
+        if (existingFile) {
+            // Update the existing file with new content
+            templateFile = await prisma.file.update({
+                where: {
+                    file_id: existingFile.file_id
+                },
+                data: {
+                    size: file.size,
+                    type: file.mimetype,
+                    path: cloudRes.url,
+                    updated_at: new Date()
+                }
+            });
+            console.log(`Updated existing file: ${templateFile.name} in Task ${task_id}`);
+        } else {
+            // Create a new file if it doesn't exist
+            templateFile = await prisma.file.create({
+                data: {
+                    name: original_filename || file.originalname,
+                    size: file.size,
+                    type: file.mimetype,
+                    path: cloudRes.url,
+                    folder_id: taskFolder.folder_id,
+                    template_document_id: templateDocument.template_document_id,
+                    file_type: 'FILE',
+                    task_id: parseInt(task_id),
+                    project_name: project_name
+                }
+            });
+            console.log(`Created new file: ${templateFile.name} in Task ${task_id}`);
+        }
 
         res.status(201).json({
             success: true,
             file: templateFile,
-            message: "Document saved as template successfully"
+            message: existingFile ? 
+                "Document updated in template successfully" : 
+                "Document saved as template successfully"
         });
     } catch (error) {
         console.error('Error saving document as template:', error);
