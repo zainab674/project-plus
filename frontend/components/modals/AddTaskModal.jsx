@@ -290,7 +290,11 @@ const AddTaskModal = ({ open, onClose }) => {
                             <FileIcon className="h-5 w-5 text-black" />
                             <span className='text-black text-sm font-medium'>Project</span>
                         </div>
-                        <Select onValueChange={(value) => setSelectedProject(value)} value={selectedProject} disabled={projectsLoading}>
+                        <Select onValueChange={(value) => {
+                            if (value !== "no-projects") {
+                                setSelectedProject(value);
+                            }
+                        }} value={selectedProject} disabled={projectsLoading}>
                             <SelectTrigger className="w-full focus-visible:ring-0 focus-visible:ring-transparent outline-none bg-white border-primary text-black">
                                 <SelectValue placeholder={projectsLoading ? "Loading projects..." : "Select a project"} />
                             </SelectTrigger>
@@ -304,7 +308,7 @@ const AddTaskModal = ({ open, onClose }) => {
                                         </SelectItem>
                                     ))
                                 ) : (
-                                    <SelectItem value="" disabled>
+                                    <SelectItem value="no-projects" disabled>
                                         <span className='text-gray-500'>No projects available</span>
                                     </SelectItem>
                                 )}
