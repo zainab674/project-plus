@@ -11,7 +11,6 @@ export class DirectTranscriptionService {
     // Handle incoming transcription data directly
     async handleTranscription(transcriptionData) {
         try {
-            console.log('📝 Processing transcription:', transcriptionData);
             
             // Save transcription directly to database
             await prisma.meetingTranscibtion.create({
@@ -23,10 +22,8 @@ export class DirectTranscriptionService {
                 }
             });
 
-            console.log('✅ Transcription saved to database');
             return { success: true };
         } catch (error) {
-            console.error('❌ Error saving transcription:', error);
             return { success: false, error: error.message };
         }
     }
@@ -42,9 +39,7 @@ export class DirectTranscriptionService {
                 }
             });
             this.isConnected = true;
-            console.log('🎯 Meeting status updated to PROCESSING');
         } catch (error) {
-            console.error('❌ Error updating meeting status:', error);
         }
     }
 
@@ -72,9 +67,7 @@ export class DirectTranscriptionService {
             });
 
             this.isConnected = false;
-            console.log('🏁 Meeting completed, duration:', duration, 'seconds');
         } catch (error) {
-            console.error('❌ Error ending meeting:', error);
         }
     }
 
@@ -97,7 +90,6 @@ export class DirectTranscriptionService {
 
             return transcriptions;
         } catch (error) {
-            console.error('❌ Error fetching transcriptions:', error);
             return [];
         }
     }
@@ -105,19 +97,15 @@ export class DirectTranscriptionService {
 
 // Socket.IO handler for direct transcription
 export const initDirectTranscriptionServer = (io) => {
-    console.log('🎤 Initializing Direct Transcription Server...');
 
     io.on("connection", async (socket) => {
         const config = socket.handshake.query;
         
         if (!config.user_id || !config.meeting_id) {
-            console.log('❌ Missing user_id or meeting_id, disconnecting');
             socket.disconnect();
             return;
         }
 
-        console.log(`🔌 Transcription connection: User ${config.user_id} for Meeting ${config.meeting_id}`);
-        
         // Create transcription service instance
         const transcriptionService = new DirectTranscriptionService(
             config.meeting_id, 
@@ -129,7 +117,6 @@ export const initDirectTranscriptionServer = (io) => {
 
         // Handle transcription data
         socket.on('transcript', async (data) => {
-            console.log('📝 Received transcript:', data);
             const result = await transcriptionService.handleTranscription(data);
             
             // Emit back to all participants in the meeting
@@ -145,7 +132,6 @@ export const initDirectTranscriptionServer = (io) => {
 
         // Handle disconnection
         socket.on('disconnect', async () => {
-            console.log(`👋 User ${config.user_id} disconnected from meeting ${config.meeting_id}`);
             
             // Check if this was the last participant
             const participants = await io.in(`meeting_${config.meeting_id}`).fetchSockets();
@@ -158,7 +144,6 @@ export const initDirectTranscriptionServer = (io) => {
 
         // Handle mute/unmute
         socket.on('mute', (isMuted) => {
-            console.log(`🔇 User ${config.user_id} ${isMuted ? 'muted' : 'unmuted'}`);
             socket.to(`meeting_${config.meeting_id}`).emit('participant_mute', {
                 user_id: config.user_id,
                 muted: isMuted

@@ -73,9 +73,7 @@ const copyTemplateDocumentsToProject = async (template, projectId, userId, proje
         // Copy root files (files not in any folder)
         await copyTemplateFilesToProject(template.files, null, templateDocumentId, userId);
 
-        console.log(`Successfully copied ${template.folders.length} folders and ${template.files.length} root files from template to user ${userId}`);
     } catch (error) {
-        console.error('Error copying template documents to project:', error);
         throw new ErrorHandler(`Failed to copy template documents: ${error.message}`, 500);
     }
 };
@@ -117,7 +115,6 @@ export const testDatabaseConnection = catchAsyncError(async (req, res, next) => 
             caseTemplateTableExists: tableExists[0].exists
         });
     } catch (error) {
-        console.error('Database connection test failed:', error);
         return next(new ErrorHandler(`Database connection failed: ${error.message}`, 500));
     }
 });
@@ -349,7 +346,7 @@ export const uploadFilesToCloudinary = async (files) => {
 // Create a new case template with file upload support
 export const createCaseTemplate = catchAsyncError(async (req, res, next) => {
     const user = req.user;
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
 
     // Parse FormData fields
     const name = req.body.name;
@@ -408,7 +405,6 @@ export const createCaseTemplate = catchAsyncError(async (req, res, next) => {
                 
                 // Get folder association for this file
                 const folderId = req.body[`file_${i}_folder_id`] || null;
-                console.log(`Processing file ${i}: ${file.originalname} -> Folder ID: ${folderId}`);
                 
                 uploadedFiles.push({
                     name: file.originalname,
@@ -422,7 +418,6 @@ export const createCaseTemplate = catchAsyncError(async (req, res, next) => {
                 });
                 
             } catch (error) {
-                console.error(`File upload error for "${file.originalname}" at index ${i}:`, error);
                 const errorMessage = error?.message || error?.toString() || 'Unknown error';
                 uploadErrors.push(`File "${file.originalname}" at index ${i} failed to upload: ${errorMessage}`);
             }
@@ -435,14 +430,7 @@ export const createCaseTemplate = catchAsyncError(async (req, res, next) => {
         files = uploadedFiles;
     }
 
-    console.log('Creating template with data:', {
-        name,
-        category,
-        user_id,
-        phases_count: phases.length,
-        documents_count: files.length,
-        folders_count: folders.length
-    });
+       
 
     // Validate files inside folders
     const folderFileValidationErrors = validateFolderFiles(folders, files);
@@ -535,17 +523,13 @@ export const createCaseTemplate = catchAsyncError(async (req, res, next) => {
                 // Find the corresponding folder ID in the created folders
                 let folderId = null;
                 if (file.folder_id) {
-                    console.log(`Looking for folder with ID: ${file.folder_id}`);
                     // First try to find by matching the temporary folder ID to the folder name
                     const originalFolder = folders.find(f => (f.folder_id || f.id || f.temp_id) === file.folder_id);
-                    console.log(`Found original folder:`, originalFolder);
                     if (originalFolder) {
                         const createdFolder = template.folders.find(folder => folder.name === originalFolder.name);
-                        console.log(`Found created folder:`, createdFolder);
                         folderId = createdFolder?.folder_id || null;
                     }
                 }
-                console.log(`Final folder ID for file ${file.name}: ${folderId}`);
 
                 const templateFile = await prisma.caseTemplateFile.create({
                     data: {
@@ -590,15 +574,12 @@ export const createCaseTemplate = catchAsyncError(async (req, res, next) => {
             }
         });
 
-        console.log('Template created successfully:', template.template_id);
-
         res.status(201).json({
             success: true,
             template: completeTemplate,
             message: "Case template created successfully"
         });
     } catch (error) {
-        console.error('Error creating template:', error);
         return next(new ErrorHandler(`Failed to create template: ${error.message}`, 500));
     }
 });
@@ -607,7 +588,7 @@ export const createCaseTemplate = catchAsyncError(async (req, res, next) => {
 export const updateCaseTemplate = catchAsyncError(async (req, res, next) => {
     const { templateId } = req.params;
     const user = req.user;
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
 
     // Parse FormData fields
     const name = req.body.name;
@@ -679,7 +660,6 @@ export const updateCaseTemplate = catchAsyncError(async (req, res, next) => {
                 
                 // Get folder association for this file
                 const folderId = req.body[`file_${i}_folder_id`] || null;
-                console.log(`Processing file ${i}: ${file.originalname} -> Folder ID: ${folderId}`);
                 
                 uploadedFiles.push({
                     name: file.originalname,
@@ -693,7 +673,6 @@ export const updateCaseTemplate = catchAsyncError(async (req, res, next) => {
                 });
                 
             } catch (error) {
-                console.error(`File upload error for "${file.originalname}" at index ${i}:`, error);
                 const errorMessage = error?.message || error?.toString() || 'Unknown error';
                 uploadErrors.push(`File "${file.originalname}" at index ${i} failed to upload: ${errorMessage}`);
             }
@@ -872,7 +851,6 @@ export const updateCaseTemplate = catchAsyncError(async (req, res, next) => {
             message: "Case template updated successfully"
         });
     } catch (error) {
-        console.error('Error updating template:', error);
         return next(new ErrorHandler(`Failed to update template: ${error.message}`, 500));
     }
 });
@@ -882,7 +860,7 @@ export const deleteCaseTemplate = catchAsyncError(async (req, res, next) => {
     const { templateId } = req.params;
     const user = req.user;
 
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
 
     // Check if template exists and belongs to user
     const template = await prisma.caseTemplate.findFirst({
@@ -915,7 +893,7 @@ export const uploadTemplateFile = catchAsyncError(async (req, res, next) => {
     const file = req.file;
     const user = req.user;
 
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
 
     if (!file || !templateId) {
         return next(new ErrorHandler("File and template ID are required", 400));
@@ -971,7 +949,7 @@ export const getTemplatesByTaskId = catchAsyncError(async (req, res, next) => {
     const { taskId } = req.params;
     const user = req.user;
 
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
 
     try {
         // Find the task folder for this task ID
@@ -1008,7 +986,6 @@ export const getTemplatesByTaskId = catchAsyncError(async (req, res, next) => {
             message: "Templates retrieved successfully"
         });
     } catch (error) {
-        console.error('Error fetching templates by task ID:', error);
         return next(new ErrorHandler(`Failed to fetch templates: ${error.message}`, 500));
     }
 });
@@ -1019,7 +996,7 @@ export const saveDocumentAsTemplate = catchAsyncError(async (req, res, next) => 
     const file = req.file;
     const user = req.user;
 
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
 
     if (!file || !task_id || !project_name) {
         return next(new ErrorHandler("File, task_id, and project_name are required", 400));
@@ -1110,7 +1087,6 @@ export const saveDocumentAsTemplate = catchAsyncError(async (req, res, next) => 
                     updated_at: new Date()
                 }
             });
-            console.log(`Updated existing file: ${templateFile.name} in Task ${task_id}`);
         } else {
             // Create a new file if it doesn't exist
             templateFile = await prisma.file.create({
@@ -1126,7 +1102,6 @@ export const saveDocumentAsTemplate = catchAsyncError(async (req, res, next) => 
                     project_name: project_name
                 }
             });
-            console.log(`Created new file: ${templateFile.name} in Task ${task_id}`);
         }
 
         res.status(201).json({
@@ -1137,7 +1112,6 @@ export const saveDocumentAsTemplate = catchAsyncError(async (req, res, next) => 
                 "Document saved as template successfully"
         });
     } catch (error) {
-        console.error('Error saving document as template:', error);
         return next(new ErrorHandler(`Failed to save document as template: ${error.message}`, 500));
     }
 });
@@ -1148,7 +1122,7 @@ export const createTemplateFolder = catchAsyncError(async (req, res, next) => {
     const { name, description, parent_id, order } = req.body;
     const user = req.user;
 
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
 
     if (!name) {
         return next(new ErrorHandler("Folder name is required", 400));
@@ -1187,8 +1161,18 @@ export const createTemplateFolder = catchAsyncError(async (req, res, next) => {
 
 // Use template to create project
 export const useTemplateForProject = catchAsyncError(async (req, res, next) => {
+    // Parse project data from FormData if it exists
+    let projectData = req.body;
+    if (req.body.projectData) {
+        try {
+            projectData = JSON.parse(req.body.projectData);
+        } catch (parseError) {
+            return next(new ErrorHandler('Invalid JSON format for project data', 400));
+        }
+    }
+
     // Validate request body
-    const [err, isValidate] = await validateRequestBody(req.body, useTemplateForProjectSchema);
+    const [err, isValidate] = await validateRequestBody(projectData, useTemplateForProjectSchema);
     if (!isValidate) {
         return next(new ErrorHandler(err, 400));
     }
@@ -1206,10 +1190,45 @@ export const useTemplateForProject = catchAsyncError(async (req, res, next) => {
         status,
         budget,
         selectedTeamMembers
-    } = req.body;
+    } = projectData;
     const user = req.user;
 
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
+
+    // Handle file uploads if any files are provided
+    let uploadedFiles = [];
+    if (req.files && Object.keys(req.files).length > 0) {
+        console.log('📎 Template project - Files received:', Object.keys(req.files).length, 'field(s)');
+        try {
+            // Process all uploaded files and upload to Cloudinary
+            for (const fieldName in req.files) {
+                const files = Array.isArray(req.files[fieldName]) ? req.files[fieldName] : [req.files[fieldName]];
+                
+                for (const file of files) {
+                    if (file && file.buffer) {
+                        console.log(`📤 Template project - Uploading file: ${file.originalname}, size: ${file.size}`);
+                        const cloudRes = await uploadToCloud(file);
+                        console.log(`✅ Template project - File uploaded to Cloudinary: ${cloudRes.url}`);
+                        
+                        // Store file info temporarily to create media records after project creation
+                        uploadedFiles.push({
+                            filename: file.originalname,
+                            file_url: cloudRes.url,
+                            mimeType: file.mimetype,
+                            size: file.size
+                        });
+                    }
+                }
+            }
+            console.log(`✅ Template project - Successfully processed ${uploadedFiles.length} file(s) for upload`);
+        } catch (uploadError) {
+            console.error('❌ Template project - Error uploading files:', uploadError);
+            // Don't fail the project creation if file upload fails
+            // Just log the error and continue
+        }
+    } else {
+        console.log('📎 Template project - No files received in request');
+    }
 
     // Get template with phases, folders, and files
     const template = await prisma.caseTemplate.findFirst({
@@ -1318,6 +1337,42 @@ export const useTemplateForProject = catchAsyncError(async (req, res, next) => {
         }
     }
 
+    // Create media records for uploaded files
+    const createdMediaFiles = [];
+    if (uploadedFiles.length > 0) {
+        console.log(`📝 Creating ${uploadedFiles.length} media record(s) for template project`);
+        for (const fileInfo of uploadedFiles) {
+            try {
+                console.log(`📝 Creating media record for: ${fileInfo.filename}`);
+                        const mediaRecord = await prisma.media.create({
+                            data: {
+                                filename: fileInfo.filename,
+                                file_url: fileInfo.file_url,
+                                mimeType: fileInfo.mimeType,
+                                size: fileInfo.size,
+                                project_id: project.project_id,
+                                user_id: user_id,
+                                task_id: null // null for project-level attachments
+                            }
+                        });
+                
+                console.log(`✅ Media record created: ${mediaRecord.media_id}`);
+                
+                createdMediaFiles.push({
+                    media_id: mediaRecord.media_id,
+                    filename: fileInfo.filename,
+                    file_url: fileInfo.file_url,
+                    mimeType: fileInfo.mimeType,
+                    size: fileInfo.size
+                });
+            } catch (mediaError) {
+                console.error('❌ Error creating media record:', mediaError);
+                // Continue with other files even if one fails
+            }
+        }
+        console.log(`✅ Successfully created ${createdMediaFiles.length} media record(s)`);
+    }
+
     // Increment usage count
     await prisma.caseTemplate.update({
         where: { template_id: templateId },
@@ -1327,7 +1382,10 @@ export const useTemplateForProject = catchAsyncError(async (req, res, next) => {
     res.status(201).json({
         success: true,
         project,
-        message: "Project created from template successfully"
+        uploadedFiles: createdMediaFiles,
+        message: createdMediaFiles.length > 0 
+            ? `Project created from template successfully with ${createdMediaFiles.length} attachment(s)` 
+            : "Project created from template successfully"
     });
 });
 
@@ -1355,7 +1413,7 @@ export const getTemplateCategories = catchAsyncError(async (req, res, next) => {
 // Get template statistics
 export const getTemplateStats = catchAsyncError(async (req, res, next) => {
     const user = req.user;
-    let user_id = user.Role === "TEAM" ? user.leader_id : user.user_id;
+    let user_id = user.user_id;
 
     const stats = await prisma.caseTemplate.aggregate({
         where: {

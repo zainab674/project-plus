@@ -71,9 +71,7 @@ export const register = catchAsyncError(async (req, res, next) => {
     // Send pending notification email
     try {
         await sendPendingNotificationEmail(email, name);
-        console.log(`Pending notification email sent to ${email}`);
     } catch (error) {
-        console.error('Error sending pending notification email:', error);
         // Don't fail the registration process if email fails
     }
 
@@ -115,7 +113,6 @@ export const login = catchAsyncError(async (req, res, next) => {
         return next(new ErrorHandler('Invalid Credentials', 404));
     }
 
-
     await sendOTPOnMail(user, async (OTP, err) => {
         if (err) {
             return next(new ErrorHandler(err, 401));
@@ -128,8 +125,6 @@ export const login = catchAsyncError(async (req, res, next) => {
             }
         });
     })
-
-
 
     res.status(200).json({
         success: true,
@@ -208,7 +203,6 @@ export const verify = catchAsyncError(async (req, res, next) => {
 
 });
 
-
 export const googleLogin = catchAsyncError(async (req, res, next) => {
     const user = req.user;
     const jwttoken = generateJWTToken(user);
@@ -281,7 +275,6 @@ export const updateUser = catchAsyncError(async (req, res, next) => {
     }
 
     const userId = req.user.user_id;
-
 
     // Validate request body to ensure only allowed fields are updated
     const updateData = {};
@@ -400,9 +393,6 @@ export const deleteTeamMember = catchAsyncError(async (req, res, next) => {
     const { team_member_id } = req.params;
     const userId = req.user.user_id;
 
-
-
-
     // Check if the team member exists and belongs to the current user's team
     const teamMember = await prisma.userTeam.findFirst({
         where: {
@@ -464,9 +454,6 @@ export const loadUser = catchAsyncError(async (req, res, next) => {
 export const updateRole = catchAsyncError(async (req, res, next) => {
     const { role } = req.body;
     const userId = req.user.user_id;
-
-
-
 
     // Update user role
     const updatedUser = await prisma.user.update({
@@ -945,7 +932,6 @@ export const joinTeamThroughInvitationPublic = catchAsyncError(async (req, res, 
         // Send OTP to user for authentication
         await sendOTPOnMail(user, async (OTP, err) => {
             if (err) {
-                console.error('Error sending OTP:', err);
                 // Don't fail the request if OTP sending fails
                 return;
             }
@@ -1019,7 +1005,6 @@ export const debugInvitations = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
 export const resendOTP = catchAsyncError(async (req, res, next) => {
     const { email } = req.body;
 
@@ -1063,10 +1048,8 @@ export const resendOTP = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
 export const connectGmail = catchAsyncError(async (req, res, next) => {
     const { connect_mail_password, connect_mail } = req.body;
-
 
     if (!connect_mail || !connect_mail) {
         return next(new ErrorHandler("gmail and app password required", 401));
@@ -1081,7 +1064,6 @@ export const connectGmail = catchAsyncError(async (req, res, next) => {
     const user_id = req.user.user_id;
     const mergeData = `${connect_mail}|${connect_mail_password}`;
     const encryptedData = encrypt(mergeData);
-
 
     // Update user details in the database
     const updatedUser = await prisma.user.update({
@@ -1313,13 +1295,10 @@ export const getUserWithProjects = catchAsyncError(async (req, res, next) => {
 export const forgotPassword = catchAsyncError(async (req, res, next) => {
     const { email } = req.body;
 
-    console.log('🔐 Password reset requested for email:', email);
-
     // Validate request body
     const [err, isValidate] = await validateRequestBody(req.body, ForgotPasswordRequestBodySchema);
 
     if (!isValidate) {
-        console.log('❌ Validation failed:', err);
         return next(new ErrorHandler(JSON.parse(err)[0]?.message, 401));
     }
 
@@ -1329,15 +1308,12 @@ export const forgotPassword = catchAsyncError(async (req, res, next) => {
     });
 
     if (!user) {
-        console.log('❌ User not found for email:', email);
         // Don't reveal if user exists or not for security
         return res.status(200).json({
             success: true,
             message: 'If an account with that email exists, a password reset link has been sent.'
         });
     }
-
-    console.log('✅ User found, generating reset token for:', email);
 
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -1352,24 +1328,19 @@ export const forgotPassword = catchAsyncError(async (req, res, next) => {
                 reset_token_expiry: resetTokenExpiry
             }
         });
-        console.log('✅ Reset token stored in database for:', email);
     } catch (dbError) {
-        console.error('❌ Database error storing reset token:', dbError);
         return next(new ErrorHandler('Failed to process password reset request. Please try again later.', 500));
     }
 
     // Send password reset email
     try {
-        console.log('📧 Attempting to send password reset email to:', email);
         await sendPasswordResetEmail(email, resetToken);
-        console.log('✅ Password reset email sent successfully to:', email);
 
         res.status(200).json({
             success: true,
             message: 'If an account with that email exists, a password reset link has been sent.'
         });
     } catch (emailError) {
-        console.error('❌ Failed to send password reset email:', emailError);
 
         // Remove the reset token if email fails
         try {
@@ -1380,9 +1351,7 @@ export const forgotPassword = catchAsyncError(async (req, res, next) => {
                     reset_token_expiry: null
                 }
             });
-            console.log('✅ Reset token cleaned up after email failure for:', email);
         } catch (cleanupError) {
-            console.error('❌ Failed to cleanup reset token:', cleanupError);
         }
 
         return next(new ErrorHandler('Failed to send password reset email. Please try again later.', 500));

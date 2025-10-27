@@ -151,7 +151,6 @@ const CreateTemplateModal = ({ onClose, onCreateTemplate }) => {
                 formData.append('files', file);
                 // Add folder association from the file-folder map
                 const folderId = fileFolderMap.get(file.name);
-                console.log(`File ${index}: ${file.name} -> Folder ID: ${folderId}`);
                 if (folderId) {
                     formData.append(`file_${index}_folder_id`, folderId);
                 }

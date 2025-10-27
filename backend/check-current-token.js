@@ -10,20 +10,12 @@ async function checkToken() {
     });
     
     if (invitation) {
-      console.log('✅ Token exists in database:');
-      console.log('Token:', invitation.token);
-      console.log('Role:', invitation.role);
-      console.log('Project ID:', invitation.project_id);
-      console.log('Expires at:', invitation.expires_at);
-      console.log('Is expired:', invitation.expires_at < new Date());
-      console.log('Leader ID:', invitation.leader_id);
-      console.log('User ID:', invitation.user_id);
+      // Token exists in database
     } else {
-      console.log('❌ Token NOT found in database');
-      console.log('This means the token was already used and deleted.');
+      // Token NOT found in database - token was already used and deleted
     }
   } catch (error) {
-    console.error('Error:', error.message);
+    // Error occurred
   } finally {
     await prisma.$disconnect();
   }

@@ -11,7 +11,6 @@ export const createMeeting = catchAsyncError(async (req, res, next) => {
     if (!heading || !description || !task_id) return next(new ErrorHandler("Heading and description and task_id is required"));
     const user_id = req.user.user_id;
 
-
     const task = await prisma.task.findUnique({
         where: {
             task_id: parseInt(task_id)
@@ -31,9 +30,7 @@ export const createMeeting = catchAsyncError(async (req, res, next) => {
         }
     });
 
-
     if (!task) return next(new ErrorHandler("Invalid task_id"));
-
 
     const participantsData = task.assignees.map((assignee) => ({
         user_id: assignee.user.user_id,
@@ -57,7 +54,6 @@ export const createMeeting = catchAsyncError(async (req, res, next) => {
         }
     });
 
-
     // Send meeting invitations/links
     try {
         if (isScheduled) {
@@ -77,7 +73,6 @@ export const createMeeting = catchAsyncError(async (req, res, next) => {
                     const result = await sendMeetingLink(assignee.user.name, assignee.user.email, meetingInfo);
                     emailResults.push({ email: assignee.user.email, success: true, messageId: result.messageId });
                 } catch (error) {
-                    console.error(`Failed to send instant meeting link to ${assignee.user.email}:`, error.message);
                     emailResults.push({ email: assignee.user.email, success: false, error: error.message });
                 }
             }
@@ -85,10 +80,8 @@ export const createMeeting = catchAsyncError(async (req, res, next) => {
             // Log email sending results
             const successful = emailResults.filter(r => r.success).length;
             const failed = emailResults.filter(r => !r.success).length;
-            console.log(`📧 Instant meeting emails: ${successful} sent successfully, ${failed} failed`);
         }
     } catch (error) {
-        console.error('❌ Error sending meeting invitations:', error.message);
         // Don't fail the meeting creation if email sending fails
         // The meeting is still created, just emails might not be sent
     }
@@ -101,12 +94,10 @@ export const createMeeting = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
 export const createClientMeeting = catchAsyncError(async (req, res, next) => {
     const { heading, description, task_id, time, date, isScheduled, client_id } = req.body;
     if (!heading || !description || !task_id) return next(new ErrorHandler("Heading and description and task_id is required"));
     const user_id = req.user.user_id;
-
 
     const task = await prisma.task.findUnique({
         where: {
@@ -120,9 +111,7 @@ export const createClientMeeting = catchAsyncError(async (req, res, next) => {
         }
     });
 
-
     if (!task) return next(new ErrorHandler("Invalid task_id"));
-
 
     const participantsData = [{
         user_id: parseInt(client_id),
@@ -146,7 +135,6 @@ export const createClientMeeting = catchAsyncError(async (req, res, next) => {
         }
     });
 
-
     if (isScheduled) {
         // For scheduled client meetings, send invitation to the client
         sendInviation([{ user: client }], heading, description, meeting.meeting_id, date, time, req.user.name, req.user.email);
@@ -159,8 +147,6 @@ export const createClientMeeting = catchAsyncError(async (req, res, next) => {
         });
     }
 
-
-
     await prisma.taskProgress.create({
         data: {
             message: `User Send a mail subject: ${heading}`,
@@ -170,7 +156,6 @@ export const createClientMeeting = catchAsyncError(async (req, res, next) => {
         }
     });
 
-
     // Return the conversation ID in the response
     res.status(200).json({
         success: true,
@@ -178,7 +163,6 @@ export const createClientMeeting = catchAsyncError(async (req, res, next) => {
         meeting
     });
 });
-
 
 export const handleVoting = catchAsyncError(async (req, res, next) => {
     const { meeting_id } = req.params;
@@ -204,7 +188,6 @@ export const handleVoting = catchAsyncError(async (req, res, next) => {
             vote: voteValue
         }
     });
-
 
     const meeting = await prisma.meeting.findUnique({
         where: {
@@ -239,10 +222,6 @@ export const handleVoting = catchAsyncError(async (req, res, next) => {
 
     res.redirect(`${process.env.FRONTEND_URL}/vote-sccuess?vote=${voteValue}`);
 });
-
-
-
-
 
 export const handleConfirm = catchAsyncError(async (req, res, next) => {
     const { meeting_id } = req.params;
@@ -296,13 +275,10 @@ export const handleConfirm = catchAsyncError(async (req, res, next) => {
         }
     });
 
-
     if (!meetingInfo) return next(new ErrorHandler("Invalid Meeting ID"));
     sendMailUpdate(meetingInfo, voteValue);
     res.redirect(`${process.env.FRONTEND_URL}/vote-confirm?vote=${voteValue}`);
 });
-
-
 
 export const getMeetings = catchAsyncError(async (req, res, next) => {
     const { isScheduled } = req.query;
@@ -373,10 +349,6 @@ export const getMeetings = catchAsyncError(async (req, res, next) => {
         meetings
     })
 });
-
-
-
-
 
 export const getMeetingBYId = catchAsyncError(async (req, res, next) => {
     const { meeting_id } = req.params;
@@ -581,31 +553,17 @@ export const generateLiveKitToken = catchAsyncError(async (req, res, next) => {
                 },
                 user_id
             );
-            console.log(`Agent 'transcriber' dispatched to room: meeting-${meeting_id}`);
         } catch (dispatchError) {
-            console.error('Failed to dispatch agent automatically:', dispatchError);
             // Don't fail token generation if dispatch fails
         }
 
         // Log that we're generating a token for a room with agent dispatch
-        console.log(`Generating LiveKit token for room: meeting-${meeting_id}`);
-        console.log(`LiveKit URL: ${process.env.LIVEKIT_URL || process.env.LIVEKIT_HOST}`);
-        console.log(`Agent 'transcriber' will be dispatched to this room`);
 
         // Debug environment variables
-        console.log('🔍 Environment Debug Info:');
-        console.log(`- NODE_ENV: ${process.env.NODE_ENV}`);
-        console.log(`- LIVEKIT_URL: ${process.env.LIVEKIT_URL || 'NOT SET'}`);
-        console.log(`- LIVEKIT_HOST: ${process.env.LIVEKIT_HOST || 'NOT SET'}`);
-        console.log(`- LIVEKIT_API_KEY: ${process.env.LIVEKIT_API_KEY ? 'SET' : 'NOT SET'}`);
-        console.log(`- LIVEKIT_API_SECRET: ${process.env.LIVEKIT_API_SECRET ? 'SET' : 'NOT SET'}`);
 
         // Validate LiveKit URL configuration
         const serverUrl = process.env.LIVEKIT_URL || process.env.LIVEKIT_HOST;
         if (!serverUrl) {
-            console.error('❌ LIVEKIT_URL and LIVEKIT_HOST are not configured');
-            console.error('❌ This is likely a deployment configuration issue');
-            console.error('❌ Please check your deployment platform environment variables');
             return next(new ErrorHandler("LiveKit server configuration is missing. Please configure LIVEKIT_URL environment variable in your deployment platform."));
         }
 
@@ -621,8 +579,6 @@ export const generateLiveKitToken = catchAsyncError(async (req, res, next) => {
             }
         }
 
-        console.log(`✅ Using LiveKit server URL: ${formattedServerUrl}`);
-
         res.status(200).json({
             success: true,
             token: token,
@@ -637,7 +593,6 @@ export const generateLiveKitToken = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Error generating LiveKit token:', error);
         return next(new ErrorHandler("Failed to generate meeting token."));
     }
 });
@@ -685,7 +640,6 @@ export const dispatchAgentToMeeting = catchAsyncError(async (req, res, next) => 
         });
 
     } catch (error) {
-        console.error('Error dispatching agent:', error);
         return next(new ErrorHandler("Failed to dispatch agent to meeting."));
     }
 });
@@ -724,7 +678,6 @@ export const checkAgentDispatchStatus = catchAsyncError(async (req, res, next) =
         });
 
     } catch (error) {
-        console.error('Error checking agent dispatch status:', error);
         return next(new ErrorHandler("Failed to check agent dispatch status."));
     }
 });
@@ -822,7 +775,6 @@ export const endMeeting = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Error ending meeting:', error);
         return next(new ErrorHandler("Failed to end meeting and save transcriptions."));
     }
 });
@@ -858,7 +810,6 @@ export const startMeetingTranscription = catchAsyncError(async (req, res, next) 
         });
 
     } catch (error) {
-        console.error('Error starting meeting transcription:', error);
         return next(new ErrorHandler("Failed to start transcription collection."));
     }
 });

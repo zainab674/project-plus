@@ -833,7 +833,6 @@ const AdminPage = () => {
                                             .filter(user => userFilter === 'all' || user.Role === userFilter)
                                             .map((user) => (
                                                 <div key={user.user_id} className="border border-gray-200 rounded-lg p-4">
-                                                    {console.log("user", user)}
                                                     <div className="flex items-center justify-between mb-4">
                                                         <div className="flex items-center space-x-4">
                                                             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
@@ -899,7 +898,6 @@ const AdminPage = () => {
                                                                 variant="outline"
                                                                 size="sm"
                                                                 onClick={() => {
-                                                                    console.log('User ID:', user.user_id);
 
                                                                     setUserToDelete(user.user_id);
                                                                     setShowDeleteConfirmModal(true);
@@ -943,7 +941,6 @@ const AdminPage = () => {
                                                     </div>
                                                 ) : userDetails[selectedUser] ? (
                                                     <>
-                                                        {console.log("check", userDetails[selectedUser].user)}
                                                         <UserTreeView user={userDetails[selectedUser].user} />
                                                     </>
                                                 ) : (
@@ -1002,7 +999,6 @@ const AdminPage = () => {
                             </Button>
                             <Button
                                 onClick={() => {
-                                    console.log("userToDelete", userToDelete)
                                     if (userToDelete) {
                                         handleDeleteUser(userToDelete);
                                     } else {

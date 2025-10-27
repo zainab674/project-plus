@@ -14,7 +14,6 @@ import { getNameAvatar } from '@/utils/getNameAvatar';
 import { Checkbox } from '../ui/checkbox';
 
 const UpdateCaseModal = ({ onClose, caseToUpdate }) => {
-    console.log("casetoupdae", caseToUpdate.project_id)
     const [isLoading, setIsLoading] = useState(false);
     const [teamMembers, setTeamMembers] = useState([]);
     const [selectedTeamMembers, setSelectedTeamMembers] = useState([]);
@@ -57,12 +56,10 @@ const UpdateCaseModal = ({ onClose, caseToUpdate }) => {
     const loadTeamMembers = useCallback(async () => {
         try {
             const res = await getTeamMembersRequest();
-            console.log('Team members response:', res.data.teamMembers);
             setTeamMembers(res.data.teamMembers || []);
 
             // Set preselected members from caseToUpdate.Members
             const selectedIds = (caseToUpdate?.Members || []).map(m => m.user_id);
-            console.log('Preselected members:', selectedIds);
             setSelectedTeamMembers(selectedIds);
         } catch (err) {
             console.error('Error loading team members', err);
@@ -73,7 +70,6 @@ const UpdateCaseModal = ({ onClose, caseToUpdate }) => {
         e.preventDefault();
         setIsLoading(true);
         try {
-            console.log('Submitting with selectedTeamMembers:', selectedTeamMembers);
             const res = await updateProjectRequest({ ...caseData, selectedTeamMembers }, caseToUpdate.project_id);
             toast.success('Case updated successfully');
             onClose();
@@ -139,12 +135,10 @@ const UpdateCaseModal = ({ onClose, caseToUpdate }) => {
     }, [loadTeamMembers]);
 
     const handleTeamMemberToggle = (memberId) => {
-        console.log('Toggling member:', memberId);
         setSelectedTeamMembers(prev => {
             const newSelection = prev.includes(memberId) 
                 ? prev.filter(id => id !== memberId)
                 : [...prev, memberId];
-            console.log('New selection:', newSelection);
             return newSelection;
         });
     };
@@ -307,8 +301,6 @@ const UpdateCaseModal = ({ onClose, caseToUpdate }) => {
                                         <div className="p-2">
                                             {(() => {
                                                 const filteredMembers = teamMembers.filter(mem => mem.role === 'TEAM');
-                                                console.log('All team members:', teamMembers);
-                                                console.log('Filtered team members:', filteredMembers);
                                                 return filteredMembers.map((member) => (
                                                     <div
                                                         key={member.user.user_id}

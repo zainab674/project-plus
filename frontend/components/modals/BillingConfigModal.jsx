@@ -78,7 +78,6 @@ const BillingConfigModal = ({ isOpen, onClose, caseId, caseName, onSuccess }) =>
             }
         } catch (error) {
             // If no config found, that's fine - it means we're setting up for the first time
-            console.log('No existing billing configuration found');
         } finally {
             setFetchingConfig(false);
         }

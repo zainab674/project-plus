@@ -13,7 +13,6 @@ const RenderTaskProgress = ({task_id,date}) => {
   // Utility function to download files with proper filename
   const downloadFile = async (url, filename) => {
     try {
-      console.log('Downloading file:', { url, filename });
       
       // Always prioritize the provided filename over URL extraction
       let finalFilename = filename;
@@ -26,7 +25,6 @@ const RenderTaskProgress = ({task_id,date}) => {
         finalFilename = finalFilename.split('?')[0];
       }
       
-      console.log('Final filename:', finalFilename);
       
       // First try the blob approach
       const response = await fetch(url, {
@@ -86,7 +84,6 @@ const RenderTaskProgress = ({task_id,date}) => {
   // Utility function to view files in new tab with proper filename
   const viewFile = async (url, filename) => {
     try {
-      console.log('Viewing file:', { url, filename });
       
       // Check if it's a Cloudinary URL that might force download
       const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
@@ -310,7 +307,6 @@ const RenderTaskProgress = ({task_id,date}) => {
       const res = await getTaskProgressRequest(task_id,date);
       setProgress(res.data.progresss);
     } catch (error) {
-      console.log(error?.response?.data?.meesage || error?.meesage);
     }
   },[date]);
 
@@ -357,11 +353,7 @@ const RenderTaskProgress = ({task_id,date}) => {
                     <div className='flex items-center gap-2 mt-3 ml-2'>
                       <button
                         onClick={() => {
-                          console.log('View button clicked:', {
-                            url: attachmentUrl,
-                            filename: attachmentName,
-                            progress: progress
-                          });
+                         
                           viewFile(attachmentUrl, attachmentName);
                         }}
                         className='flex items-center gap-1 px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors'
@@ -371,11 +363,7 @@ const RenderTaskProgress = ({task_id,date}) => {
                       </button>
                       <button
                         onClick={() => {
-                          console.log('Download button clicked:', {
-                            url: attachmentUrl,
-                            filename: attachmentName,
-                            progress: progress
-                          });
+                         
                           downloadFile(attachmentUrl, attachmentName);
                         }}
                         className='flex items-center gap-1 px-3 py-1 text-xs bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors'

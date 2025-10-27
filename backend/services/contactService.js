@@ -30,7 +30,6 @@ class ContactService {
 
             return { success: true, data: contact };
         } catch (error) {
-            console.error('ContactService.createContact error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -96,7 +95,6 @@ class ContactService {
                 }
             };
         } catch (error) {
-            console.error('ContactService.getContacts error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -119,7 +117,6 @@ class ContactService {
 
             return { success: true, data: contact };
         } catch (error) {
-            console.error('ContactService.getContactById error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -166,7 +163,6 @@ class ContactService {
 
             return { success: true, data: contact };
         } catch (error) {
-            console.error('ContactService.updateContact error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -194,7 +190,6 @@ class ContactService {
 
             return { success: true, message: 'Contact deleted successfully' };
         } catch (error) {
-            console.error('ContactService.deleteContact error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -271,7 +266,6 @@ class ContactService {
                 }
             };
         } catch (error) {
-            console.error('ContactService.bulkImportContacts error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -315,7 +309,6 @@ class ContactService {
                 }
             };
         } catch (error) {
-            console.error('ContactService.getContactStats error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -334,7 +327,6 @@ class ContactService {
 
             return { success: true, data: contact };
         } catch (error) {
-            console.error('ContactService.searchContactByPhone error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -362,7 +354,6 @@ class ContactService {
 
             return { success: true, data: updatedContact };
         } catch (error) {
-            console.error('ContactService.toggleFavorite error:', error);
             return { success: false, error: error.message };
         }
     }

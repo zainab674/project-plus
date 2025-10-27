@@ -10,26 +10,21 @@ import { generateRequestDocumentHtml } from "../processors/generateDocumentReque
 
 export const sendInviation = async (users, heading, description, meeting_id, date, time, senderName, sendEmail) => {
     try {
-        console.log('📧 Sending scheduled meeting invitations to', users.length, 'users');
         
         const batches = createMailBatchs(users, 10);
         for (const batch of batches) {
             await executeBatchMail(batch, heading, description, meeting_id, date, time, senderName, sendEmail)
             await new Promise((resolve) => setTimeout(resolve, 5000));
         }
-        console.log('✅ All scheduled meeting emails sent successfully!');
         return { success: true, emailsSent: users.length };
         
     } catch (error) {
-        console.error('❌ Failed to send scheduled meeting invitations:', error.message);
         throw error;
     }
 }
 
-
 export const sendMailDetails = async (meetingInfo) => {
     try {
-        console.log('📧 Sending meeting details to:', meetingInfo.user.email);
         
         const participant = meetingInfo.participants;
         const recipient = meetingInfo.user;
@@ -43,18 +38,15 @@ export const sendMailDetails = async (meetingInfo) => {
         const html = generateMeetingInfoHtml(participant, recipient, meetingDetails, scheduledLink, CanceledLink);
         
         const result = await sendMail("Meeting Information", recipient.email, html);
-        console.log('✅ Meeting details sent successfully to:', recipient.email, result.messageId);
         return result;
         
     } catch (error) {
-        console.error('❌ Failed to send meeting details to:', meetingInfo.user.email, error.message);
         throw error;
     }
 }
 
 export const sendMeetingLink = async (name, email, meetingInfo) => {
     try {
-        console.log('📧 Sending instant meeting link to:', email);
         
         const recipient = {
             name,
@@ -68,47 +60,37 @@ export const sendMeetingLink = async (name, email, meetingInfo) => {
         const html = generateMeetingInvitation(recipient, meetingDetails, joinLink);
         
         const result = await sendMail("Meeting Invitation", recipient.email, html);
-        console.log('✅ Instant meeting link sent successfully to:', email, result.messageId);
         return result;
         
     } catch (error) {
-        console.error('❌ Failed to send instant meeting link to:', email, error.message);
         throw error;
     }
 }
 
 export const sendDocumentRequest = async (project_client_id, name, description, email) => {
     try {
-        console.log('📧 Sending document request to:', email);
         
         const submitLink = `${process.env.FRONTEND_URL}/documents/${project_client_id}`
         const html = generateRequestDocumentHtml(submitLink, name, description);
         
         const result = await sendMail("Submit Document", email, html);
-        console.log('✅ Document request sent successfully to:', email, result.messageId);
         return result;
         
     } catch (error) {
-        console.error('❌ Failed to send document request to:', email, error.message);
         throw error;
     }
 }
 
-
-
 export const sendSignatureRequest = async (project_client_id, name, description, email) => {
     try {
-        console.log('📧 Sending signature request to:', email);
         
         const submitLink = `${process.env.FRONTEND_URL}/sign/${project_client_id}`
         const html = generateRequestDocumentHtml(submitLink, name, description);
         
         const result = await sendMail("Submit Document", email, html);
-        console.log('✅ Signature request sent successfully to:', email, result.messageId);
         return result;
         
     } catch (error) {
-        console.error('❌ Failed to send signature request to:', email, error.message);
         throw error;
     }
 }

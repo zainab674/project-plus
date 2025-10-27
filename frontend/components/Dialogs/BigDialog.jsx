@@ -6,7 +6,7 @@ const BigDialog = ({ onClose, children, open, width = 50, className }) => {
     if (!open) return null;
 
     return (
-        <div className='fixed inset-0 z-50 p-5 bg-black/50 transition-all flex items-center justify-center'>
+        <div className='fixed inset-0 z-[70] p-5 bg-black/50 transition-all flex items-center justify-center'>
             <div className={`bg-white shadow-xl rounded-lg mx-auto p-4 relative border border-gray-200 max-h-[90vh] w-8/12 overflow-y-auto  `}>
 
                 <div className='flex items-center justify-end'>

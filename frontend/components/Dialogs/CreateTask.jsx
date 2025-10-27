@@ -28,7 +28,7 @@ const JoditEditor = dynamic(
 )
 
 
-const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
+const CreateTask = ({ project, onClose, prefillData = {} }) => {
     const [selectedMember, setSelectedMember] = useState([]);
     const [isDisabled, setIsDiabled] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -60,7 +60,6 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
     );
 
     useEffect(() => {
-        console.log('🔍 CreateTask: Project prop received:', project);
         setFormdata(prev => ({
             ...prev,
             project_id: project?.project_id,
@@ -72,13 +71,11 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
     // Handle prefill data from AI assistant
     useEffect(() => {
         if (prefillData && Object.keys(prefillData).length > 0) {
-            console.log('🔍 CreateTask: Received prefillData:', prefillData);
             setFormdata(prev => {
                 const newFormData = {
                     ...prev,
                     ...prefillData
                 };
-                console.log('🔍 CreateTask: Updated formdata:', newFormData);
                 return newFormData;
             });
             
@@ -115,7 +112,6 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
     const handleCreate = useCallback(async () => {
         setIsLoading(true);
         try {
-            console.log('🔍 CreateTask: Creating task with data:', { formdata, selectedMember, project, selectedFile });
             
             // Check if project is available
             if (!project || !project.project_id) {
@@ -157,17 +153,7 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
                 }
             }
 
-            console.log('🔍 CreateTask: Final form data:', {
-                project_id: project.project_id,
-                name: formdata.name,
-                priority: formdata.priority,
-                phase: formdata.phase,
-                status: formdata.status,
-                assigned_to: formdata.assigned_to,
-                description: formdata.description,
-                hasFile: !!(selectedFile || selectedInternalDoc),
-                fileName: selectedFile?.name || selectedInternalDoc?.name
-            });
+          
 
             const res = await createTaskRequest(formData);
             setSelectedMember([]);
@@ -197,8 +183,6 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
     const config = useMemo(() => ({
         placeholder: "Add description",
     }), []);
-
-    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -242,7 +226,7 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
                             <SelectTrigger className="focus-visible:ring-0 focus-visible:ring-transparent outline-none bg-white border-primary text-black">
                                 <SelectValue placeholder="Select Phase" />
                             </SelectTrigger>
-                            <SelectContent className="focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary">
+                            <SelectContent className="focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary z-[100]">
                                 {project.phases.map((phase, index) => (
                                     <SelectItem key={index} value={phase}>
                                         <div className='flex items-center gap-4'>
@@ -265,7 +249,7 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
                         <SelectTrigger className="focus-visible:ring-0 focus-visible:ring-transparent outline-none bg-white border-primary text-black">
                             <SelectValue placeholder="Priority" />
                         </SelectTrigger>
-                        <SelectContent className="focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary">
+                        <SelectContent className="focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary z-[100]">
                             <SelectItem value="CRITICAL">
                                 <div className='flex items-center gap-4'>
                                     <span className='w-[1.4rem] h-[1.4rem] bg-red-950 rounded-full'></span>
@@ -322,7 +306,7 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
                         <SelectTrigger className="focus-visible:ring-0 focus-visible:ring-transparent outline-none bg-white border-primary text-black">
                             <SelectValue placeholder="Task Leader" />
                         </SelectTrigger>
-                        <SelectContent className="focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary">
+                        <SelectContent className="focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary z-[100]">
                             {
                                 project?.Members?.map(member => (
                                     <SelectItem value={member?.user?.user_id} key={member?.user?.user_id}>
@@ -367,7 +351,7 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
                         <SelectTrigger className="focus-visible:ring-0 focus-visible:ring-transparent outline-none bg-white border-primary text-black">
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
-                        <SelectContent className="focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary">
+                        <SelectContent className="focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary z-[100]">
                             <SelectItem value="TO_DO">
                                 <div className='flex items-center gap-4'>
                                     <span className='w-[1.4rem] h-[1.4rem] bg-gray-400 rounded-full'></span>
@@ -438,7 +422,10 @@ const CreateTask = ({ project, onClose, prefillData = {}, isOpen = false }) => {
                             >
                                 <FileText className="h-4 w-4" />
                                 <span className="text-sm">
-                                    {formdata.phase && phaseHasFolders ? `Phase Documents (${formdata.phase})` : 'Internal Document'}
+                                    {formdata.phase ? 
+                                        phaseHasFolders ? `Phase Documents (${formdata.phase})` : 
+                                        'Select Document'
+                                    : 'Internal Document'}
                                 </span>
                             </button>
                             {(selectedFile || selectedInternalDoc) && (

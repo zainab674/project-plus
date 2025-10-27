@@ -5,6 +5,8 @@ import { Button } from '@/components/Button'
 import { getProjectRequest } from '@/lib/http/project'
 import { Cloud, CloudUpload, Info } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider'
+import { useRouter } from 'next/navigation'
 import { getMediaByProjectIdRequest, uploadMediaRequest } from '@/lib/http/media'
 import BigDialog from '@/components/Dialogs/BigDialog'
 import {
@@ -33,6 +35,8 @@ const bytesToMB = (bytes) => {
     return mb.toFixed(2);
 };
 const page = ({ params }) => {
+    const { selectedCase: globalSelectedCase } = useDashboardFilter();
+    const router = useRouter();
     const [project, setProject] = useState(null);
     const [isLoading, setLoading] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
@@ -83,7 +87,6 @@ const page = ({ params }) => {
             setMedia(mediaRes?.data?.media);
         } catch (error) {
             setProject(null);
-            console.log(error?.response?.data?.message || error?.message);
         } finally {
             setLoading(false);
         }
@@ -124,6 +127,14 @@ const page = ({ params }) => {
     useEffect(() => {
         getProjectDetails();
     }, []);
+
+    // Listen to global case selection changes and navigate if different case is selected
+    useEffect(() => {
+        if (globalSelectedCase && globalSelectedCase.project_id !== params.id) {
+            // A different case was selected from the global dropdown
+            router.push(`/dashboard/projects/media/${globalSelectedCase.project_id}`);
+        }
+    }, [globalSelectedCase, params.id, router]);
     return (
         <>
             <div className="flex h-screen flex-col bg-white m-2 rounded-md overflow-auto">

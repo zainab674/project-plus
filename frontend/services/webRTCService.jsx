@@ -11,7 +11,6 @@ export class WebRTC extends EventEmitter {
     }
 
     async createPeer(initiator){
-        console.log('called one time')
         this.stream = await this.getStream();
         this.peer = new Peer({initiator: initiator, stream: this.stream});
 
@@ -29,12 +28,10 @@ export class WebRTC extends EventEmitter {
     }
 
     async onConnect(data){
-        console.log('connected successfully...');
         this.emit('conncted',data);
     }
 
     async onStream(data){
-        console.log('stream getting successfully...');
         this.emit('stream',data);
     }
 

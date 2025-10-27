@@ -182,7 +182,6 @@ const RenderChats = ({ selectedChat, setSelectTask, selectedTask, messages, setM
                     </div>
                 </div>
                 <div className="h-[72vh] overflow-y-auto p-2 space-y-4 overflow-x-hidden bg-gray-50" ref={containerRef}>
-                    {console.log('🎨 RenderChats rendering with:', { loading, messagesLength: messages.length, messages })}
                     {
                         loading &&
                         Array(8).fill(0).map((_, index) => (
@@ -192,7 +191,6 @@ const RenderChats = ({ selectedChat, setSelectTask, selectedTask, messages, setM
                     {
                         !loading && messages.length > 0 &&
                         messages.map((message, index) => {
-                            console.log('🎨 Rendering message:', message, 'at index:', index);
                             return (
                                 <React.Fragment key={index}>
                                     {

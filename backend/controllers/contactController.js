@@ -57,7 +57,6 @@ export const createContact = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Create contact error:', error);
         return next(new ErrorHandler(`Failed to create contact: ${error.message}`, 500));
     }
 });
@@ -132,7 +131,6 @@ export const getContacts = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Get contacts error:', error);
         return next(new ErrorHandler(`Failed to fetch contacts: ${error.message}`, 500));
     }
 });
@@ -164,7 +162,6 @@ export const getContactById = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Get contact by ID error:', error);
         return next(new ErrorHandler(`Failed to fetch contact: ${error.message}`, 500));
     }
 });
@@ -236,7 +233,6 @@ export const updateContact = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Update contact error:', error);
         return next(new ErrorHandler(`Failed to update contact: ${error.message}`, 500));
     }
 });
@@ -273,7 +269,6 @@ export const deleteContact = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Delete contact error:', error);
         return next(new ErrorHandler(`Failed to delete contact: ${error.message}`, 500));
     }
 });
@@ -356,7 +351,6 @@ export const bulkImportContacts = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Bulk import contacts error:', error);
         return next(new ErrorHandler(`Failed to import contacts: ${error.message}`, 500));
     }
 });
@@ -405,7 +399,6 @@ export const getContactStats = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Get contact stats error:', error);
         return next(new ErrorHandler(`Failed to fetch contact statistics: ${error.message}`, 500));
     }
 });

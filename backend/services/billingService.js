@@ -374,12 +374,8 @@ class BillingService {
         }
       });
 
-      console.log('📋 Found assigned cases:', assignedCases.length);
-      console.log('📋 Assigned cases details:', JSON.stringify(assignedCases, null, 2));
-
       return assignedCases;
     } catch (error) {
-      console.error('❌ Error in getCasesAssignedToBiller:', error);
       throw new Error(`Failed to get cases assigned to biller: ${error.message}`);
     }
   }
@@ -480,7 +476,6 @@ class BillingService {
 
     return project;
   };
-
 
   // Set member rate for a case
   async setMemberRate(caseId, memberId, rateType, rateValue, userId) {
@@ -948,7 +943,7 @@ class BillingService {
               }
             }
           },
-          reviewer: {
+          acted_by: {
             select: {
               user_id: true,
               name: true,
@@ -967,7 +962,7 @@ class BillingService {
       }
 
       const billingConfig = review.task.project.billingConfig;
-      const memberRate = billingConfig.memberRates.find(rate => rate.user_id === review.reviewer_id);
+      const memberRate = billingConfig.memberRates.find(rate => rate.user_id === review.acted_by_id);
 
       if (!memberRate) {
         throw new Error('No billing rate found for reviewer');
@@ -980,11 +975,11 @@ class BillingService {
         data: {
           billing_id: await this.getOrCreateBillingId(review.task.project_id),
           item_type: 'REVIEW',
-          description: `Review: ${review.task.name} - ${review.reviewer.name}`,
+          description: `Review: ${review.task.name} - ${review.acted_by?.name || 'Unknown'}`,
           quantity: 1,
           unit_rate: reviewRate,
           total_amount: reviewRate,
-          user_id: review.reviewer_id,
+          user_id: review.acted_by_id,
           task_id: review.task_id,
           created_at: new Date()
         }
@@ -2410,7 +2405,6 @@ class BillingService {
 
       // If no client is assigned, create a default client for the project
       if (!project.Clients || project.Clients.length === 0) {
-        console.log(`No client assigned to project ${projectId}, creating default client`);
 
         // Create a default client for the project
         const defaultClient = await prisma.projectClient.create({
@@ -2451,7 +2445,6 @@ class BillingService {
         throw new Error(`Project ${projectId} not found`);
       }
 
-      console.log(`No biller assigned to project ${projectId}, using project creator as default`);
       return project.created_by;
     } catch (error) {
       throw new Error(`Failed to get project biller ID: ${error.message}`);
@@ -2461,7 +2454,6 @@ class BillingService {
   // Get billing entries for a project
   async getProjectBillingEntries(projectId, userId) {
     try {
-      console.log(`Getting project billing entries for project ${projectId} and user ${userId}`);
 
       // Check if user has access to this project through multiple patterns
       const project = await prisma.project.findFirst({
@@ -2495,20 +2487,15 @@ class BillingService {
         }
       });
 
-      console.log(`Project found: ${!!project}`);
-
       // If not found through project membership, check if user is assigned biller
       let isBiller = false;
       if (!project) {
-        console.log('Checking biller assignment...');
         const billerAssignment = await prisma.caseAssignment.findFirst({
           where: {
             project_id: parseInt(projectId),
             biller_id: userId
           }
         });
-
-        console.log(`Biller assignment found: ${!!billerAssignment}`);
 
         if (!billerAssignment) {
           // Let's also check if the project exists at all
@@ -2527,8 +2514,6 @@ class BillingService {
         // Check if user is biller for this project
         isBiller = project.caseAssignments.some(assignment => assignment.biller_id === userId);
       }
-
-      console.log(`User has access, isBiller: ${isBiller}, fetching billing entries...`);
 
       // Get billing entries for this project
       const billingEntries = await prisma.billingLineItem.findMany({
@@ -2567,18 +2552,14 @@ class BillingService {
         }
       });
 
-      console.log(`Billing entries fetched: ${billingEntries.length}`);
-
       return billingEntries;
     } catch (error) {
-      console.error(`Error in getProjectBillingEntries: ${error.message}`);
       throw new Error(`Failed to get project billing entries: ${error.message}`);
     }
   }
 
   async getProjectActivities(projectId, userId) {
     try {
-      console.log(`Getting project activities for project ${projectId} and user ${userId}`);
 
       // Check if user has access to this project through multiple patterns
       const project = await prisma.project.findFirst({
@@ -2599,19 +2580,14 @@ class BillingService {
         }
       });
 
-      console.log(`Project found: ${!!project}`);
-
       // If not found through project membership, check if user is assigned biller
       if (!project) {
-        console.log('Checking biller assignment...');
         const billerAssignment = await prisma.caseAssignment.findFirst({
           where: {
             project_id: parseInt(projectId),
             biller_id: userId
           }
         });
-
-        console.log(`Biller assignment found: ${!!billerAssignment}`);
 
         if (!billerAssignment) {
           // Let's also check if the project exists at all
@@ -2626,8 +2602,6 @@ class BillingService {
           }
         }
       }
-
-      console.log('User has access, fetching activities...');
 
       // Get all activities for the project
       const [tasks, meetings, reviews, timeEntries, progressEntries] = await Promise.all([
@@ -2732,8 +2706,6 @@ class BillingService {
         })
       ]);
 
-      console.log(`Activities fetched - Tasks: ${tasks.length}, Meetings: ${meetings.length}, Reviews: ${reviews.length}, Time: ${timeEntries.length}, Progress: ${progressEntries.length}`);
-
       return {
         tasks,
         meetings,
@@ -2742,7 +2714,6 @@ class BillingService {
         progressEntries
       };
     } catch (error) {
-      console.error(`Error in getProjectActivities: ${error.message}`);
       throw new Error(`Failed to get project activities: ${error.message}`);
     }
   }
@@ -2818,15 +2789,12 @@ class BillingService {
         }
       });
 
-      console.log(`Custom billing line item created: ${billingLineItem.line_item_id}`);
-
       return {
         success: true,
         message: 'Billing line item created successfully',
         billingLineItem
       };
     } catch (error) {
-      console.error(`Error in createCustomBillingLineItem: ${error.message}`);
       throw new Error(`Failed to create billing line item: ${error.message}`);
     }
   }
@@ -2834,7 +2802,6 @@ class BillingService {
   // Check if an activity has been billed
   async checkActivityBilled(projectId, activityType, activityId) {
     try {
-      console.log(`🔍 Backend: Checking billing status for ${activityType} ${activityId} in project ${projectId}`);
 
       let whereCondition = {
         billing: {
@@ -2862,8 +2829,6 @@ class BillingService {
             select: { message: true, type: true }
           });
           if (progressDetails) {
-            console.log(`🔍 Backend: Progress message for ${activityId}: "${progressDetails.message}"`);
-            console.log(`🔍 Backend: Progress type for ${activityId}: "${progressDetails.type}"`);
 
             // First, let's see all progress billing entries for this project
             const allProgressBillings = await prisma.billingLineItem.findMany({
@@ -2883,8 +2848,6 @@ class BillingService {
                 item_type: true
               }
             });
-
-            console.log(`🔍 Backend: All progress billing entries for project ${projectId}:`, allProgressBillings);
 
             // Use the same logic as generateProgressBillingEntry
             // The actual billing entries are created with patterns like:
@@ -2929,9 +2892,7 @@ class BillingService {
               contains: `${progressPrefix} ${progressDetails.message}`
             };
 
-            console.log(`🔍 Backend: Looking for billing entries with description containing: "${progressPrefix} ${progressDetails.message}"`);
           } else {
-            console.log(`❌ Backend: Progress details not found for ${activityId}`);
           }
           break;
         case 'REVIEW':
@@ -2955,8 +2916,6 @@ class BillingService {
           };
       }
 
-      console.log(`🔍 Backend: Where condition for ${activityType} ${activityId}:`, JSON.stringify(whereCondition, null, 2));
-
       const existingBilling = await prisma.billingLineItem.findFirst({
         where: whereCondition,
         select: {
@@ -2967,14 +2926,11 @@ class BillingService {
         }
       });
 
-      console.log(`🔍 Backend: Existing billing for ${activityType} ${activityId}:`, existingBilling);
-
       return {
         billed: !!existingBilling,
         billingItem: existingBilling
       };
     } catch (error) {
-      console.error('Error checking if activity is billed:', error);
       return {
         billed: false,
         billingItem: null
@@ -3077,7 +3033,6 @@ class BillingService {
   // Update billing entry
   async updateBillingEntry(lineItemId, updateData, userId) {
     try {
-      console.log(`✏️ Backend: Attempting to update billing entry ${lineItemId} by user ${userId}`);
 
       // Get the billing line item with related data
       const billingLineItem = await prisma.billingLineItem.findUnique({
@@ -3102,11 +3057,8 @@ class BillingService {
       });
 
       if (!billingLineItem) {
-        console.log(`❌ Backend: Billing entry ${lineItemId} not found`);
         throw new Error('Billing entry not found');
       }
-
-      console.log(`✅ Backend: Found billing entry ${lineItemId} for project ${billingLineItem.billing.project_id}`);
 
       const project = billingLineItem.billing.projectClient.project;
       if (!project) {
@@ -3121,8 +3073,6 @@ class BillingService {
           biller_id: userId
         }
       });
-
-      console.log(`🔐 Backend: User ${userId} - isOwner: ${isOwner}, isBiller: ${!!isBiller}`);
 
       if (!isOwner && !isBiller) {
         throw new Error('Unauthorized to update this billing entry');
@@ -3151,15 +3101,12 @@ class BillingService {
         }
       });
 
-      console.log(`✅ Backend: Successfully updated billing entry ${lineItemId}`);
-
       return {
         success: true,
         message: 'Billing entry updated successfully',
         updatedEntry
       };
     } catch (error) {
-      console.error(`❌ Backend: Error updating billing entry ${lineItemId}:`, error.message);
       throw new Error(`Failed to update billing entry: ${error.message}`);
     }
   }
@@ -3167,7 +3114,6 @@ class BillingService {
   // Delete billing entry
   async deleteBillingEntry(lineItemId, userId) {
     try {
-      console.log(`🗑️ Backend: Attempting to delete billing entry ${lineItemId} by user ${userId}`);
 
       // Get the billing line item with related data
       const billingLineItem = await prisma.billingLineItem.findUnique({
@@ -3192,11 +3138,8 @@ class BillingService {
       });
 
       if (!billingLineItem) {
-        console.log(`❌ Backend: Billing entry ${lineItemId} not found`);
         throw new Error('Billing entry not found');
       }
-
-      console.log(`✅ Backend: Found billing entry ${lineItemId} for project ${billingLineItem.billing.project_id}`);
 
       const project = billingLineItem.billing.projectClient.project;
       if (!project) {
@@ -3211,8 +3154,6 @@ class BillingService {
           biller_id: userId
         }
       });
-
-      console.log(`🔐 Backend: User ${userId} - isOwner: ${isOwner}, isBiller: ${!!isBiller}`);
 
       if (!isOwner && !isBiller) {
         throw new Error('Unauthorized to delete this billing entry');
@@ -3230,15 +3171,12 @@ class BillingService {
         }
       });
 
-      console.log(`✅ Backend: Successfully deleted billing entry ${lineItemId}`);
-
       return {
         success: true,
         message: 'Billing entry deleted successfully',
         deletedEntry
       };
     } catch (error) {
-      console.error(`❌ Backend: Error deleting billing entry ${lineItemId}:`, error.message);
       throw new Error(`Failed to delete billing entry: ${error.message}`);
     }
   }
@@ -3246,7 +3184,6 @@ class BillingService {
   // Get client billing activities for a specific project
   async getClientBillingActivities(projectId, userId) {
     try {
-      console.log(`Getting client billing activities for project ${projectId} and user ${userId}`);
 
       // First, get the project_client_id for this user and project
       const projectClient = await prisma.projectClient.findFirst({
@@ -3274,8 +3211,6 @@ class BillingService {
       if (!projectClient) {
         throw new Error(`User ${userId} is not a client for project ${projectId}`);
       }
-
-      console.log(`✅ Client access verified for project ${projectId}, project_client_id: ${projectClient.project_client_id}`);
 
       // Get all billing activities for this project (regardless of assignment status)
       const billingActivities = await prisma.billingLineItem.findMany({
@@ -3315,8 +3250,6 @@ class BillingService {
         }
       });
 
-      console.log(`✅ Found ${billingActivities.length} billing activities for project ${projectId} (all activities)`);
-
       // Transform the data to match the frontend expectations
       const transformedActivities = billingActivities.map(activity => ({
         billing_activity_id: activity.line_item_id,
@@ -3332,7 +3265,6 @@ class BillingService {
 
       return transformedActivities;
     } catch (error) {
-      console.error(`❌ Error in getClientBillingActivities: ${error.message}`);
       throw new Error(`Failed to get client billing activities: ${error.message}`);
     }
   }

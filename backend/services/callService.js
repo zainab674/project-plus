@@ -13,7 +13,6 @@ class CallService {
             });
             return { success: true, data: call };
         } catch (error) {
-            console.error('CallService.createCall error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -37,11 +36,9 @@ class CallService {
                 return { success: true, data: call };
             } else {
                 // Call doesn't exist, log this for debugging
-                console.warn(`Call with SID ${callSid} not found in database. This might be a webhook for a call that wasn't properly created.`);
                 return { success: false, error: `Call with SID ${callSid} not found` };
             }
         } catch (error) {
-            console.error('CallService.updateCallStatus error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -56,7 +53,6 @@ class CallService {
             });
             return { success: true, data: call };
         } catch (error) {
-            console.error('CallService.getCallBySid error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -120,7 +116,6 @@ class CallService {
                 }
             };
         } catch (error) {
-            console.error('CallService.getCallHistory error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -169,7 +164,6 @@ class CallService {
                 }
             };
         } catch (error) {
-            console.error('CallService.getCallStats error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -194,7 +188,6 @@ class CallService {
 
             return { success: true, message: 'Call deleted successfully' };
         } catch (error) {
-            console.error('CallService.deleteCall error:', error);
             return { success: false, error: error.message };
         }
     }
@@ -247,7 +240,6 @@ class CallService {
 
             if (!existingCall) {
                 // Call doesn't exist, create it first
-                console.log(`Creating new call record for SID: ${CallSid}`);
                 
                 // Try to determine user_id from phone number (optional)
                 let userId = null;
@@ -265,13 +257,9 @@ class CallService {
                     
                     if (user) {
                         userId = user.user_id;
-                        console.log(`Found user ${userId} for phone number`);
                     } else {
-                        console.log(`No user found for phone numbers ${From}/${To}, creating call without user association`);
                     }
                 } catch (userError) {
-                    console.warn('Error looking up user by phone number:', userError.message);
-                    console.log('Creating call without user association');
                 }
                 
                 const newCallData = {
@@ -291,7 +279,6 @@ class CallService {
                     data: newCallData
                 });
                 
-                console.log(`Created new call record: ${newCall.call_id}`);
                 return { success: true, data: newCall };
             } else {
                 // Call exists, update it
@@ -318,7 +305,6 @@ class CallService {
                 return result;
             }
         } catch (error) {
-            console.error('CallService.processWebhookData error:', error);
             return { success: false, error: error.message };
         }
     }

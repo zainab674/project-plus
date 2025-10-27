@@ -53,8 +53,6 @@ export const getConversationID = catchAsyncError(async (req, res, next) => {
     },
   });
 
-
-
   // If no conversation exists, create one
   if (!conversation) {
     conversation = await prisma.conversation.create({
@@ -87,20 +85,16 @@ export const getPrivateChatConversationID = catchAsyncError(async (req, res, nex
   user_id = parseInt(user_id);
   const my_id = req.user.user_id;
 
-
   const task = await prisma.task.findUnique({
     where: {
       task_id: parseInt(task_id)
     }
   });
 
-
   const projectData = {};
   if (task) {
     projectData.project_id = task.project_id
   }
-
-
 
   let conversation = await prisma.conversation.findFirst({
     where: {
@@ -139,7 +133,6 @@ export const getPrivateChatConversationID = catchAsyncError(async (req, res, nex
     },
   });
 
-
   // Let's also check what conversations exist for this task
   const allTaskConversations = await prisma.conversation.findMany({
     where: {
@@ -149,8 +142,6 @@ export const getPrivateChatConversationID = catchAsyncError(async (req, res, nex
       participants: true
     }
   });
-
-
 
   // If no conversation exists, create one
   if (!conversation) {
@@ -186,10 +177,8 @@ export const getPrivateChatConversationID = catchAsyncError(async (req, res, nex
   });
 });
 
-
 export const getConversations = catchAsyncError(async (req, res, next) => {
   const { conversation_id } = req.params;
-
 
   let conversations = await prisma.message.findMany({
     where: {
@@ -199,8 +188,6 @@ export const getConversations = catchAsyncError(async (req, res, next) => {
       createdAt: 'asc'
     }
   });
-
-
 
   // Return the conversation ID in the response
   res.status(200).json({
@@ -212,7 +199,6 @@ export const getConversations = catchAsyncError(async (req, res, next) => {
 // New dedicated function for private chat conversations
 export const getPrivateChatConversations = catchAsyncError(async (req, res, next) => {
   const { conversation_id } = req.params;
-
 
   // First, let's check what messages exist for this conversation without any filters
   let allMessages = await prisma.message.findMany({
@@ -233,8 +219,6 @@ export const getPrivateChatConversations = catchAsyncError(async (req, res, next
     }
   });
 
-
-
   // Now filter for private chat messages (is_group_chat is false or null)
   allMessages.forEach((msg, index) => {
 
@@ -244,15 +228,12 @@ export const getPrivateChatConversations = catchAsyncError(async (req, res, next
     message.is_group_chat === false || message.is_group_chat === null
   );
 
-
-
   // Return the conversation ID in the response
   res.status(200).json({
     success: true,
     conversations,
   });
 });
-
 
 export const getConversationUsers = catchAsyncError(async (req, res, next) => {
   const my_id = req.user.user_id;
@@ -291,7 +272,6 @@ export const getConversationUsers = catchAsyncError(async (req, res, next) => {
   })
 
 })
-
 
 export const getChatsUser = catchAsyncError(async (req, res, next) => {
   const { query } = req.query;
@@ -411,7 +391,6 @@ export const getProjectChatMessages = catchAsyncError(async (req, res, next) => 
 export const testMessageSaving = catchAsyncError(async (req, res, next) => {
   const { conversation_id, sender_id, reciever_id, content } = req.body;
 
-
   try {
     const testMessage = await prisma.message.create({
       data: {
@@ -424,14 +403,12 @@ export const testMessageSaving = catchAsyncError(async (req, res, next) => {
       }
     });
 
-
     res.status(200).json({
       success: true,
       message: 'Test message saved successfully',
       savedMessage: testMessage
     });
   } catch (error) {
-    console.error('❌ Test message saving failed:', error);
     res.status(500).json({
       success: false,
       message: 'Test message saving failed',

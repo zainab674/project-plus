@@ -47,12 +47,9 @@ const AddTaskModal = ({ open, onClose }) => {
 
     // Load full user data when component mounts or when user changes
     useEffect(() => {
-        console.log('AddTaskModal - useEffect triggered, user:', user, 'hasFullUserData:', hasFullUserData);
         if (user && !user.Projects && !hasFullUserData) {
-            console.log('AddTaskModal - Loading user with projects...');
             setProjectsLoading(true);
             loadUserWithProjects().then(fullUser => {
-                console.log('AddTaskModal - User with projects loaded:', fullUser);
                 setFullUserData(fullUser);
                 setProjectsLoading(false);
             }).catch(error => {
@@ -61,15 +58,12 @@ const AddTaskModal = ({ open, onClose }) => {
                 toast.error('Failed to load projects');
             });
         } else if (user && user.Projects) {
-            console.log('AddTaskModal - User already has projects:', user.Projects);
             setFullUserData(user);
         }
     }, [user, loadUserWithProjects, hasFullUserData]);
 
     // Use fullUserData if available, otherwise use user
     const userWithProjects = fullUserData || user;
-    console.log('AddTaskModal - userWithProjects:', userWithProjects);
-    console.log('AddTaskModal - userWithProjects.Projects:', userWithProjects?.Projects);
 
     // Handle file selection
     const handleFileSelect = (e) => {
@@ -131,6 +125,13 @@ const AddTaskModal = ({ open, onClose }) => {
         selectedProject ? parseInt(selectedProject) : null,
         formdata.phase
     );
+    
+    // Check if project has files (for showing in modal description)
+    const hasProjectFiles = useMemo(() => {
+        if (!currentProject?.Media) return false
+        const caseFiles = currentProject.Media.filter(media => media.task_id === null || media.task_id === undefined)
+        return caseFiles.length > 0
+    }, [currentProject])
 
     // Update task name when project changes (but preserve user's phase selection)
     useEffect(() => {
@@ -146,7 +147,6 @@ const AddTaskModal = ({ open, onClose }) => {
 
     // Debug formdata changes
     useEffect(() => {
-        console.log('🔍 AddTaskModal: Formdata changed:', formdata);
     }, [formdata]);
 
     const options = useMemo(() => (currentProject?.Members?.filter(member => member.user_id != formdata.assigned_to).map(member => ({
@@ -172,7 +172,6 @@ const AddTaskModal = ({ open, onClose }) => {
 
         setIsLoading(true);
         try {
-            console.log('🔍 AddTaskModal: Creating task with data:', { formdata, selectedMember, currentProject, selectedFile });
             
             // Create FormData for file upload
             const formData = new FormData();
@@ -208,17 +207,7 @@ const AddTaskModal = ({ open, onClose }) => {
                 }
             }
 
-            console.log('🔍 AddTaskModal: Final form data:', {
-                project_id: parseInt(selectedProject),
-                name: formdata.name,
-                priority: formdata.priority,
-                phase: formdata.phase,
-                status: formdata.status,
-                assigned_to: formdata.assigned_to,
-                description: formdata.description,
-                hasFile: !!(selectedFile || selectedInternalDoc),
-                fileName: selectedFile?.name || selectedInternalDoc?.name
-            });
+           
 
             const res = await createTaskRequest(formData);
             setSelectedMember([]);
@@ -258,16 +247,7 @@ const AddTaskModal = ({ open, onClose }) => {
 
     if (!open) return null;
 
-    // Debug logging
-    console.log('AddTaskModal - Render state:', {
-        open,
-        user,
-        userWithProjects,
-        projects: userWithProjects?.Projects,
-        projectsLength: userWithProjects?.Projects?.length,
-        projectsLoading,
-        selectedProject
-    });
+  
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -544,7 +524,10 @@ const AddTaskModal = ({ open, onClose }) => {
                                 >
                                     <FileText className="h-4 w-4" />
                                     <span className="text-sm">
-                                        {formdata.phase && phaseHasFolders ? `Phase Documents (${formdata.phase})` : 'Internal Document'}
+                                        {formdata.phase ? 
+                                            phaseHasFolders ? `Phase Documents (${formdata.phase})` : 
+                                            'Select Document'
+                                        : 'Internal Document'}
                                     </span>
                                 </button>
                                 {(selectedFile || selectedInternalDoc) && (

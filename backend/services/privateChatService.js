@@ -5,7 +5,6 @@ import { userSocketMap } from "../constants/userSocketMapConstant.js";
 // Handle private message via socket
 export const handlePrivateMessage = async (data, redisPub, io) => {
 
-
   // Add a simple deduplication check using message content and sender
   const messageKey = `${data.private_conversation_id}-${data.sender_id}-${data.content}`;
   if (global.processedMessages && global.processedMessages.has(messageKey)) {
@@ -25,7 +24,6 @@ export const handlePrivateMessage = async (data, redisPub, io) => {
 
   try {
     // Save message to database
-
 
     const savedMessage = await prisma.privateMessage.create({
       data: {
@@ -53,7 +51,6 @@ export const handlePrivateMessage = async (data, redisPub, io) => {
       }
     });
 
-
     // Prepare broadcast data
     const broadcastData = {
       message_id: savedMessage.private_message_id, // Frontend expects message_id
@@ -72,7 +69,6 @@ export const handlePrivateMessage = async (data, redisPub, io) => {
       task_name: data.task_name,
       task_id: data.task_id
     };
-
 
     // Publish to Redis for other server instances
     if (redisPub) {
@@ -97,7 +93,6 @@ export const handlePrivateMessage = async (data, redisPub, io) => {
     }
 
   } catch (error) {
-    console.error('❌ Error handling private message:', error);
   }
 };
 
@@ -107,10 +102,8 @@ export const initPrivateChatRedisSubscriber = (redisSub, io) => {
     return;
   }
 
-
   redisSub.subscribe('on_private_publish', (err) => {
     if (err) {
-      console.error('❌ Error subscribing to private chat Redis channel:', err);
       return;
     }
   });
@@ -120,20 +113,15 @@ export const initPrivateChatRedisSubscriber = (redisSub, io) => {
       try {
         const parseMessage = JSON.parse(message);
 
-
         if (parseMessage.event === 'on:private_message') {
           const receiver_id = parseMessage.receiver_id;
           const sender_id = parseMessage.sender_id;
-
-
 
           // Emit to receiver
           let receiverSocketId = userSocketMap.get(receiver_id.toString());
           if (!receiverSocketId) {
             receiverSocketId = userSocketMap.get(parseInt(receiver_id));
           }
-
-
 
           if (receiverSocketId) {
             io.to(receiverSocketId).emit('on:private_message', parseMessage);
@@ -152,7 +140,6 @@ export const initPrivateChatRedisSubscriber = (redisSub, io) => {
           }
         }
       } catch (error) {
-        console.error('❌ Error processing private Redis message:', error);
       }
     }
   });

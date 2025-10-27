@@ -43,7 +43,6 @@ export const createCall = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Create call error:', error);
         return next(new ErrorHandler(`Failed to create call record: ${error.message}`, 500));
     }
 });
@@ -126,7 +125,6 @@ export const getCallHistory = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Get call history error:', error);
         return next(new ErrorHandler(`Failed to fetch call history: ${error.message}`, 500));
     }
 });
@@ -196,7 +194,6 @@ export const updateCallStatus = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Update call status error:', error);
         return next(new ErrorHandler(`Failed to update call status: ${error.message}`, 500));
     }
 });
@@ -240,7 +237,6 @@ export const updateCallDescription = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Update call description error:', error);
         return next(new ErrorHandler(`Failed to update call description: ${error.message}`, 500));
     }
 });
@@ -310,7 +306,6 @@ export const getCallStats = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Get call stats error:', error);
         return next(new ErrorHandler(`Failed to fetch call statistics: ${error.message}`, 500));
     }
 });
@@ -347,7 +342,6 @@ export const deleteCall = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Delete call error:', error);
         return next(new ErrorHandler(`Failed to delete call record: ${error.message}`, 500));
     }
 });
@@ -371,7 +365,6 @@ export const getCallBySid = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Get call by SID error:', error);
         return next(new ErrorHandler(`Failed to fetch call: ${error.message}`, 500));
     }
 });

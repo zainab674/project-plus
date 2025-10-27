@@ -34,41 +34,30 @@ const initChatServer = (io) => {
 
       // Test connection
       redisPub.ping().then(() => {
-        console.log('✅ Redis connected successfully');
         //subscribe redis
         initRedisSubcriber(redisSub, io);
         initChatConsumer();
       }).catch((error) => {
-        console.log('❌ Redis connection failed:', error.message);
-        console.log('🔄 Running without Redis, using direct socket broadcasting');
         redisPub = null;
         redisSub = null;
       });
     } catch (error) {
-      console.log('❌ Redis initialization failed:', error.message);
-      console.log('🔄 Running without Redis, using direct socket broadcasting');
       redisPub = null;
       redisSub = null;
     }
   } else {
-    console.log('Redis not configured, running without Redis');
   }
   */
   
   // Force Redis to be null to use direct socket broadcasting
   redisPub = null;
   redisSub = null;
-  console.log('🔄 Running without Redis, using direct socket broadcasting');
 
   io.on("connection", (socket) => {
-    console.log('🔌 New socket connection:', socket.id);
 
     //save user socket id
     const config = socket.handshake.query;
     const user_id = config.user_id;
-
-    console.log('🔌 User ID from query:', user_id);
-    console.log('🔌 Socket ID:', socket.id);
 
     if (user_id) {
       //change user active status on db - pending
@@ -76,12 +65,9 @@ const initChatServer = (io) => {
       
       // Join user's personal room for email notifications
       socket.join(`user_${user_id}`);
-      console.log(`🔌 User ${user_id} joined personal notification room`);
     }
 
     userSocketMap.set(user_id, socket.id);
-    console.log('🔌 User socket map updated. Size:', userSocketMap.size);
-    console.log('🔌 User socket map keys:', Array.from(userSocketMap.keys()));
 
     // Chat events
     socket.on(ON_DISCONNET, () => handleDisconnect(config));
@@ -100,37 +86,30 @@ const initChatServer = (io) => {
 
     // Email notification events
     socket.on('request_email_count', (data) => {
-      console.log('📧 Email count requested for user:', data.user_id);
       // This will be handled by the email polling service
     });
 
     socket.on('mark_email_read', (data) => {
-      console.log('📧 Mark email as read:', data);
       // This will be handled by the email polling service
     });
 
     socket.on('mark_email_unread', (data) => {
-      console.log('📧 Mark email as unread:', data);
       // This will be handled by the email polling service
     });
 
     socket.on('delete_email', (data) => {
-      console.log('📧 Delete email:', data);
       // This will be handled by the email polling service
     });
 
     socket.on('archive_email', (data) => {
-      console.log('📧 Archive email:', data);
       // This will be handled by the email polling service
     });
 
     // Handle disconnection
     socket.on('disconnect', () => {
-      console.log('🔌 Socket disconnected:', socket.id);
       if (user_id) {
         // Leave personal room
         socket.leave(`user_${user_id}`);
-        console.log(`🔌 User ${user_id} left personal notification room`);
       }
     });
 

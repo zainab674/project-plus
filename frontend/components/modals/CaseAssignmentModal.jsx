@@ -46,7 +46,6 @@ const CaseAssignmentModal = ({ isOpen, onClose }) => {
         try {
             const response = await getTeamMembersRequest();
             const allMembers = response.data.teamMembers || [];
-            console.log("allmembers", allMembers)
             const billersOnly = allMembers.filter(member => member.role === 'BILLER'); // ✅ Only BILLERs
             setTeamMembers(billersOnly);
         } catch (error) {
@@ -58,15 +57,11 @@ const CaseAssignmentModal = ({ isOpen, onClose }) => {
     // Fetch cases already assigned to billers
     const fetchAssignedCases = useCallback(async () => {
         try {
-            console.log('🔍 CaseAssignmentModal - Fetching assigned cases...');
             const response = await getBillerAssignedCasesRequest();
-            console.log('🔍 CaseAssignmentModal - Response:', response);
 
             if (response.data.success) {
-                console.log('✅ CaseAssignmentModal - Setting assigned cases:', response.data.assignedCases);
                 setAssignedCases(response.data.assignedCases);
             } else {
-                console.log('⚠️ CaseAssignmentModal - Response not successful:', response.data);
                 setAssignedCases([]);
             }
         } catch (error) {
@@ -76,7 +71,6 @@ const CaseAssignmentModal = ({ isOpen, onClose }) => {
     }, []);
 
     useEffect(() => {
-        console.log("bhiller", user)
         if (isOpen) {
             fetchProjects();
             loadTeamMembers();

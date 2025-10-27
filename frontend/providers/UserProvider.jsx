@@ -1,5 +1,5 @@
 'use client';
-import { loadUserRequest, getUserWithProjectsRequest, updateRoleRequest } from '@/lib/http/auth';
+import { loadUserRequest, getUserWithProjectsRequest } from '@/lib/http/auth';
 import {createContext, useCallback, useContext, useLayoutEffect, useState} from 'react';
 
 export const UserContext = createContext({
@@ -13,12 +13,6 @@ export const UserContext = createContext({
     loadUser: () => {},
     loadUserWithProjects: () => {},
     hasFullUserData: false,
-    showRoleSelection: false,
-    setShowRoleSelection: () => {},
-    updateUserRole: () => {},
-    resetRoleSelection: () => {},
-    forceShowRoleSelection: () => {},
-    dismissRoleSelection: () => {}
 });
 
 
@@ -27,7 +21,6 @@ export const UserProvider = ({children}) => {
     const [isAuth, setIsAuth] = useState(undefined);
     const [isLoading, setIsLoading] = useState(false);
     const [userAvatar,setUserAvatar] = useState('EX');
-    const [showRoleSelection, setShowRoleSelection] = useState(false);
     const [hasFullUserData, setHasFullUserData] = useState(false);
   
 
@@ -44,29 +37,10 @@ export const UserProvider = ({children}) => {
                 setUserAvatar(`${firstname?.slice(0,1)?.toUpperCase() || ''}${lastname?.slice(0,1)?.toUpperCase() || ''}`)
             }
 
-            // Check if user needs role selection
-            const userRole = res?.data?.user?.Role;
-            
-            // Check if user has already selected a role (persisted in localStorage)
-            const hasSelectedRole = localStorage.getItem('roleSelected');
-            
-            // Only show role selection for users who:
-            // 1. Have default PROVIDER role
-            // 2. Haven't already selected a role (persisted in localStorage)
-            // 3. Haven't dismissed the role selection
-            const hasDismissedRoleSelection = localStorage.getItem('roleSelectionDismissed');
-            
-            if (userRole === 'PROVIDER' && !hasSelectedRole && !hasDismissedRoleSelection) {
-                setShowRoleSelection(true);
-            } else if (userRole !== 'PROVIDER') {
-                // If user has already selected a role other than PROVIDER, mark as selected
-                localStorage.setItem('roleSelected', 'true');
-            }
         } catch (error) {
             setIsAuth(false);
             // Clear invalid token
             localStorage.removeItem('authToken');
-            console.log(error?.response?.data?.message || error.message)
         }finally{
             setIsLoading(false);
         }
@@ -83,47 +57,12 @@ export const UserProvider = ({children}) => {
             setHasFullUserData(true);
             return fullUserData;
         } catch (error) {
-            console.log(error?.response?.data?.message || error.message);
             throw error;
         } finally {
             setIsLoading(false);
         }
     }, [hasFullUserData, user]);
 
-    const updateUserRole = useCallback(async (role) => {
-        setIsLoading(true);
-        try {
-            const res = await updateRoleRequest({ role });
-            setUser(res?.data?.user);
-            setShowRoleSelection(false);
-            
-            // Persist that user has selected a role
-            localStorage.setItem('roleSelected', 'true');
-            
-            return res?.data?.user;
-        } catch (error) {
-            console.log(error?.response?.data?.message || error.message);
-            throw error;
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    const resetRoleSelection = useCallback(() => {
-        localStorage.removeItem('roleSelected');
-        setShowRoleSelection(false);
-    }, []);
-
-    const forceShowRoleSelection = useCallback(() => {
-        localStorage.removeItem('roleSelected');
-        localStorage.removeItem('roleSelectionDismissed');
-        setShowRoleSelection(true);
-    }, []);
-
-    const dismissRoleSelection = useCallback(() => {
-        localStorage.setItem('roleSelectionDismissed', 'true');
-        setShowRoleSelection(false);
-    }, []);
 
     useLayoutEffect(() => {
         loadUser();
@@ -140,12 +79,6 @@ export const UserProvider = ({children}) => {
         loadUser,
         loadUserWithProjects,
         hasFullUserData,
-        showRoleSelection,
-        setShowRoleSelection,
-        updateUserRole,
-        resetRoleSelection,
-        forceShowRoleSelection,
-        dismissRoleSelection
     }}>
         {children}
     </UserContext.Provider>
@@ -168,12 +101,6 @@ export const useUser = () => {
             loadUser: () => {},
             loadUserWithProjects: () => {},
             hasFullUserData: false,
-            showRoleSelection: false,
-            setShowRoleSelection: () => {},
-            updateUserRole: () => {},
-            resetRoleSelection: () => {},
-            forceShowRoleSelection: () => {},
-            dismissRoleSelection: () => {}
         };
     }
     

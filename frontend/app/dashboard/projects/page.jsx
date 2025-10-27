@@ -41,7 +41,6 @@ export default function Page({ params }) {
             setProjects([...projects, ...collaboratedProjects]);
         } catch (error) {
             setProjects(null);
-            console.log(error?.response?.data?.meesage || error?.meesage);
         } finally {
             setLoading(false);
         }

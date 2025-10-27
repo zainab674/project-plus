@@ -4,7 +4,7 @@
 
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, X, Calendar, User, FileText, AlertCircle, Briefcase, Layers, Users, ChevronDown, BookTemplate } from 'lucide-react';
+import { Plus, X, Calendar, User, FileText, AlertCircle, Briefcase, Layers, Users, ChevronDown, BookTemplate, Upload, File } from 'lucide-react';
 import { useUser } from '@/providers/UserProvider';
 import { createProjectRequest } from '@/lib/http/project';
 import { getTeamMembersRequest } from '@/lib/http/auth';
@@ -14,9 +14,9 @@ import { toast } from 'react-toastify';
 import Loader from '../Loader';
 // import { useRouter } from 'next/router';
 import { useRouter } from 'next/navigation'; // ✅ App Router version
-import { Checkbox } from '@headlessui/react';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { getNameAvatar } from '@/utils/getNameAvatar';
+import useClickOutside from '@/hooks/useClickOutside';
 
 
 const CreateCaseModal = ({ onClose, prefillData = {} }) => {
@@ -40,11 +40,17 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
         phases: []
     });
     const [phaseInput, setPhaseInput] = useState('');
+    const [attachments, setAttachments] = useState([]);
+    const [isDragOver, setIsDragOver] = useState(false);
     const userContext = useUser();
     const router = useRouter(); // ✅ useRouter instead of useNavigate
 
     // Safely destructure loadUser with fallback
     const loadUser = userContext?.loadUser || (() => {});
+
+    // Click outside refs for dropdowns
+    const teamMembersDropdownRef = useClickOutside(() => setIsDropdownOpen(false), [isDropdownOpen]);
+    const templateSelectorRef = useClickOutside(() => setShowTemplateSelector(false), [showTemplateSelector]);
 
     useEffect(() => {
         const loadTeamMembers = async () => {
@@ -116,8 +122,14 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                 ...caseData,
                 selectedTeamMembers
             };
-            const res = await createProjectRequest(projectData);
-            toast.success(res?.data?.message);
+            
+           
+            
+            const res = await createProjectRequest(projectData, attachments);
+            
+           
+            
+            toast.success(res?.data?.message || 'Case created successfully');
             await loadUser();
             router.push(`/dashboard/project/${res?.data?.project?.project_id}`);
 
@@ -127,7 +139,7 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
         } finally {
             setIsLoading(false);
         }
-    }, [caseData, selectedTeamMembers]);
+    }, [caseData, selectedTeamMembers, attachments]);
 
     const getPriorityColor = (priority) => {
         switch (priority) {
@@ -162,6 +174,75 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
         }
     };
 
+    // File handling functions
+    const handleFileSelect = (e) => {
+        const files = Array.from(e.target.files);
+        addFiles(files);
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        setIsDragOver(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const files = Array.from(e.dataTransfer.files);
+        addFiles(files);
+    };
+
+    const addFiles = (files) => {
+        const validFiles = files.filter(file => {
+            
+            // Check file type
+            const allowedTypes = [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'text/plain',
+                'image/jpeg',
+                'image/png',
+                'image/gif'
+            ];
+            
+            if (!allowedTypes.includes(file.type)) {
+                toast.error(`File type not supported: ${file.name}`);
+                return false;
+            }
+            
+            // Check file size (10MB limit)
+            if (file.size > 10 * 1024 * 1024) {
+                toast.error(`File too large: ${file.name} (max 10MB)`);
+                return false;
+            }
+            
+            return true;
+        });
+
+        setAttachments(prev => {
+            const newAttachments = [...prev, ...validFiles];
+            return newAttachments;
+        });
+    };
+
+    const removeAttachment = (index) => {
+        setAttachments(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
     const handleTemplateSelect = (template) => {
         setSelectedTemplate(template);
         setCaseData(prev => ({
@@ -191,10 +272,29 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                 clientAddress: caseData.client_address
             };
 
-            const response = await useTemplateForProjectRequest(selectedTemplate.template_id, projectData);
+            // Create FormData to send files with the request
+            const formData = new FormData();
+            
+            // Add project data as JSON
+            formData.append('projectData', JSON.stringify(projectData));
+            
+            // Add files if there are any attachments
+            if (attachments.length > 0) {
+                attachments.forEach((file, index) => {
+                    formData.append(`file_${index}`, file);
+                });
+            }
+            
+            const response = await useTemplateForProjectRequest(selectedTemplate.template_id, formData);
             
             if (response.data.success) {
-                toast.success('Case created from template successfully!');
+                const uploadedCount = response.data.uploadedFiles?.length || 0;
+                if (uploadedCount > 0) {
+                    toast.success(`Case created from template successfully with ${uploadedCount} file(s)!`);
+                } else {
+                    toast.success('Case created from template successfully!');
+                }
+                
                 await loadUser();
                 router.push(`/dashboard/project/${response.data.project.project_id}`);
                 onClose();
@@ -235,38 +335,21 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                             Use Case Template (Optional)
                         </label>
                         <div className="flex gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowTemplateSelector(!showTemplateSelector)}
-                                className="flex-1 p-3 border border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors bg-white text-left flex items-center justify-between"
-                            >
-                                <span className="text-slate-700">
-                                    {selectedTemplate ? selectedTemplate.name : "Select a template"}
-                                </span>
-                                <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showTemplateSelector ? 'rotate-180' : ''}`} />
-                            </button>
-                            {selectedTemplate && (
+                            <div className="flex-1 relative" ref={templateSelectorRef}>
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        setSelectedTemplate(null);
-                                        setCaseData(prev => ({
-                                            ...prev,
-                                            priority: 'Medium',
-                                            phases: [],
-                                            description: ''
-                                        }));
-                                    }}
-                                    className="px-4 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                                    onClick={() => setShowTemplateSelector(!showTemplateSelector)}
+                                    className="w-full p-3 border border-slate-500 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-colors bg-white text-left flex items-center justify-between"
                                 >
-                                    <X className="w-4 h-4" />
+                                    <span className="text-slate-700">
+                                        {selectedTemplate ? selectedTemplate.name : "Select a template"}
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showTemplateSelector ? 'rotate-180' : ''}`} />
                                 </button>
-                            )}
-                        </div>
 
-                        {/* Template Selector Dropdown */}
-                        {showTemplateSelector && (
-                            <div className="border border-slate-300 rounded-lg shadow-lg bg-white max-h-60 overflow-y-auto">
+                                {/* Template Selector Dropdown */}
+                                {showTemplateSelector && (
+                                    <div className="absolute z-10 w-full mt-1 border border-slate-300 rounded-lg shadow-lg bg-white max-h-60 overflow-y-auto">
                                 <div className="p-3 border-b border-slate-200">
                                     <p className="text-sm text-slate-600">Select a template to auto-fill case phases and settings:</p>
                                 </div>
@@ -312,8 +395,27 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                                         ))
                                     )}
                                 </div>
+                                    </div>
+                                )}
                             </div>
-                        )}
+                            {selectedTemplate && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedTemplate(null);
+                                        setCaseData(prev => ({
+                                            ...prev,
+                                            priority: 'Medium',
+                                            phases: [],
+                                            description: ''
+                                        }));
+                                    }}
+                                    className="px-4 py-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
 
                         {selectedTemplate && (
                             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -441,7 +543,7 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                         
                         {teamMembers.length > 0 ? (
                             <>
-                                <div className="relative">
+                                <div className="relative" ref={teamMembersDropdownRef}>
                                     <button
                                         type="button"
                                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -454,35 +556,66 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                                     {isDropdownOpen && (
                                         <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                                             <div className="p-3 border-b border-slate-200">
-                                                <p className="text-sm text-slate-600">Select team members to add to this case:</p>
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-sm text-slate-600">Select team members to add to this case:</p>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const teamMemberIds = teamMembers.filter(mem => mem.role === 'TEAM').map(mem => mem.user.user_id);
+                                                                setSelectedTeamMembers(teamMemberIds);
+                                                            }}
+                                                            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                                        >
+                                                            Select All
+                                                        </button>
+                                                        <span className="text-slate-300">|</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedTeamMembers([])}
+                                                            className="text-xs text-slate-500 hover:text-slate-700 font-medium"
+                                                        >
+                                                            Clear All
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                             <div className="p-2">
-                                                {teamMembers.filter(mem => mem.role === 'TEAM').map((member) => (
-                                                    <div
-                                                        key={member.user.user_id}
-                                                        className="flex items-center space-x-3 p-2 hover:bg-slate-50 rounded-md cursor-pointer"
-                                                        onClick={() => handleTeamMemberToggle(member.user.user_id)}
-                                                    >
-                                                        {console.log("teammembers", teamMembers)}
-
-                                                        <Checkbox
-                                                            checked={selectedTeamMembers.includes(member.user.user_id)}
-                                                            onChange={() => handleTeamMemberToggle(member.user.user_id)}
-                                                            className="w-4 h-4 text-blue-600 bg-white border-slate-300 rounded focus:ring-blue-500"
-                                                        />
-                                                        <Avatar className="w-8 h-8">
-                                                            <AvatarFallback className="bg-blue-100 text-blue-700 text-xs">
-                                                                {getNameAvatar(member.user.name)}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div className="flex-1">
-                                                            <div className="text-sm font-medium text-slate-700">
-                                                                {member.user.name}
+                                                {teamMembers.filter(mem => mem.role === 'TEAM').map((member) => {
+                                                    const isSelected = selectedTeamMembers.includes(member.user.user_id);
+                                                    return (
+                                                        <div
+                                                            key={member.user.user_id}
+                                                            className={`flex items-center space-x-3 p-3 hover:bg-slate-50 rounded-md cursor-pointer transition-colors ${
+                                                                isSelected ? 'bg-blue-50 border border-blue-200' : ''
+                                                            }`}
+                                                            onClick={() => handleTeamMemberToggle(member.user.user_id)}
+                                                        >
+                                                            <div className="flex items-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isSelected}
+                                                                    onChange={() => handleTeamMemberToggle(member.user.user_id)}
+                                                                    className="w-4 h-4 text-blue-600 bg-white border-slate-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                                                                />
                                                             </div>
-                                                            <div className="text-xs text-slate-500 capitalize">{member.role}</div>
+                                                            <Avatar className="w-8 h-8">
+                                                                <AvatarFallback className="bg-blue-100 text-blue-700 text-xs">
+                                                                    {getNameAvatar(member.user.name)}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="flex-1">
+                                                                <div className="text-sm font-medium text-slate-700">
+                                                                    {member.user.name}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 capitalize">{member.role}</div>
+                                                            </div>
+                                                            {isSelected && (
+                                                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                                            )}
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
@@ -604,6 +737,74 @@ const CreateCaseModal = ({ onClose, prefillData = {} }) => {
                             rows="4"
                             placeholder="Provide a detailed description of the case, including key facts, issues, and objectives..."
                         />
+                    </div>
+
+                    {/* File Attachments Section */}
+                    <div className="space-y-2 md:col-span-2">
+                        <label className="flex items-center text-base font-semibold text-slate-700 mb-2">
+                            <Upload className="w-4 h-4 mr-2 text-slate-500" />
+                            Attachments (Optional)
+                        </label>
+                        
+                        {/* File Upload Area */}
+                        <div
+                            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                                isDragOver 
+                                    ? 'border-blue-400 bg-blue-50' 
+                                    : 'border-slate-300 bg-slate-50 hover:bg-slate-100'
+                            }`}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                        >
+                            <Upload className={`w-8 h-8 mx-auto mb-3 ${isDragOver ? 'text-blue-500' : 'text-slate-400'}`} />
+                            <p className="text-slate-600 mb-2">
+                                Drag and drop files here, or{' '}
+                                <label className="text-blue-600 hover:text-blue-800 cursor-pointer font-medium">
+                                    browse to select files
+                                    <input
+                                        type="file"
+                                        multiple
+                                        onChange={handleFileSelect}
+                                        className="hidden"
+                                        accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+                                    />
+                                </label>
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                Supported formats: PDF, Word, Text, Images (max 10MB each)
+                            </p>
+                        </div>
+
+                        {/* Selected Files List */}
+                        {attachments.length > 0 && (
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-medium text-slate-700">Selected Files ({attachments.length})</h4>
+                                <div className="space-y-2">
+                                    {attachments.map((file, index) => (
+                                        <div
+                                            key={index}
+                                            className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg"
+                                        >
+                                            <div className="flex items-center space-x-3">
+                                                <File className="w-5 h-5 text-slate-500" />
+                                                <div>
+                                                    <p className="text-sm font-medium text-slate-700">{file.name}</p>
+                                                    <p className="text-xs text-slate-500">{formatFileSize(file.size)}</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeAttachment(index)}
+                                                className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

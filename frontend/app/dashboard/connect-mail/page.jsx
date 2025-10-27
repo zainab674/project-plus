@@ -90,7 +90,6 @@ const page = () => {
         getMails()
     }, [user]);
 
-    console.log(selectedMail)
 
     return (
         <>

@@ -47,7 +47,6 @@ class LiveKitMeetingService {
         throw new Error(`Invalid server URL format: ${data.serverUrl}`);
       }
 
-      console.log('🔗 LiveKit server URL validated:', data.serverUrl);
       return data;
     } catch (error) {
       console.error('Error generating meeting token:', error);

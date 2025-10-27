@@ -3,6 +3,7 @@ import multer from "multer";
 const storage = multer.memoryStorage();
 
 const singleUpload = multer({ storage }).single("file");
+
 const multipleUpload = multer({ 
     storage,
     limits: {
@@ -14,13 +15,16 @@ const multipleUpload = multer({
             'application/pdf',
             'application/msword',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'text/plain'
+            'text/plain',
+            'image/jpeg',
+            'image/png',
+            'image/gif'
         ];
         
         if (allowedTypes.includes(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error('Invalid file type. Only PDF, Word, and text files are allowed.'), false);
+            cb(new Error('Invalid file type. Only PDF, Word, text, and image files are allowed.'), false);
         }
     }
 }).fields([

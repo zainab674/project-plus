@@ -25,8 +25,7 @@ export default function AvailablePhoneNumbers() {
             setIsLoading(true);
             setError(null);
             
-            console.log('🔍 API base URL:', api.defaults.baseURL);
-            console.log('🔍 Search params:', searchParams);
+        
             
             const response = await api.get('/twilio/numbers/search', {
                 params: searchParams

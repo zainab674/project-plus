@@ -47,7 +47,7 @@ const CaseModal = ({ isOpen, onClose }) => {
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6">
-                                    <CaseManagementSystem />
+                                    <CaseManagementSystem onCaseClick={onClose} />
                                 </div>
                             </Dialog.Panel>
                         </Transition.Child>

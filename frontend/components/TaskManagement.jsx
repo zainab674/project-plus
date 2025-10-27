@@ -71,14 +71,12 @@ const PortalDropdown = ({ isOpen, anchorRef, children, className = "" }) => {
             const element = anchorRef.current || anchorRef;
             if (element) {
                 const rect = element.getBoundingClientRect();
-                console.log('PortalDropdown positioning:', { rect, isOpen });
                 setPosition({
                     top: rect.top - 8, // Position above the button
                     left: rect.left,
                     width: rect.width
                 });
             } else {
-                console.log('PortalDropdown: element not found', { anchorRef, isOpen });
             }
         }
     }, [isOpen, anchorRef]);
@@ -388,7 +386,6 @@ const ReviewActionsModal = ({ isOpen, onClose, task, onApprove, onReject, isLoad
     // Handle file view
     const viewFile = async (url, filename) => {
         try {
-            console.log('Viewing file:', { url, filename });
             
             // Check if it's a Cloudinary URL that might force download
             const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
@@ -875,15 +872,9 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
             const isPhaseButton = Object.values(phaseButtonRefs.current).some(ref => ref?.contains(event.target));
             const isDropdownContent = event.target.closest('.portal-dropdown-content');
             
-            console.log('🔍 Click outside check:', {
-                target: event.target,
-                isPhaseButton,
-                isDropdownContent,
-                willClose: !isPhaseButton && !isDropdownContent
-            });
+          
             
             if (!isPhaseButton && !isDropdownContent) {
-                console.log('🚪 Closing phase dropdowns');
                 setShowPhaseDropdown({});
             }
         };
@@ -982,7 +973,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
             if (ccproject.Tasks && ccproject.Tasks.length > 0) {
                 checkAndUpdateOverdueTasks(ccproject.Tasks).then(updatedCount => {
                     if (updatedCount > 0) {
-                        console.log(`Updated ${updatedCount} overdue tasks`)
                     }
                 })
             }
@@ -1127,7 +1117,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
             }
 
             // Debug: Check what we're sending
-            console.log('Sending FormData with task_id:', numericTaskId, 'type:', typeof numericTaskId)
 
             // Submit review to API
             await createReviewRequest(formData)
@@ -1248,7 +1237,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
 
     // Phase change handler
     const handlePhaseChange = useCallback(async (task_id, newPhase) => {
-        console.log('🔄 Phase change initiated:', { task_id, newPhase, taskIdType: typeof task_id });
         
         // Ensure task_id is a number
         const numericTaskId = parseInt(task_id);
@@ -1272,12 +1260,9 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
         setShowPhaseDropdown(prev => ({ ...prev, [task_id]: false }))
 
         try {
-            console.log('📡 Calling updateTaskRequest with:', { phase: newPhase, task_id: numericTaskId });
-            console.log('📡 Request URL will be:', `/task/${numericTaskId}`);
-            console.log('📡 Request data:', { phase: newPhase });
+          
             
             const response = await updateTaskRequest({ phase: newPhase }, numericTaskId)
-            console.log('✅ Phase update successful, response:', response);
             toast.success('Phase updated successfully')
         } catch (error) {
             console.error('❌ Phase update failed:', error);
@@ -1350,7 +1335,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
             await updateTaskRequest({ status }, task_id)
             toast.success("Task status updated")
         } catch (error) {
-            console.log(error?.response?.data?.message || error?.message)
             toast.error("Failed to update task status")
         }
     }, [project])
@@ -1648,7 +1632,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                                         }
                                                                     }}
                                                                     onClick={(e) => {
-                                                                        console.log('🎯 Kanban phase button clicked:', { taskId: task.task_id, currentState: showPhaseDropdown[task.task_id] });
                                                                         e.stopPropagation()
                                                                         e.preventDefault()
                                                                         setShowPhaseDropdown(prev => {
@@ -1656,7 +1639,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                                                 ...prev,
                                                                                 [task.task_id]: !prev[task.task_id]
                                                                             };
-                                                                            console.log('🔄 Phase dropdown state change:', { taskId: task.task_id, newState });
                                                                             return newState;
                                                                         })
                                                                     }}
@@ -1875,7 +1857,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                                     ...prev,
                                                                     [task.task_id]: !prev[task.task_id]
                                                                 };
-                                                                console.log('Phase dropdown state:', { taskId: task.task_id, newState });
                                                                 return newState;
                                                             })
                                                         }}
@@ -2037,7 +2018,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                 <button
                                     key={phaseOption}
                                     onClick={(e) => {
-                                        console.log('🎯 PortalDropdown Phase button clicked:', { taskId: task.task_id, phaseOption });
                                         e.stopPropagation()
                                         e.preventDefault()
                                         handlePhaseChange(task.task_id, phaseOption)

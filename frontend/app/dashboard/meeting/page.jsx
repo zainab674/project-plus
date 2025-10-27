@@ -11,28 +11,34 @@ import {
 } from "lucide-react"
 import { Select, SelectGroup, SelectLabel, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import RenderMeeting from "@/components/RenderMeeting"
+import RenderScheduleMeeting from "@/components/RenderScheduleMeeting"
 import CreateMeeting from "@/components/CreateMeeting"
 import { getsMeetingRequest } from "@/lib/http/meeting"
 import { useUser } from "@/providers/UserProvider"
 import CreateMeetingClient from "@/components/CreateMeetingClient"
 
-
-
-
 export default function Page() {
     const [createMeeting, setCreateMeeting] = useState(false);
     const [createMeetingClient, setCreateMeetingClient] = useState(false);
+    const [createScheduledMeeting, setCreateScheduledMeeting] = useState(false);
+    const [createScheduledMeetingClient, setCreateScheduledMeetingClient] = useState(false);
     const [meetings, setMeetings] = useState([]);
+    const [scheduledMeetings, setScheduledMeetings] = useState([]);
     const { user } = useUser();
 
     const getMeetings = useCallback(async () => {
-
         try {
             const res = await getsMeetingRequest(false);
-
             setMeetings(res.data.meetings);
         } catch (error) {
-            console.log(error?.response?.data?.message || error.message);
+        }
+    }, []);
+
+    const getScheduledMeetings = useCallback(async () => {
+        try {
+            const res = await getsMeetingRequest(true);
+            setScheduledMeetings(res.data.meetings);
+        } catch (error) {
         }
     }, []);
 
@@ -40,11 +46,15 @@ export default function Page() {
         setMeetings(prevMeetings => 
             prevMeetings.filter(meeting => meeting.meeting_id !== deletedMeetingId)
         );
+        setScheduledMeetings(prevScheduledMeetings => 
+            prevScheduledMeetings.filter(meeting => meeting.meeting_id !== deletedMeetingId)
+        );
     }, []);
 
     useEffect(() => {
         getMeetings();
-    }, []);
+        getScheduledMeetings();
+    }, [getMeetings, getScheduledMeetings]);
 
     return (
         <>
@@ -53,19 +63,17 @@ export default function Page() {
                     {/* Header */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <h1 className="text-2xl font-semibold text-black">All Meetings</h1>
+                            <h1 className="text-2xl font-semibold text-black">Meetings</h1>
                             <Info className="h-4 w-4 text-black" />
                         </div>
-
                     </div>
 
                     {/* View Tabs */}
-                    <Tabs defaultValue="all" className="w-full">
+                    <Tabs defaultValue="instant" className="w-full">
                         <div className="flex items-center justify-between">
                             <TabsList className="bg-white border border-primary">
-                                <TabsTrigger value="all" className="data-[state=active]:bg-tbutton-bg data-[state=active]:text-tbutton-text">All</TabsTrigger>
-                                <TabsTrigger value="created" className="data-[state=active]:bg-tbutton-bg data-[state=active]:text-tbutton-text">Created</TabsTrigger>
-                                <TabsTrigger value="joined" className="data-[state=active]:bg-tbutton-bg data-[state=active]:text-tbutton-text">Joined</TabsTrigger>
+                                <TabsTrigger value="instant" className="data-[state=active]:bg-tbutton-bg data-[state=active]:text-tbutton-text">Instant Meetings</TabsTrigger>
+                                <TabsTrigger value="scheduled" className="data-[state=active]:bg-tbutton-bg data-[state=active]:text-tbutton-text">Scheduled Meetings</TabsTrigger>
                             </TabsList>
                             <div className="flex items-center gap-2">
                                 {
@@ -73,19 +81,14 @@ export default function Page() {
                                     <>
                                         <Button className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all" onClick={() => setCreateMeeting(true)}>
                                             <Plus className="mr-2 h-4 w-4" />
-                                            New Meet For Team
+                                            New Instant Meeting
                                         </Button>
                                         <Button className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all" onClick={() => setCreateMeetingClient(true)}>
                                             <Plus className="mr-2 h-4 w-4" />
-                                            New Meet For Client
+                                            New Client Meeting
                                         </Button>
                                     </>
                                 }
-
-                                {/* <div className="relative">
-                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-                                    <Input className="w-64 pl-8" placeholder="Search" />
-                                </div> */}
                                 <Select>
                                     <SelectTrigger className="w-[180px] bg-white border-primary text-black">
                                         <SelectValue placeholder="Select a date" />
@@ -93,7 +96,7 @@ export default function Page() {
                                     <SelectContent className="bg-white border-primary">
                                         <SelectGroup>
                                             <SelectLabel className="text-black">Today</SelectLabel>
-                                            <SelectItem value="apple" className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">Yeaterday</SelectItem>
+                                            <SelectItem value="apple" className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">Yesterday</SelectItem>
                                             <SelectItem value="banana" className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">03-12-2024</SelectItem>
                                             <SelectItem value="blueberry" className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">02-12-2024</SelectItem>
                                             <SelectItem value="grapes" className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">01-12-2024</SelectItem>
@@ -104,7 +107,7 @@ export default function Page() {
                             </div>
                         </div>
 
-                        <TabsContent value="all">
+                        <TabsContent value="instant">
                             {
                                 meetings.length > 0 &&
                                 <RenderMeeting meetings={meetings} onMeetingDeleted={handleMeetingDeleted} />
@@ -112,67 +115,113 @@ export default function Page() {
                             {
                                 meetings.length == 0 &&
                                 <div className="flex flex-col h-[500px] items-center justify-center text-black gap-4">
-                                    <p>No meeting</p>
+                                    <p>No instant meetings</p>
                                     {user?.Role === "PROVIDER" && (
                                         <Button 
                                             className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
                                             onClick={() => setCreateMeeting(true)}
                                         >
                                             <Plus className="mr-2 h-4 w-4" />
-                                            Add new meeting
+                                            Add new instant meeting
                                         </Button>
                                     )}
                                 </div>
                             }
+                        </TabsContent>
 
-                        </TabsContent>
-                        <TabsContent value="created">
-                            {
-                                meetings?.filter(meeting => meeting.user_id == user?.user_id).length > 0 &&
-                                <RenderMeeting meetings={meetings?.filter(meeting => meeting.user_id == user?.user_id)} onMeetingDeleted={handleMeetingDeleted} />
-                            }
-                            {
-                                meetings?.filter(meeting => meeting.user_id == user?.user_id).length == 0 &&
-                                <div className="flex flex-col h-[500px] items-center justify-center text-black gap-4">
-                                    <p>No meeting</p>
-                                    {user?.Role === "PROVIDER" && (
-                                        <Button 
-                                            className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
-                                            onClick={() => setCreateMeeting(true)}
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Add new meeting
-                                        </Button>
+                        <TabsContent value="scheduled">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-lg font-semibold text-black">Scheduled Meetings</h3>
+                                    <Info className="h-4 w-4 text-black" />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {(user?.Role === "PROVIDER" || user?.Role === "TEAM") && (
+                                        <>
+                                            <Button
+                                                className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
+                                                onClick={() => setCreateScheduledMeeting(true)}
+                                            >
+                                                Schedule Team Meeting
+                                            </Button>
+                                            <Button
+                                                className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
+                                                onClick={() => setCreateScheduledMeetingClient(true)}
+                                            >
+                                                Schedule Client Meeting
+                                            </Button>
+                                        </>
                                     )}
                                 </div>
-                            }
-                        </TabsContent>
-                        <TabsContent value="joined">
-                            {
-                                meetings?.filter(meeting => meeting.user_id != user?.user_id).length > 0 &&
-                                <RenderMeeting meetings={meetings?.filter(meeting => meeting.user_id != user?.user_id)} onMeetingDeleted={handleMeetingDeleted} />
-                            }
-                            {
-                                meetings?.filter(meeting => meeting.user_id != user?.user_id).length == 0 &&
-                                <div className="flex flex-col h-[500px] items-center justify-center text-black gap-4">
-                                    <p>No meeting</p>
-                                    {user?.Role === "PROVIDER" && (
-                                        <Button 
-                                            className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
-                                            onClick={() => setCreateMeeting(true)}
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Add new meeting
-                                        </Button>
-                                    )}
-                                </div>
-                            }
+                            </div>
+                            <Tabs defaultValue="pending" className="w-full">
+                                <TabsList className="bg-white border border-primary mb-4">
+                                    <TabsTrigger value="pending" className="data-[state=active]:bg-tbutton-bg data-[state=active]:text-tbutton-text">Pending</TabsTrigger>
+                                    <TabsTrigger value="scheduled" className="data-[state=active]:bg-tbutton-bg data-[state=active]:text-tbutton-text">Scheduled</TabsTrigger>
+                                    <TabsTrigger value="canceled" className="data-[state=active]:bg-tbutton-bg data-[state=active]:text-tbutton-text">Canceled</TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="pending">
+                                    {
+                                        scheduledMeetings?.filter(meeting => meeting.status == "PENDING").length > 0 &&
+                                        <RenderScheduleMeeting 
+                                            meetings={scheduledMeetings?.filter(meeting => meeting.status == "PENDING")} 
+                                            getMeetings={getScheduledMeetings}
+                                            onMeetingDeleted={handleMeetingDeleted}
+                                        />
+                                    }
+                                    {
+                                        scheduledMeetings?.filter(meeting => meeting.status == "PENDING").length == 0 &&
+                                        <div className="flex h-[500px] items-center justify-center text-black">
+                                            No pending meetings
+                                        </div>
+                                    }
+                                </TabsContent>
+
+                                <TabsContent value="scheduled">
+                                    {
+                                        scheduledMeetings?.filter(meeting => meeting.status == "SCHEDULED").length > 0 &&
+                                        <RenderScheduleMeeting 
+                                            meetings={scheduledMeetings?.filter(meeting => meeting.status == "SCHEDULED")} 
+                                            getMeetings={getScheduledMeetings}
+                                            onMeetingDeleted={handleMeetingDeleted}
+                                        />
+                                    }
+                                    {
+                                        scheduledMeetings?.filter(meeting => meeting.status == "SCHEDULED").length == 0 &&
+                                        <div className="flex h-[500px] items-center justify-center text-black">
+                                            No scheduled meetings
+                                        </div>
+                                    }
+                                </TabsContent>
+
+                                <TabsContent value="canceled">
+                                    {
+                                        scheduledMeetings?.filter(meeting => meeting.status == "CANCELED").length > 0 &&
+                                        <RenderScheduleMeeting 
+                                            meetings={scheduledMeetings?.filter(meeting => meeting.status == "CANCELED")} 
+                                            getMeetings={getScheduledMeetings}
+                                            onMeetingDeleted={handleMeetingDeleted}
+                                        />
+                                    }
+                                    {
+                                        scheduledMeetings?.filter(meeting => meeting.status == "CANCELED").length == 0 &&
+                                        <div className="flex h-[500px] items-center justify-center text-black">
+                                            No canceled meetings
+                                        </div>
+                                    }
+                                </TabsContent>
+                            </Tabs>
                         </TabsContent>
                     </Tabs>
                 </div>
             </div>
             <CreateMeeting open={createMeeting} onClose={() => setCreateMeeting(false)} isScheduled={false} getMeetings={getMeetings} project_id={null} />
             <CreateMeetingClient open={createMeetingClient} onClose={() => setCreateMeetingClient(false)} isScheduled={false} getMeetings={getMeetings} project_id={null} />
+            
+            {/* Scheduled Meeting Creation Modals */}
+            <CreateMeeting open={createScheduledMeeting} onClose={() => setCreateScheduledMeeting(false)} isScheduled={true} getMeetings={getScheduledMeetings} project_id={null} />
+            <CreateMeetingClient open={createScheduledMeetingClient} onClose={() => setCreateScheduledMeetingClient(false)} isScheduled={true} getMeetings={getScheduledMeetings} project_id={null} />
         </>
     )
 }

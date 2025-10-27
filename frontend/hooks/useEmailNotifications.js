@@ -26,7 +26,6 @@ export const useEmailNotifications = () => {
 
             // Set up notification callbacks
             service.onNewEmail((notification) => {
-                console.log('📧 New email notification received:', notification);
                 
                 // Add to notifications list
                 setNotifications(prev => [notification, ...prev.slice(0, 9)]); // Keep last 10
@@ -41,7 +40,6 @@ export const useEmailNotifications = () => {
             });
 
             service.onEmailCountUpdate((data) => {
-                console.log('📊 Email count updated:', data);
                 setUnreadCount(data.unread_count || 0);
             });
 

@@ -2,7 +2,7 @@
 import React, { useCallback } from 'react'
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Bell, Brain, DoorOpen, Menu, User, Shield } from 'lucide-react'
+import { Bell, Brain, DoorOpen, Menu, User, Shield, PanelLeft, PanelRight } from 'lucide-react'
 import { useUser } from '@/providers/UserProvider'
 import { useRouter } from 'next/navigation'
 import {
@@ -16,7 +16,7 @@ import { logoutUserRequest } from '@/lib/http/auth'
 import { toast } from 'react-toastify'
 import FilterControls from './FilterControls'
 
-const TopNavigation = ({ setSidebarOpen }) => {
+const TopNavigation = ({ setSidebarOpen, isSidebarMode, setIsSidebarMode }) => {
     const { user, userAvatar, setUser, setIsAuth } = useUser();
     const router = useRouter();
 
@@ -37,7 +37,7 @@ const TopNavigation = ({ setSidebarOpen }) => {
         }
     }, []);
     return (
-        <header className="bg-white shadow">
+        <header className="sticky top-0 z-[40] bg-white shadow">
             <div className="flex h-16 items-center justify-between px-4">
                 <div className="flex items-center space-x-6">
                     <h2 className='font-medium text-2xl hidden lg:block text-black'>flexywexy.com</h2>
@@ -51,6 +51,27 @@ const TopNavigation = ({ setSidebarOpen }) => {
                 </div>
 
                 <div className="flex items-center space-x-4">
+                    {/* Quick Actions Toggle Button */}
+                    {isSidebarMode !== undefined && setIsSidebarMode && (
+                        <button
+                            onClick={() => setIsSidebarMode(!isSidebarMode)}
+                            className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 text-sm font-medium text-gray-700"
+                            title={isSidebarMode ? "Switch to horizontal layout" : "Switch to vertical layout"}
+                        >
+                            {isSidebarMode ? (
+                                <>
+                                    <PanelRight className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Horizontal</span>
+                                </>
+                            ) : (
+                                <>
+                                    <PanelLeft className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Vertical</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+                    
                     <Button variant="ghost" size="icon" className="text-black hover:bg-tbutton-bg hover:text-tbutton-text">
                         <Brain className="h-5 w-5" />
                     </Button>

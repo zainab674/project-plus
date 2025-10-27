@@ -30,7 +30,6 @@ import { getTemplateFileRequest, sendToClientRequest, updateLawyerSendedDocument
 // Utility function to download files with proper filename
 const downloadFile = async (url, filename) => {
   try {
-    console.log('Downloading file:', { url, filename });
     
     // Always prioritize the provided filename over URL extraction
     let finalFilename = filename;
@@ -43,7 +42,6 @@ const downloadFile = async (url, filename) => {
       finalFilename = finalFilename.split('?')[0];
     }
     
-    console.log('Final filename:', finalFilename);
     
     // First try the blob approach
     const response = await fetch(url, {
@@ -104,7 +102,6 @@ const downloadFile = async (url, filename) => {
 // Utility function to view files in new tab
 const viewFile = async (url, filename) => {
   try {
-    console.log('Viewing file:', { url, filename });
     
     // Check if it's a Cloudinary URL that might force download
     const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');

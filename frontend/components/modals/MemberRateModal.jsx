@@ -19,9 +19,7 @@ const MemberRateModal = ({ isOpen, onClose, caseId, caseName, teamMembers, onSuc
     // Fetch existing member rates when modal opens
     useEffect(() => {
         if (isOpen && caseId) {
-            console.log('MemberRateModal opened with caseId:', caseId);
-            console.log('Team members received:', teamMembers);
-            console.log('Team members structure:', teamMembers?.map(m => ({ user_id: m.user_id, name: m.name, email: m.email })));
+           
             fetchMemberRates();
         }
     }, [isOpen, caseId, teamMembers]);
@@ -114,9 +112,7 @@ const MemberRateModal = ({ isOpen, onClose, caseId, caseName, teamMembers, onSuc
     };
 
     const getMemberName = (memberId) => {
-        console.log('Looking for member with ID:', memberId, 'in team members:', teamMembers);
         const member = teamMembers?.find(m => m.user_id === memberId || m.user_id?.toString() === memberId?.toString());
-        console.log('Found member:', member);
         return member ? member.name : 'Unknown Member';
     };
 

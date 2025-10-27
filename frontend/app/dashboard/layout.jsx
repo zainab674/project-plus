@@ -1,6 +1,5 @@
 'use client'
 import { ChatSidebar } from '@/components/ChattingComponent'
-import TopNavigation from '@/components/TopNavigation'
 import Sibebar from '@/components/Sidebar'
 import { Button } from '@/components/ui/button'
 import ProtectedRouteProvider from '@/providers/ProtectedRouteProvider'
@@ -19,14 +18,14 @@ const layout = ({ children }) => {
     
     return (
         <ProtectedRouteProvider>
-            <div>
-                {/* <TopNavigation setSidebarOpen={setSidebarOpen} sidebarOpen={sidebarOpen} /> */}
-                <div className="">
+            <div className="flex flex-col min-h-screen">
+                {/* TopNavigation is rendered in ClientLayoutWrapper at root level */}
+                <div className="flex-1">
                     {/* <Sibebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} /> */}
                     <div className="">
                         {/* Back Button - positioned at top left with proper spacing for sidebar */}
                         {showBackButton && (
-                            <div className="fixed top-0 left-4 z-50 p-4">
+                            <div className="fixed top-16 left-4 z-50 p-4">
                                 <BackButton />
                             </div>
                         )}

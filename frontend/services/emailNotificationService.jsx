@@ -18,16 +18,13 @@ export class EmailNotificationService {
 
     connect() {
         try {
-            console.log('🔍 EmailNotificationService: Attempting to connect to:', `${process.env.NEXT_PUBLIC_API_URL}/chat`);
-            console.log('🔍 EmailNotificationService: User ID:', this.userId);
-            
+         
             // Connect to the main chat namespace which handles email notifications
             this.io = io(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
                 query: { user_id: this.userId }
             });
 
             this.setupEventListeners();
-            console.log('📧 EmailNotificationService: Service initialized successfully');
         } catch (error) {
             console.error('❌ EmailNotificationService: Error connecting:', error);
         }
@@ -37,28 +34,22 @@ export class EmailNotificationService {
         if (!this.io) return;
 
         this.io.on('connect', () => {
-            console.log('🔌 EmailNotificationService: Connected to WebSocket');
         });
 
         this.io.on('disconnect', () => {
-            console.log('🔌 EmailNotificationService: Disconnected from WebSocket');
         });
 
         // Listen for new email notifications
         this.io.on('new_emails', (data) => {
-            console.log('📧 EmailNotificationService: Received new_emails event:', data);
             
             if (this.onNewEmailCallback) {
-                console.log('🔍 EmailNotificationService: Calling onNewEmail callback');
                 this.onNewEmailCallback(data);
             } else {
-                console.log('⚠️ EmailNotificationService: No onNewEmail callback set');
             }
         });
 
         // Listen for email count updates
         this.io.on('email_count_update', (data) => {
-            console.log('📊 EmailNotificationService: Received email_count_update event:', data);
             
             if (this.onEmailCountUpdateCallback) {
                 this.onEmailCountUpdateCallback(data);
@@ -67,7 +58,6 @@ export class EmailNotificationService {
 
         // Listen for email status updates
         this.io.on('email_status_update', (data) => {
-            console.log('📧 EmailNotificationService: Received email_status_update event:', data);
         });
 
         this.io.on('error', (error) => {
@@ -138,7 +128,6 @@ export class EmailNotificationService {
             this.io.disconnect();
             this.io = null;
         }
-        console.log('🔌 Email notification service disconnected');
     }
 
     // Check connection status
@@ -149,7 +138,6 @@ export class EmailNotificationService {
     // Reconnect if disconnected
     reconnect() {
         if (!this.isConnected()) {
-            console.log('🔄 Reconnecting to email notification service...');
             this.connect();
         }
     }

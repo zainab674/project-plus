@@ -62,28 +62,24 @@ export default function Page() {
         if (typeof window !== 'undefined') {
             const pendingInvitation = localStorage.getItem('pendingInvitation');
             if (pendingInvitation) {
-                console.log('Found pending invitation:', pendingInvitation);
                 // The invitation will be processed automatically during registration
             }
         }
     }, []);
 
     const handleSubmit = useCallback(async () => {
-        console.log('🚀 Starting registration process...');
-        console.log('📝 Form data:', formdata);
+ 
         
         setIsLoading(true);
         try {
             // Validate required fields for admin approval
             if (!formdata.company_name || !formdata.reason || !formdata.team_size) {
-                console.log('❌ Validation failed: Missing required fields');
                 toast.error('Please fill in all required fields: Company Name, Reason for Access, and Team Size');
                 setIsLoading(false);
                 return;
             }
 
             if (formdata.reason.length < 10) {
-                console.log('❌ Validation failed: Reason too short');
                 toast.error('Reason for access must be at least 10 characters long');
                 setIsLoading(false);
                 return;
@@ -92,7 +88,6 @@ export default function Page() {
             // Get invitation role and project ID from localStorage if available
             const invitationRole = localStorage.getItem('invitationRole');
             const invitationProjectId = localStorage.getItem('invitationProjectId');
-            console.log('🎯 Invitation data:', { invitationRole, invitationProjectId });
             
             // Add role and project ID to formdata if they exist
             const registrationData = {
@@ -101,11 +96,8 @@ export default function Page() {
                 ...(invitationProjectId && { project_id: invitationProjectId })
             };
             
-            console.log('📤 Sending registration request with data:', registrationData);
-            console.log('🔗 API URL:', process.env.NEXT_PUBLIC_API_URL);
             
             const res = await registerRequest(registrationData);
-            console.log('✅ Registration successful:', res);
             toast.success(res?.data?.message);
             
             if (typeof window != 'undefined') {

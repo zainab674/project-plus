@@ -6,7 +6,8 @@ import { getAllProjectRequest } from '@/lib/http/project';
 import CreateCaseModal from './createCaseModal';
 import Loader from '../Loader';
 import { Button } from '../Button';
-import Link from "next/link";
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
     Table,
     TableBody,
@@ -17,13 +18,22 @@ import {
 } from "@/components/ui/table"
 import { useUser } from '@/providers/UserProvider';
 
-const CaseManagementSystem = () => {
+const CaseManagementSystem = ({ onCaseClick }) => {
     const [projects, setProjects] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [showNewCaseForm, setShowNewCaseForm] = useState(false);
     const [viewMode, setViewMode] = useState('grid'); // grid, list, or table
     const [searchTerm, setSearchTerm] = useState('');
     const { user, loadUser } = useUser();
+    const router = useRouter();
+
+    const handleCaseClick = (projectId) => {
+        router.push(`/dashboard/project/${projectId}`);
+        // Close the modal if the callback is provided
+        if (onCaseClick) {
+            onCaseClick();
+        }
+    };
 
 
     const getProjectAllProject = React.useCallback(async () => {
@@ -53,14 +63,12 @@ const CaseManagementSystem = () => {
             setProjects(allProjects);
         } catch (error) {
             setProjects(null);
-            console.log(error?.response?.data?.message || error?.message);
         } finally {
             setIsLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        { console.log("uuuuuu", user) }
 
         getProjectAllProject();
     }, []);
@@ -89,7 +97,7 @@ const CaseManagementSystem = () => {
                             <p className="text-gray-600 mt-1">Manage and track all your cases</p>
                         </div>
 
-                        {user?.Role !== 'TEAM' && (
+                        {user?.Role !== 'BILLER' && (
 
                             <Button
                                 onClick={() => setShowNewCaseForm(true)}
@@ -173,14 +181,15 @@ const CaseManagementSystem = () => {
                             </TableHeader>
                             <TableBody>
                                 {filteredProjects?.map(project => (
-                                    <TableRow key={project.project_id} className="hover:bg-gray-50 cursor-pointer">
+                                    <TableRow 
+                                        key={project.project_id} 
+                                        className="hover:bg-gray-50 cursor-pointer"
+                                        onClick={() => handleCaseClick(project.project_id)}
+                                    >
                                         <TableCell>
-                                            <Link
-                                                href={`/dashboard/project/${project.project_id}`}
-                                                className="font-medium text-gray-900 hover:text-blue-600"
-                                            >
+                                            <span className="font-medium text-gray-900 hover:text-blue-600">
                                                 {project.name}
-                                            </Link>
+                                            </span>
                                         </TableCell>
                                         <TableCell className="text-gray-600">
                                             {project.client_name}
@@ -223,6 +232,12 @@ const CaseManagementSystem = () => {
                                 href={`/dashboard/project/${project.project_id}`}
                                 key={project.project_id}
                                 className="block"
+                                onClick={() => {
+                                    // Close the modal if the callback is provided
+                                    if (onCaseClick) {
+                                        onCaseClick();
+                                    }
+                                }}
                             >
                                 <div className={`bg-blue-100 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all cursor-pointer group hover:border-gray-300 ${viewMode === 'list' ? 'flex items-center p-4' : 'p-6'
                                     }`}>

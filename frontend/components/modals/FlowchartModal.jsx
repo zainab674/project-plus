@@ -8,7 +8,6 @@ import CaseComprehensiveView from '../case/CaseComprehensiveView';
 // Utility function to download files with proper filename
 const downloadFile = async (url, filename) => {
   try {
-    console.log('Downloading file:', { url, filename });
     
     // Always prioritize the provided filename over URL extraction
     let finalFilename = filename;
@@ -21,7 +20,6 @@ const downloadFile = async (url, filename) => {
       finalFilename = finalFilename.split('?')[0];
     }
     
-    console.log('Final filename:', finalFilename);
     
     // First try the blob approach
     const response = await fetch(url, {
@@ -82,7 +80,6 @@ const downloadFile = async (url, filename) => {
 // Utility function to view files in new tab
 const viewFile = (url) => {
   try {
-    console.log('Viewing file:', { url });
     // Direct Cloudinary URL for viewing
     window.open(url, '_blank');
   } catch (error) {
@@ -94,23 +91,29 @@ const FlowchartModal = ({
     isOpen,
     onClose,
     projects,
-    projectsLoading,
-    searchTerm,
-    setSearchTerm,
-    selectedProjectForTimeline,
-    setSelectedProjectForTimeline
+    projectsLoading = false,
+    searchTerm = '',
+    setSearchTerm = () => {},
+    selectedProjectForTimeline = null,
+    setSelectedProjectForTimeline = () => {}
 }) => {
     const [showComprehensiveView, setShowComprehensiveView] = useState(false);
     if (!isOpen) return null;
 
-    // Filter projects based on search term
-    const filteredProjects = projects?.filter(project =>
-        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.client_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Filter projects based on search term with proper null checks
+    const filteredProjects = projects?.filter(project => {
+        if (!project) return false;
+        
+        const projectName = project.name || '';
+        const clientName = project.client_name || '';
+        const searchLower = (searchTerm || '').toLowerCase();
+        
+        return projectName.toLowerCase().includes(searchLower) ||
+               clientName.toLowerCase().includes(searchLower);
+    }) || [];
 
     return (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div className="fixed inset-0 z-[70] overflow-y-auto">
             <div className="fixed inset-0 bg-black bg-opacity-30 transition-opacity" onClick={onClose} />
             <div className="flex min-h-full items-center justify-center p-4">
                 <div className="relative w-full max-w-7xl transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all">
@@ -154,9 +157,9 @@ const FlowchartModal = ({
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {filteredProjects?.map((project) => (
+                                        {filteredProjects?.map((project, index) => (
                                             <button
-                                                key={project.project_id}
+                                                key={`${project.project_id}-${index}`}
                                                 onClick={() => setSelectedProjectForTimeline(project)}
                                                 className="text-left p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all duration-200 group"
                                             >

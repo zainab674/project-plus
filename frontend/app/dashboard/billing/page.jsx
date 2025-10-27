@@ -362,7 +362,6 @@ const BillingPage = () => {
                                             key={assignment.project_id}
                                             className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
                                         >
-                                            {console.log("assignment", assignment)}
                                             <div className="flex items-start justify-between mb-3">
                                                 <div className="flex-1">
                                                     <h4 className="text-lg font-semibold text-gray-900 truncate">

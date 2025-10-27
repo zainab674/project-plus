@@ -3,17 +3,9 @@ import {config} from 'dotenv';
 import { fileToUri } from '../processors/fileToUriProcessor.js';
 config();
 
-
-
 const uploadToCloudinary = async (data, mimetype) => {
     try {
-        console.log('Cloudinary config check:', {
-            hasCloudName: !!process.env.CLOUDINARY_NAME,
-            hasApiKey: !!process.env.CLOUDINARY_API_KEY,
-            hasApiSecret: !!process.env.CLOUDINARY_API_SECRET,
-            mimetype: mimetype
-        });
-        
+           
         if (!process.env.CLOUDINARY_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
             throw new Error('Cloudinary configuration is missing. Please check environment variables.');
         }
@@ -24,7 +16,6 @@ const uploadToCloudinary = async (data, mimetype) => {
             api_secret: process.env.CLOUDINARY_API_SECRET
         });
 
-        console.log('Uploading to Cloudinary with data length:', data.length);
         const res = await cloudinary.v2.uploader.upload(data, {
             resource_type: "auto",
             mimetype
@@ -39,7 +30,6 @@ const uploadToCloudinary = async (data, mimetype) => {
             key: res.public_id
         };
     } catch (error) {
-        console.error('Cloudinary upload error:', error);
         
         // Handle different types of Cloudinary errors
         let errorMessage = 'Unknown Cloudinary error';
@@ -61,16 +51,9 @@ const uploadToCloudinary = async (data, mimetype) => {
     }
 }
 
-
-
 export const uploadToCloud = async (file) => {
     try {
-        console.log('Uploading file:', {
-            originalname: file?.originalname,
-            mimetype: file?.mimetype,
-            size: file?.size,
-            hasBuffer: !!file?.buffer
-        });
+          
         
         if (!file || !file.buffer || !file.originalname) {
             throw new Error('Invalid file object provided');
@@ -92,16 +75,13 @@ export const uploadToCloud = async (file) => {
             throw new Error('Failed to convert file to URI');
         }
         
-        console.log('File URI created, uploading to Cloudinary...');
         const cloudRes = await uploadToCloudinary(fileUri.content, file.mimetype);
         if (!cloudRes || !cloudRes.url) {
             throw new Error('Cloudinary upload failed - no URL returned');
         }
         
-        console.log('File uploaded successfully:', cloudRes.url);
         return cloudRes;
     } catch (error) {
-        console.error('Error in uploadToCloud:', error);
         throw new Error(`File upload failed: ${error.message || error.toString()}`);
     }
 }

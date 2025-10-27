@@ -17,13 +17,11 @@ class ChatNotificationService {
     // Set the io instance for WebSocket communication
     setIO(ioInstance) {
         this.io = ioInstance;
-        console.log('🔌 Chat notification service initialized with io instance');
     }
 
     // Send real-time notification for new private message
     async notifyPrivateMessage(messageData) {
         if (!this.io) {
-            console.log('⚠️ Chat notification service: No io instance available');
             return;
         }
 
@@ -54,19 +52,15 @@ class ChatNotificationService {
                     }
                 });
 
-                console.log(`📱 Private chat notification sent to user ${reciever_id} from ${sender_name}`);
             } else {
-                console.log(`⚠️ User ${reciever_id} not connected, notification not sent`);
             }
         } catch (error) {
-            console.error('❌ Error sending private message notification:', error);
         }
     }
 
     // Send real-time notification for new group/project message
     async notifyGroupMessage(messageData) {
         if (!this.io) {
-            console.log('⚠️ Chat notification service: No io instance available');
             return;
         }
 
@@ -107,16 +101,13 @@ class ChatNotificationService {
                 }
             });
 
-            console.log(`📱 Group chat notification sent to ${connectedUsers.length - 1} users from ${sender_name}`);
         } catch (error) {
-            console.error('❌ Error sending group message notification:', error);
         }
     }
 
     // Send real-time notification for project-specific messages
     async notifyProjectMessage(messageData) {
         if (!this.io) {
-            console.log('⚠️ Chat notification service: No io instance available');
             return;
         }
 
@@ -159,16 +150,13 @@ class ChatNotificationService {
                 }
             });
 
-            console.log(`📱 Project chat notification sent to ${projectMembers.length - 1} project members from ${sender_name}`);
         } catch (error) {
-            console.error('❌ Error sending project message notification:', error);
         }
     }
 
     // Send real-time notification for public messages (general chat)
     async notifyPublicMessage(messageData) {
         if (!this.io) {
-            console.log('⚠️ Chat notification service: No io instance available');
             return;
         }
 
@@ -206,9 +194,7 @@ class ChatNotificationService {
                 }
             });
 
-            console.log(`📱 Public chat notification sent to ${connectedUsers.length - 1} users from ${sender_name}`);
         } catch (error) {
-            console.error('❌ Error sending public message notification:', error);
         }
     }
 
@@ -249,16 +235,13 @@ class ChatNotificationService {
                 }
             });
 
-            console.log(`📱 Mention notifications sent to ${mentionedUsers.length} users from ${sender_name}`);
         } catch (error) {
-            console.error('❌ Error sending mention notification:', error);
         }
     }
 
     // Send system notification (for important updates, announcements, etc.)
     async notifySystemMessage(messageData, targetUsers = null) {
         if (!this.io) {
-            console.log('⚠️ Chat notification service: No io instance available');
             return;
         }
 
@@ -297,9 +280,7 @@ class ChatNotificationService {
                 }
             });
 
-            console.log(`📱 System notification sent to ${usersToNotify.length} users: ${title}`);
         } catch (error) {
-            console.error('❌ Error sending system notification:', error);
         }
     }
 
@@ -314,7 +295,6 @@ class ChatNotificationService {
             });
             return count;
         } catch (error) {
-            console.error(`Error getting unread chat count for user ${userId}:`, error.message);
             return 0;
         }
     }
@@ -324,10 +304,8 @@ class ChatNotificationService {
         try {
             // You can implement user-specific notification preferences here
             // For now, we'll just log the settings
-            console.log(`📱 Notification settings updated for user ${userId}:`, settings);
             return true;
         } catch (error) {
-            console.error(`Error updating notification settings for user ${userId}:`, error.message);
             return false;
         }
     }

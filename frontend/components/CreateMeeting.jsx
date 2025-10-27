@@ -13,11 +13,8 @@ import { useRouter } from 'next/navigation'
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const CreateMeeting = ({ open, onClose, isScheduled, getMeetings, project_id = null }) => {
-    console.log('CreateMeeting - Initial project_id:', project_id);
     const { user, loadUserWithProjects, hasFullUserData } = useUser();
-    console.log('CreateMeeting - hasFullUserData:', hasFullUserData);
     const [selectProject, setSelectedProject] = useState(project_id || '');
-    console.log('CreateMeeting - Initial selectProject state:', project_id || '');
     const [selectTask, setSelectedTask] = useState('');
     const [heading, setHeading] = useState('');
     const [description, setDescription] = useState('');
@@ -29,17 +26,13 @@ const CreateMeeting = ({ open, onClose, isScheduled, getMeetings, project_id = n
 
     // Load full user data when component mounts or when user changes
     useEffect(() => {
-        console.log('CreateMeeting - useEffect triggered, user:', user, 'hasFullUserData:', hasFullUserData);
         if (user && !user.Projects && !hasFullUserData) {
-            console.log('CreateMeeting - Loading user with projects...');
             loadUserWithProjects().then(fullUser => {
-                console.log('CreateMeeting - User with projects loaded:', fullUser);
                 setFullUserData(fullUser);
             }).catch(error => {
                 console.error('CreateMeeting - Error loading user with projects:', error);
             });
         } else if (user && user.Projects) {
-            console.log('CreateMeeting - User already has projects:', user.Projects);
             setFullUserData(user);
         }
     }, [user, loadUserWithProjects, hasFullUserData]);
@@ -47,9 +40,7 @@ const CreateMeeting = ({ open, onClose, isScheduled, getMeetings, project_id = n
     // Fetch specific project when project_id is provided
     useEffect(() => {
         if (project_id && !specificProject) {
-            console.log('CreateMeeting - Fetching specific project:', project_id);
             getProjectRequest(project_id).then(res => {
-                console.log('CreateMeeting - Specific project fetched:', res.data.project);
                 setSpecificProject(res.data.project);
             }).catch(error => {
                 console.error('CreateMeeting - Error fetching specific project:', error);
@@ -59,19 +50,12 @@ const CreateMeeting = ({ open, onClose, isScheduled, getMeetings, project_id = n
 
     // Use specific project if available, otherwise use fullUserData
     const userWithProjects = specificProject ? { Projects: [specificProject] } : (fullUserData || user);
-    console.log('CreateMeeting - userWithProjects:', userWithProjects);
-    console.log('CreateMeeting - userWithProjects.Projects:', userWithProjects?.Projects);
-    console.log('CreateMeeting - selectProject state:', selectProject);
-    console.log('CreateMeeting - specificProject:', specificProject);
-
-    const router = useRouter();
+       const router = useRouter();
 
     // Update selected project when project_id prop changes
     useEffect(() => {
-        console.log('CreateMeeting - project_id changed:', project_id);
         if (project_id) {
             setSelectedProject(project_id);
-            console.log('CreateMeeting - setSelectedProject called with:', project_id);
         }
     }, [project_id]);
 
@@ -123,11 +107,9 @@ const CreateMeeting = ({ open, onClose, isScheduled, getMeetings, project_id = n
 
     // Get current project details
     const currentProject = userWithProjects?.Projects?.find(project => project?.project_id == selectProject);
-    console.log('CreateMeeting - currentProject:', currentProject);
 
     // Don't render until user data is loaded OR specific project is loaded
     if (!userWithProjects || (!userWithProjects.Projects && !specificProject)) {
-        console.log('CreateMeeting - Waiting for user data or specific project to load...');
         return (
             <BigDialog open={open} onClose={onClose}>
                 <div className='px-2 py-3'>
@@ -155,14 +137,11 @@ const CreateMeeting = ({ open, onClose, isScheduled, getMeetings, project_id = n
                                 <SelectTrigger className="w-full bg-white border-primary text-black">
                                     <SelectValue placeholder="Select a project" />
                                 </SelectTrigger>
-                                {console.log('CreateMeeting - Select value prop:', selectProject)}
-                                {console.log('CreateMeeting - Select value type:', typeof selectProject)}
                                 <SelectContent className="bg-white border-primary">
                                     <SelectGroup>
                                         <SelectLabel className="text-gray-400">Projects</SelectLabel>
                                         {
                                             userWithProjects?.Projects?.map((project, index) => {
-                                                console.log('CreateMeeting - Available project:', project.project_id, project.name);
                                                 return (
                                                     <SelectItem value={`${project.project_id}`} key={`${project.project_id}-${index}`} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">{project?.name}</SelectItem>
                                                 );

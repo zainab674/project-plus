@@ -20,6 +20,7 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
   const [isLoading, setIsLoading] = useState(false)
   const [filteredDocuments, setFilteredDocuments] = useState([])
   const [showingAllFolders, setShowingAllFolders] = useState(false)
+  const [documentSource, setDocumentSource] = useState('phase') // 'phase', 'case', or 'all'
 
   useEffect(() => {
     if (isOpen) {
@@ -39,7 +40,7 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
   const fetchDocuments = async () => {
     setIsLoading(true)
     try {
-      // Build query parameters
+      // First, check if phase has folders
       const params = {}
       if (phase) {
         params.phase = phase
@@ -48,11 +49,87 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
         params.id = projectId
       }
       
-      const response = await getFilesRequest(params)
-      if (response.data.success) {
+      let response = await getFilesRequest(params)
+      
+      // If no documents for the phase, check for case files (project-level attachments)
+      if (response.data.success && (!response.data.folders || response.data.folders.length === 0 || response.data.showingAllFolders)) {
+        // Fetch project comprehensive data to get Media attachments
+        try {
+          const { getAllProjectComprehensiveRequest } = await import('@/lib/http/project');
+          const comprehensiveResponse = await getAllProjectComprehensiveRequest();
+          
+          if (comprehensiveResponse.data.success && Array.isArray(comprehensiveResponse.data.projects)) {
+            // Find the current project
+            const currentProject = comprehensiveResponse.data.projects.find(p => p.project_id == projectId);
+            
+            if (currentProject && currentProject.Media && Array.isArray(currentProject.Media)) {
+              // Get project-level attachments (task_id is null)
+              const caseFiles = currentProject.Media.filter(media => media.task_id === null || media.task_id === undefined);
+              
+              if (caseFiles.length > 0) {
+                // Convert case files to document format - group all files under one folder
+                const caseFileFolders = [{
+                  folder_id: `case_files_${currentProject.project_id}`,
+                  name: 'Case Files',
+                  project_name: currentProject.name,
+                  files: caseFiles.map(file => ({
+                    file_id: file.media_id,
+                    name: file.filename || 'Unnamed Document',
+                    size: file.size || 0,
+                    path: file.file_url,
+                    isCaseFile: true
+                  }))
+                }];
+                
+                setDocuments(caseFileFolders)
+                setFilteredDocuments(caseFileFolders)
+                setShowingAllFolders(true)
+                setDocumentSource('case')
+                
+                // Auto-expand case file folders
+                const folderIds = {}
+                caseFileFolders.forEach(folder => {
+                  folderIds[folder.folder_id] = true
+                })
+                setExpandedFolders(folderIds)
+                
+                setIsLoading(false)
+                return
+              }
+            }
+          }
+        } catch (mediaError) {
+          console.error('Error fetching case files:', mediaError)
+        }
+        
+        // If still no documents, fetch all internal documents (no phase filter)
+        const allDocumentsParams = {}
+        if (projectId) {
+          allDocumentsParams.id = projectId
+        }
+        
+        response = await getFilesRequest(allDocumentsParams)
+        
+        if (response.data.success) {
+          setDocuments(response.data.folders)
+          setFilteredDocuments(response.data.folders)
+          setShowingAllFolders(true)
+        setDocumentSource('all')
+      }
+    } else if (response.data.success) {
         setDocuments(response.data.folders)
         setFilteredDocuments(response.data.folders)
         setShowingAllFolders(response.data.showingAllFolders || false)
+        setDocumentSource('phase')
+        
+        // Auto-expand all folders when documents are for a specific phase
+        if (!response.data.showingAllFolders) {
+          const folderIds = {}
+          response.data.folders.forEach(folder => {
+            folderIds[folder.folder_id] = true
+          })
+          setExpandedFolders(folderIds)
+        }
       }
     } catch (error) {
       toast.error('Failed to fetch documents')
@@ -93,7 +170,14 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
   }
 
   const handleFileSelect = (file) => {
-    onSelect(file)
+    // If it's a case file, convert it to proper format
+    const fileToSelect = file.isCaseFile ? {
+      ...file,
+      file_id: file.file_id,
+      name: file.name
+    } : file
+    
+    onSelect(fileToSelect)
     onClose()
   }
 
@@ -212,8 +296,10 @@ const InternalDocumentSelector = ({ isOpen, onClose, onSelect, selectedFile, pha
             </h2>
             <p className="text-sm text-gray-600 mt-1">
               {phase ? (
-                showingAllFolders ? 
-                  `No documents found for phase "${phase}". Showing all available documents:` :
+                documentSource === 'case' ? 
+                  `No documents found for phase "${phase}". Showing case files:` :
+                documentSource === 'all' ?
+                  `No documents found for phase "${phase}" or case files. Showing all available documents:` :
                   `Documents for phase: ${phase}`
               ) : 'Choose from your existing documents'}
             </p>

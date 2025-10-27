@@ -28,15 +28,11 @@ export const TimerProvider = ({ children }) => {
         if (activeTime) {
           // If we don't have full user data with projects, load it
           if (!user.Projects && !user.Collaboration && !user.Services) {
-            console.log('Loading full user data for timer initialization...');
             await loadUserWithProjects();
             return; // This will trigger the effect again with full data
           }
           
-          console.log('Active timer found:', activeTime);
-          console.log('User projects data:', user.Projects);
-          console.log('User collaboration data:', user.Collaboration);
-          console.log('User services data:', user.Services);
+      
           
           // Try to get task name from user's projects data
           let taskName = 'Unknown Task';
@@ -44,13 +40,10 @@ export const TimerProvider = ({ children }) => {
           
           // Look through user's projects to find the task
           if (user.Projects) {
-            console.log('Searching in Projects:', user.Projects.length, 'projects');
             for (const project of user.Projects) {
               if (project.Tasks) {
-                console.log('Project:', project.name, 'has', project.Tasks.length, 'tasks');
                 const task = project.Tasks.find(t => t.task_id === activeTime.task_id);
                 if (task) {
-                  console.log('Found task in Projects:', task.name);
                   taskName = task.name;
                   projectName = project.name;
                   break;
@@ -61,13 +54,10 @@ export const TimerProvider = ({ children }) => {
           
           // Also check collaboration projects
           if (user.Collaboration) {
-            console.log('Searching in Collaboration:', user.Collaboration.length, 'collaborations');
             for (const collab of user.Collaboration) {
               if (collab.project && collab.project.Tasks) {
-                console.log('Collaboration project:', collab.project.name, 'has', collab.project.Tasks.length, 'tasks');
                 const task = collab.project.Tasks.find(t => t.task_id === activeTime.task_id);
                 if (task) {
-                  console.log('Found task in Collaboration:', task.name);
                   taskName = task.name;
                   projectName = collab.project.name;
                   break;
@@ -78,13 +68,10 @@ export const TimerProvider = ({ children }) => {
           
           // Also check services projects
           if (user.Services) {
-            console.log('Searching in Services:', user.Services.length, 'services');
             for (const service of user.Services) {
               if (service.project && service.project.Tasks) {
-                console.log('Service project:', service.project.name, 'has', service.project.Tasks.length, 'tasks');
                 const task = service.project.Tasks.find(t => t.task_id === activeTime.task_id);
                 if (task) {
-                  console.log('Found task in Services:', task.name);
                   taskName = task.name;
                   projectName = service.project.name;
                   break;
@@ -93,7 +80,6 @@ export const TimerProvider = ({ children }) => {
             }
           }
 
-          console.log('Final task name:', taskName, 'for task_id:', activeTime.task_id);
 
           setActiveTimer({
             time_id: activeTime.time_id,

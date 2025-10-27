@@ -43,7 +43,6 @@ export const ExpensesModal = ({ isOpen, onClose, defaultProviderId = null }) => 
         setLoading(true);
         try {
             const response = await getExpensesRequest(selectedMonth, selectedProvider || null);
-            console.log("response", response)
             setExpenses(response.data.expenses || []);
         } catch (error) {
             toast.error(error?.response?.data?.message || 'Failed to load expenses');

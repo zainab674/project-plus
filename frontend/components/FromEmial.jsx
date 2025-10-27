@@ -37,7 +37,6 @@ const FormEmail = ({ handleCloseMailForm,task,getTaskById }) => {
         }
     },[formdata,task]);
 
-    console.log(formdata)
     return (
         <div className='px-2 py-3'>
             <div className='flex items-center justify-between'>

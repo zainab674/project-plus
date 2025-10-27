@@ -133,8 +133,6 @@ export const compareDocuments = catchAsyncError(async (req, res, next) => {
 // Upload and compare two documents
 // -------------------------------------------------
 export const uploadAndCompareDocuments = catchAsyncError(async (req, res, next) => {
-  console.log('📄 Document comparison request received');
-  console.log('📄 Files received:', req.files ? Object.keys(req.files) : 'No files');
 
   const files = req.files;
   const { comparison_type = 'detailed' } = req.body;
@@ -148,17 +146,12 @@ export const uploadAndCompareDocuments = catchAsyncError(async (req, res, next) 
   }
 
   try {
-    console.log('📄 Starting text extraction for both documents...');
     const [text1, text2] = await Promise.all([
       extractTextFromFile(files.document1[0]),
       extractTextFromFile(files.document2[0])
     ]);
 
-    console.log('📄 Text extraction results:', {
-      document1: { name: files.document1[0].originalname, textLength: text1?.length || 0, success: !!text1 },
-      document2: { name: files.document2[0].originalname, textLength: text2?.length || 0, success: !!text2 }
-    });
-
+    
     if (!text1 || !text2) {
       const reasons = [];
       if (!text1) reasons.push(`"${files.document1[0].originalname}"`);
@@ -183,7 +176,6 @@ export const uploadAndCompareDocuments = catchAsyncError(async (req, res, next) 
       analysis: comparisonResult
     });
   } catch (err) {
-    console.error('Upload and compare error:', err);
     return next(new ErrorHandler('Failed to upload and compare documents', 500));
   }
 });
@@ -229,20 +221,16 @@ async function extractTextFromPdfBuffer(buffer) {
 // -------------------------------------------------
 async function extractTextFromFile(file) {
   try {
-    console.log('📄 Extracting text from file:', { name: file.originalname, mimetype: file.mimetype, size: file.size });
 
     if (!file.buffer || file.buffer.length === 0) throw new Error('File buffer is empty');
     const mimeType = (file.mimetype || '').toLowerCase();
 
     if (mimeType.includes('pdf')) {
-      console.log('📄 Processing PDF via pdfjs-dist');
       try {
         const text = await extractTextFromPdfBuffer(file.buffer);
         if (!text) throw new Error('Empty text from pdfjs');
-        console.log('📄 PDF text extracted, length:', text.length);
         return text;
       } catch (e) {
-        console.error('❌ pdfjs-dist failed:', e.message);
         // very rough fallback
         const raw = file.buffer.toString('utf-8');
         const matches = raw.match(/BT\s+.*?ET/gs);
@@ -255,22 +243,16 @@ async function extractTextFromFile(file) {
     }
 
     if (mimeType.includes('word') || mimeType.includes('docx') || mimeType.includes('doc')) {
-      console.log('📄 Processing Word document');
       const result = await mammoth.extractRawText({ buffer: file.buffer });
       return result.value || '';
     }
 
     if (mimeType.includes('text') || mimeType.includes('plain')) {
-      console.log('📄 Processing text file');
       return file.buffer.toString('utf-8');
     }
 
     throw new Error(`Unsupported document type: ${mimeType}`);
   } catch (error) {
-    console.error('❌ Text extraction error:', error);
-    console.error('❌ File details:', {
-      name: file?.originalname, mimetype: file?.mimetype, size: file?.size, hasBuffer: !!file?.buffer
-    });
     return null;
   }
 }
@@ -337,7 +319,6 @@ Respond ONLY with valid JSON. No markdown formatting or additional text.
       return generateFallbackComparison(text1, text2, doc1Name, doc2Name);
     }
   } catch (error) {
-    console.error('Gemini comparison error:', error);
     return generateFallbackComparison(text1, text2, doc1Name, doc2Name);
   }
 }

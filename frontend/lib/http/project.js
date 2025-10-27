@@ -1,6 +1,21 @@
 import { api } from ".";
 
-export const createProjectRequest = async (FormData) => api.post('/project', FormData);
+export const createProjectRequest = async (projectData, files = []) => {
+    const formData = new FormData();
+    
+ 
+    
+    // Add all project data fields as JSON string
+    formData.append('projectData', JSON.stringify(projectData));
+    
+    // Add files
+    files.forEach((file, index) => {
+        formData.append(`file_${index}`, file);
+    });
+    
+    // Don't set Content-Type header - let axios/browser set it with boundary
+    return api.post('/project', formData);
+};
 export const updateProjectRequest = async (FormData, project_id) => api.patch(`/project/${project_id}`, FormData);
 export const deleteProjectRequest = async (project_id) => api.delete(`/project/${project_id}`);
 

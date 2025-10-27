@@ -301,8 +301,6 @@ export const getProjectBillingEntries = catchAsyncError(async (req, res, next) =
 export const getBillerAssignedCases = catchAsyncError(async (req, res, next) => {
     const userId = req.user.user_id;
 
-
-
     if (!userId) {
         return next(new ErrorHandler("User ID is required", 400));
     }
@@ -310,14 +308,11 @@ export const getBillerAssignedCases = catchAsyncError(async (req, res, next) => 
     try {
         const assignedCases = await billingService.getBillerAssignedCases(userId);
 
-
-
         res.status(200).json({
             success: true,
             assignedCases
         });
     } catch (error) {
-        console.error('❌ getBillerAssignedCases - Error:', error);
         return next(new ErrorHandler(error.message, 500));
     }
 });
@@ -326,8 +321,6 @@ export const getBillerAssignedCases = catchAsyncError(async (req, res, next) => 
 export const getMyAssignedCases = catchAsyncError(async (req, res, next) => {
     const userId = req.user.user_id;
 
-
-
     if (!userId) {
         return next(new ErrorHandler("User ID is required", 400));
     }
@@ -335,13 +328,11 @@ export const getMyAssignedCases = catchAsyncError(async (req, res, next) => {
     try {
         const assignedCases = await billingService.getCasesAssignedToBiller(userId);
 
-
         res.status(200).json({
             success: true,
             assignedCases
         });
     } catch (error) {
-        console.error('❌ Controller error:', error);
         return next(new ErrorHandler(error.message, 500));
     }
 });
@@ -349,8 +340,6 @@ export const getMyAssignedCases = catchAsyncError(async (req, res, next) => {
 // Get detailed case information
 export const getCaseDetails = catchAsyncError(async (req, res, next) => {
     const projectId = parseInt(req.params.projectId, 10);
-
-
 
     if (!projectId) {
         return next(new ErrorHandler("Project ID is required", 400));
@@ -364,7 +353,6 @@ export const getCaseDetails = catchAsyncError(async (req, res, next) => {
             caseDetails
         });
     } catch (error) {
-        console.error('❌ getCaseDetails - Error:', error);
         return next(new ErrorHandler(error.message, 500));
     }
 });
@@ -488,15 +476,12 @@ export const debugCaseAssignments = catchAsyncError(async (req, res, next) => {
             }
         });
 
-
-
         res.status(200).json({
             success: true,
             totalAssignments: allAssignments.length,
             assignments: allAssignments
         });
     } catch (error) {
-        console.error('❌ Debug error:', error);
         return next(new ErrorHandler(error.message, 500));
     }
 });
@@ -671,8 +656,6 @@ export const checkProjectBillingReadiness = catchAsyncError(async (req, res, nex
         return next(new ErrorHandler(error.message, 500));
     }
 });
-
-
 
 // Create custom billing line item for individual activities
 export const createCustomBillingLineItem = catchAsyncError(async (req, res, next) => {

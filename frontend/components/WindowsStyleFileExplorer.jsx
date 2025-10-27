@@ -63,17 +63,13 @@ const WindowsStyleFileExplorer = () => {
   };
 
   const toggleFolder = (folderName) => {
-    console.log('Toggling folder:', folderName);
     const newExpanded = new Set(expandedFolders);
     if (newExpanded.has(folderName)) {
       newExpanded.delete(folderName);
-      console.log('Closing folder:', folderName);
     } else {
       newExpanded.add(folderName);
-      console.log('Opening folder:', folderName);
     }
     setExpandedFolders(newExpanded);
-    console.log('Expanded folders:', Array.from(newExpanded));
   };
 
   const handleDoubleClick = (e, item) => {
@@ -81,11 +77,9 @@ const WindowsStyleFileExplorer = () => {
     e.stopPropagation();
     
     if (item.type === 'folder') {
-      console.log('Double-clicked folder:', item.name);
       toggleFolder(item.name);
     } else {
       // Handle file double-click (open file)
-      console.log('Opening file:', item.name);
     }
   };
 
@@ -104,7 +98,6 @@ const WindowsStyleFileExplorer = () => {
   };
 
   const toggleSelection = (itemName) => {
-    console.log('Selecting item:', itemName);
     const newSelected = new Set(selectedItems);
     if (newSelected.has(itemName)) {
       newSelected.delete(itemName);

@@ -45,27 +45,14 @@ export const sendEmailViaProxy = async (emailData) => {
             apiKey: EMAIL_PROXY_API_KEY
         };
 
-        console.log('📧 Sending email via Vercel proxy:', {
-            to: emailData.to,
-            subject: emailData.subject,
-            timestamp: new Date().toISOString()
-        });
+        
 
         // Log the payload for debugging
-        console.log('📧 Request payload:', JSON.stringify(payload, null, 2));
 
         // Check payload size before sending
         const payloadString = JSON.stringify(payload);
         const payloadSizeKB = Math.round(payloadString.length / 1024);
-        
-        console.log(`📧 Request payload size: ${payloadSizeKB}KB`);
-        console.log(`📧 EMAIL_PROXY_URL from env: ${process.env.EMAIL_PROXY_URL || 'NOT_SET'}`);
-        console.log(`📧 Using EMAIL_PROXY_URL: ${EMAIL_PROXY_URL}`);
-        console.log(`📧 Making request to: ${EMAIL_PROXY_URL}/api/send-email`);
-        console.log(`📧 Request method: POST`);
-        console.log(`📧 Content-Type: application/json`);
-        console.log(`📧 API Key: ${EMAIL_PROXY_API_KEY ? 'SET' : 'NOT_SET'}`);
-        
+
         // Vercel has a 4.5MB limit for request body, but let's be conservative
         if (payloadSizeKB > 1000) { // 1MB limit
             throw new Error(`Request body too large: ${payloadSizeKB}KB. Maximum allowed: 1000KB`);
@@ -73,13 +60,10 @@ export const sendEmailViaProxy = async (emailData) => {
 
         // Make request to Vercel API with timeout and retry logic
         const makeRequest = async (retryCount = 0) => {
-            console.log(`📧 Starting request attempt ${retryCount + 1}...`);
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
             
             try {
-                console.log(`📧 Sending fetch request to: ${EMAIL_PROXY_URL}/api/send-email`);
-                console.log(`📧 Request body length: ${payloadString.length} characters`);
                 
                 const response = await fetch(`${EMAIL_PROXY_URL}/api/send-email`, {
                     method: 'POST',
@@ -91,14 +75,9 @@ export const sendEmailViaProxy = async (emailData) => {
                 });
                 
                 clearTimeout(timeoutId);
-                console.log(`📧 Received response with status: ${response.status}`);
-                console.log(`📧 Response headers:`, Object.fromEntries(response.headers.entries()));
                 return response;
             } catch (error) {
                 clearTimeout(timeoutId);
-                console.error(`📧 Request attempt ${retryCount + 1} failed:`, error.message);
-                console.error(`📧 Error type:`, error.name);
-                console.error(`📧 Error stack:`, error.stack);
                 
                 if (error.name === 'AbortError') {
                     throw new Error('Request timeout - email proxy took too long to respond');
@@ -106,7 +85,6 @@ export const sendEmailViaProxy = async (emailData) => {
                 
                 // Retry on network errors (up to 2 retries)
                 if (retryCount < 2 && (error.message.includes('fetch') || error.message.includes('network'))) {
-                    console.log(`🔄 Retrying request (attempt ${retryCount + 1}/2)...`);
                     await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
                     return makeRequest(retryCount + 1);
                 }
@@ -119,26 +97,14 @@ export const sendEmailViaProxy = async (emailData) => {
 
         let result;
         try {
-            console.log(`📧 Attempting to parse response as JSON...`);
             result = await response.json();
-            console.log(`📧 Successfully parsed JSON response:`, JSON.stringify(result, null, 2));
         } catch (jsonError) {
-            console.error('❌ Failed to parse JSON response from email proxy:');
-            console.error('JSON Error:', jsonError.message);
-            console.error('JSON Error type:', jsonError.name);
             
             // If JSON parsing fails, get the raw response text
-            console.log(`📧 Attempting to read response as text...`);
             const responseText = await response.text();
-            console.error('Response status:', response.status);
-            console.error('Response headers:', Object.fromEntries(response.headers.entries()));
-            console.error('Response body length:', responseText.length);
-            console.error('Response body (first 500 chars):', responseText.substring(0, 500));
-            console.error('Response body (last 500 chars):', responseText.substring(Math.max(0, responseText.length - 500)));
             
             // Check if it's a "Body is unusable" error
             if (responseText.includes('Body is unusable') || jsonError.message.includes('Body is unusable')) {
-                console.error('❌ Detected "Body is unusable" error');
                 throw new Error('Request body error - the request body may be too large or malformed');
             }
             
@@ -153,13 +119,7 @@ export const sendEmailViaProxy = async (emailData) => {
             throw new Error(`Email sending failed: ${result.error || 'Unknown error'}`);
         }
 
-        console.log('✅ Email sent successfully via proxy:', {
-            messageId: result.messageId,
-            to: emailData.to,
-            subject: emailData.subject,
-            timestamp: result.timestamp
-        });
-
+           
         return {
             success: true,
             messageId: result.messageId,
@@ -167,12 +127,7 @@ export const sendEmailViaProxy = async (emailData) => {
         };
 
     } catch (error) {
-        console.error('❌ Error sending email via proxy:', {
-            error: error.message,
-            to: emailData.to,
-            subject: emailData.subject,
-            timestamp: new Date().toISOString()
-        });
+         
         throw error;
     }
 };
@@ -220,7 +175,6 @@ export const checkEmailProxyHealth = async () => {
         });
         return response.ok;
     } catch (error) {
-        console.error('Email proxy health check failed:', error.message);
         return false;
     }
 };

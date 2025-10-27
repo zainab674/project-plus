@@ -44,7 +44,6 @@ import { getTemplatesByTaskIdRequest } from '@/lib/http/caseTemplate'
 // Utility function to view files in new tab with proper filename
 const viewFile = async (url, filename) => {
   try {
-    console.log('Viewing file:', { url, filename });
     
     // Check if it's a Cloudinary URL that might force download
     const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
@@ -395,11 +394,7 @@ const ReasonCard = ({ type, reason }) => {
 const AttachmentsCard = ({ task, media, loadingMedia, onEditDocument }) => {
     const [showAttachments, setShowAttachments] = useState(false)
     
-    // Debug logging to understand the data structure (remove in production)
-    // console.log('AttachmentsCard - task:', task)
-    // console.log('AttachmentsCard - media:', media)
-    // console.log('AttachmentsCard - loadingMedia:', loadingMedia)
-    
+   
     // Get attachments from task media or separate media object
     const getAttachments = (task, media) => {
         // Check if media is passed as a separate prop (from API response)
@@ -437,7 +432,6 @@ const AttachmentsCard = ({ task, media, loadingMedia, onEditDocument }) => {
     }
 
     const attachments = getAttachments(task, media)
-    // console.log('AttachmentsCard - attachments:', attachments)
 
     // Show loading state
     if (loadingMedia) {
@@ -723,7 +717,6 @@ const EditedTemplatesCard = ({ task, templates, loadingTemplates }) => {
                     <div className="space-y-3 max-h-48 overflow-y-auto">
                         {templates.map((template, index) => {
                             // Debug logging to check template structure
-                            console.log('Template data:', template);
                             
                             return (
                                 <div key={template.file_id || index} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
@@ -875,7 +868,7 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
 
     const handleEditDocument = (attachment) => {
         // Open document editor with task and project context
-        const editUrl = `/dashboard/edit-file/${attachment.media_id || attachment.id}?file=${encodeURIComponent(attachment.file_url)}&task_id=${task.task_id}&project_name=${encodeURIComponent(project?.name || 'Unknown Project')}&filename=${encodeURIComponent(attachment.filename)}`
+        const editUrl = `/dashboard/edit-file/${attachment.media_id || attachment.id}?file=${encodeURIComponent(attachment.file_url)}&media_id=${attachment.media_id || attachment.id}&task_id=${task.task_id}&project_name=${encodeURIComponent(project?.name || 'Unknown Project')}&filename=${encodeURIComponent(attachment.filename)}`
         window.open(editUrl, '_blank')
     }
 

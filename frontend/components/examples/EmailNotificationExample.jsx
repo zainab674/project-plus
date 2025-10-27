@@ -38,7 +38,6 @@ const EmailNotificationExample = () => {
 
     const handleShowExampleNotification = () => {
         showEmailNotificationToast(exampleNotification, (notification) => {
-            console.log('Example notification clicked:', notification);
             alert('Example notification clicked! This would normally navigate to the email.');
         });
     };

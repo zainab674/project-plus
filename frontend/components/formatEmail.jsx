@@ -196,7 +196,6 @@ const formatEmailBody = (body, subject = '', metadata = {}) => {
 
     try {
         const emailType = detectEmailType(body, subject);
-        console.log('Detected email type:', emailType);
 
         // Check if the body contains HTML (from processors)
         const hasHtml = body.includes('<html') || body.includes('<div') || body.includes('<style');

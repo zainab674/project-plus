@@ -28,7 +28,6 @@ class TranscriptionCollectionService {
         };
 
         this.transcriptions.get(meetingId).push(transcription);
-        console.log(`📝 Added ${transcription.type} transcription for meeting ${meetingId}: ${transcription.text.substring(0, 50)}...`);
     }
 
     /**
@@ -37,7 +36,6 @@ class TranscriptionCollectionService {
      */
     startMeeting(meetingId) {
         this.meetingStartTimes.set(meetingId, new Date());
-        console.log(`🎬 Meeting ${meetingId} started at ${new Date().toISOString()}`);
     }
 
     /**
@@ -47,7 +45,6 @@ class TranscriptionCollectionService {
      */
     async endMeeting(meetingId, userId) {
         this.meetingEndTimes.set(meetingId, new Date());
-        console.log(`🏁 Meeting ${meetingId} ended at ${new Date().toISOString()}`);
 
         // Process and save transcriptions
         await this.processAndSaveTranscriptions(meetingId, userId);
@@ -63,11 +60,8 @@ class TranscriptionCollectionService {
             const meetingTranscriptions = this.transcriptions.get(meetingId) || [];
             
             if (meetingTranscriptions.length === 0) {
-                console.log(`📝 No transcriptions found for meeting ${meetingId}`);
                 return;
             }
-
-            console.log(`📝 Processing ${meetingTranscriptions.length} transcription segments for meeting ${meetingId}`);
 
             // Group transcriptions by participant and create final transcripts
             const participantTranscripts = this.groupTranscriptionsByParticipant(meetingTranscriptions);
@@ -87,10 +81,7 @@ class TranscriptionCollectionService {
             this.meetingStartTimes.delete(meetingId);
             this.meetingEndTimes.delete(meetingId);
 
-            console.log(`✅ Successfully processed and saved transcriptions for meeting ${meetingId}`);
-
         } catch (error) {
-            console.error(`❌ Error processing transcriptions for meeting ${meetingId}:`, error);
             throw error;
         }
     }
@@ -167,9 +158,7 @@ class TranscriptionCollectionService {
                 }
             });
 
-            console.log(`✅ Saved transcription for participant ${participant} in meeting ${meetingId}`);
         } catch (error) {
-            console.error(`❌ Error saving transcription for participant ${participant}:`, error);
             throw error;
         }
     }
@@ -197,9 +186,7 @@ class TranscriptionCollectionService {
                 }
             });
 
-            console.log(`✅ Updated meeting ${meetingId} status to COMPLETED with duration ${duration}s`);
         } catch (error) {
-            console.error(`❌ Error updating meeting status for ${meetingId}:`, error);
             throw error;
         }
     }
@@ -220,7 +207,6 @@ class TranscriptionCollectionService {
         this.transcriptions.clear();
         this.meetingStartTimes.clear();
         this.meetingEndTimes.clear();
-        console.log('🧹 Cleared all transcription data');
     }
 
     /**

@@ -9,6 +9,7 @@ import CaseDetail from '@/components/caseDetail';
 
 import CreateCaseModal from '@/components/cases/createCaseModal';
 import { useUser } from '@/providers/UserProvider';
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider';
 import BigDialog from '@/components/Dialogs/BigDialog';
 import CreateTask from '@/components/Dialogs/CreateTask';
 import { getProjectRequest, deleteProjectRequest, updateProjectRequest, getAllProjectRequest } from '@/lib/http/project';
@@ -25,6 +26,7 @@ import CreateMeetingClient from '@/components/CreateMeetingClient';
 import SendMail from '@/components/SendMail';
 import SendMailClient from '@/components/SendMailClient';
 import TaskComments from '@/components/TaskComments';
+import NotesDisplay from '@/components/NotesDisplay';
 import { Button } from '@/components/Button';
 import { useParams, useRouter } from 'next/navigation';
 import TaskManagementView from '@/components/TaskManagement';
@@ -48,9 +50,9 @@ export default function Page({ params }) {
   const [showChatModal, setShowChatModal] = useState(false);
 
   const { user, loadUser } = useUser();
+  const { selectedCase: globalSelectedCase, setSelectedCase: setGlobalSelectedCase } = useDashboardFilter();
   const [project, setProject] = useState(null);
   const [allCases, setAllCases] = useState([]);
-  const [selectedCase, setSelectedCase] = useState(null);
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [viewMember, setViewMember] = useState(false);
@@ -71,22 +73,19 @@ export default function Page({ params }) {
     try {
       const res = await getProjectRequest(params.id);
       setProject(res?.data?.project);
-      setSelectedCase(res?.data?.project); // Set current project as selected case
-      console.log("res?.data?.project", res?.data?.project);
+      // Don't set selectedCase here to avoid loops
     } catch (error) {
       setProject(null);
-      console.log(error?.response?.data?.message || error?.message);
     } finally {
       setIsLoading(false);
     }
-  }, [id]); // Added dependency
+  }, [params.id]);
 
   const getAllCases = useCallback(async () => {
     try {
       const res = await getAllProjectRequest();
       setAllCases(res?.data?.projects || []);
     } catch (error) {
-      console.log(error?.response?.data?.message || error?.message);
       setAllCases([]);
     }
   }, []);
@@ -121,7 +120,23 @@ export default function Page({ params }) {
   useEffect(() => {
     getProjectDetails();
     getAllCases();
-  }, [getProjectDetails, getAllCases]); // Added dependency
+  }, [getProjectDetails, getAllCases]); // Re-fetch when functions change
+
+  // Listen to global case selection changes and navigate if different case is selected
+  useEffect(() => {
+    if (globalSelectedCase && globalSelectedCase.project_id !== params.id) {
+      // A different case was selected from the global dropdown
+      router.push(`/dashboard/project/${globalSelectedCase.project_id}`);
+    }
+  }, [globalSelectedCase, params.id, router]);
+
+  // Sync local selectedCase with global when project loads (only once when project_id changes)
+  useEffect(() => {
+    if (project && project.project_id === params.id && globalSelectedCase?.project_id !== params.id) {
+      // Only update global state if the project matches the current URL and it's not already set
+      setGlobalSelectedCase(project);
+    }
+  }, [project?.project_id, params.id, globalSelectedCase?.project_id, setGlobalSelectedCase]);
 
   if (isLoading) {
     return (
@@ -158,7 +173,6 @@ export default function Page({ params }) {
               </Button>
               {user?.Role !== "CLIENT" && (
                 <>
-                  {console.log("user", user)}
                   <button
                     onClick={() => setShowNewTaskForm(true)}
                     className="bg-white hover:bg-slate-50 border border-slate-500 text-slate-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
@@ -187,7 +201,7 @@ export default function Page({ params }) {
                       Case Active
                     </div>
                   )}
-                  {user?.Role !== 'TEAM' && user?.Role !== "CLIENT" && (
+                  {user?.Role !== "CLIENT" && (
 
                     <button
                       onClick={() => setShowDeleteConfirm(true)}
@@ -313,7 +327,7 @@ export default function Page({ params }) {
                   <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     <Briefcase className="h-4 w-4 text-gray-600" />
                     <span className="text-sm font-medium">
-                      {selectedCase ? selectedCase.name : "Select a case"}
+                      {project ? project.name : "Select a case"}
                     </span>
                     <ChevronDown className="h-4 w-4 text-gray-400" />
                   </button>
@@ -336,7 +350,7 @@ export default function Page({ params }) {
                         key={caseItem.project_id}
                         onClick={() => router.push(`/dashboard/project/${caseItem.project_id}`)}
                         className={`px-3 py-2 cursor-pointer ${
-                          selectedCase?.project_id === caseItem.project_id
+                          project?.project_id === caseItem.project_id
                             ? 'bg-blue-50 text-blue-700 font-medium'
                             : 'hover:bg-gray-50'
                         }`}
@@ -365,11 +379,11 @@ export default function Page({ params }) {
             </div>
           </div>
 
-          {selectedCase &&
-            <CaseDetail selectedCase={selectedCase} />
+          {project &&
+            <CaseDetail selectedCase={project} />
           }
 
-
+         
 
         </div>
         {showUpdateCaseForm && (
@@ -391,7 +405,7 @@ export default function Page({ params }) {
         />
 
         {/* Task Creation Modal */}
-        <BigDialog open={showNewTaskForm} onClose={() => setShowNewTaskForm(false)} width={70}>
+        {showNewTaskForm && (
           <CreateTask
             project={project}
             onClose={async () => {
@@ -399,7 +413,7 @@ export default function Page({ params }) {
               getProjectDetails();
             }}
           />
-        </BigDialog>
+        )}
 
         <InviteComponet
           open={inviteOpen}
@@ -427,12 +441,7 @@ export default function Page({ params }) {
         getMeetings={() => { }}
         project_id={project?.project_id}
       />
-      {console.log('Project page - project data:', project)}
-      {console.log('Project page - project_id being passed:', project?.project_id)}
-      {console.log('Project page - Clients data:', project?.Clients)}
-      {console.log('Project page - Clients length:', project?.Clients?.length)}
-
-      <CreateMeetingClient
+           <CreateMeetingClient
         open={createMeetingClient}
         onClose={() => setCreateMeetingClient(false)}
         isScheduled={false}

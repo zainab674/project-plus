@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input';
 // Utility function to download files with proper filename
 const downloadFile = async (url, filename) => {
   try {
-    console.log('Downloading file:', { url, filename });
     
     // Always prioritize the provided filename over URL extraction
     let finalFilename = filename;
@@ -27,7 +26,6 @@ const downloadFile = async (url, filename) => {
       finalFilename = finalFilename.split('?')[0];
     }
     
-    console.log('Final filename:', finalFilename);
     
     // First try the blob approach
     const response = await fetch(url, {
@@ -88,7 +86,6 @@ const downloadFile = async (url, filename) => {
 // Utility function to view files in new tab
 const viewFile = async (url, filename) => {
   try {
-    console.log('Viewing file:', { url, filename });
     
     // Check if it's a Cloudinary URL that might force download
     const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
@@ -421,7 +418,6 @@ const page = () => {
       setTimes(res.data?.times || []);
       setDocuments(res.data?.documents || [])
     } catch (error) {
-      console.log(error?.response?.data?.message || error?.message);
       // Set empty arrays on error to prevent undefined errors
       setProgress([])
       setTimes([]);
@@ -731,7 +727,6 @@ const page = () => {
                         {
                           client.Documents.map((document, index) => {
                             // Debug: Log the document data to see available fields
-                            console.log('Timeline document data:', document);
                             
                             return (
                             <TableRow key={index}>

@@ -28,7 +28,6 @@ const FormTranscribtion = ({ handleCloseTranscibtionForm,task,getTaskById }) => 
         setIsLoading(true);
         try {
             formdata['task_id'] = task?.task_id;
-            console.log(formdata)
             const res = await addTaskTranscribtionRequest(formdata);
             await getTaskById();
             toast.success(res?.data?.message);

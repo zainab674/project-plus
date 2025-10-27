@@ -110,7 +110,6 @@ const CaseComprehensiveView = ({ project, onClose }) => {
 
     setTimelineLoading(true);
     try {
-      console.log('🔍 Fetching timeline data for project:', projectId);
 
       // Get current date and format it properly for the API (DD-MM-YYYY)
       const now = new Date();
@@ -119,11 +118,9 @@ const CaseComprehensiveView = ({ project, onClose }) => {
       // Calculate start date (30 days ago for better coverage)
       const startDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
 
-      console.log('🔍 Fetching timeline with dates:', { startDate, endDate });
 
       // Fetch timeline data using the task progress API
       const res = await getAllTaskProgressRequest(startDate, endDate, null, projectId);
-      console.log('🔍 Timeline API response:', res.data);
 
       if (res.data && res.data.success) {
         const timelineData = {
@@ -131,7 +128,6 @@ const CaseComprehensiveView = ({ project, onClose }) => {
           times: res.data.times || [],
           documents: res.data.documents || []
         };
-        console.log('✅ Timeline data fetched successfully:', timelineData);
         setTimelineData(timelineData);
       } else {
         console.warn('⚠️ Timeline API returned no data or error');

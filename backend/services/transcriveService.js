@@ -12,13 +12,9 @@ export const handleTranscibtion = async (transcribe,config) => {
     produceTranscribtion(message);
 }
 
-
-
-
 export const handleDisconnted = async (config,redis) => {
    let participantsCount = await redis.get(config.meeting_id);
    participantsCount = parseInt(participantsCount);
-   console.log(participantsCount);
    if(participantsCount == 1){
         let starttime = await redis.get(`${config.meeting_id}-starttime`);
         
@@ -29,7 +25,6 @@ export const handleDisconnted = async (config,redis) => {
             handleUpdateStatus(config.meeting_id,"COMPLETED",null,new Date(endtime),duration);
         }
 
-
         //delete all value after meeting end
         await redis.del(`${config.meeting_id}-starttime`);
         await redis.del(config.meeting_id);
@@ -38,8 +33,6 @@ export const handleDisconnted = async (config,redis) => {
 
    await redis.set(config.meeting_id,participantsCount-1);
 }
-
-
 
 export const handleUpdateStatus = async (meeting_id,status,starttime,endtime,duration) => {
     const data = {};
@@ -57,7 +50,6 @@ export const handleUpdateStatus = async (meeting_id,status,starttime,endtime,dur
         data["duration"] = duration;
     }
 
-
     try {
         await prisma.meeting.update({
             where: {
@@ -66,11 +58,8 @@ export const handleUpdateStatus = async (meeting_id,status,starttime,endtime,dur
             data: data
         });
     } catch (error) {
-        console.log(`Getting an error while update status: ${error.message}`);
     }
 }
-
-
 
 export const addParticipant = async (meeting_id,user_id) => {
     try {
@@ -91,11 +80,8 @@ export const addParticipant = async (meeting_id,user_id) => {
         }
 
     } catch (error) {
-        console.log(`Getting an error while add participants: ${error.message}`);
     }
 }
-
-
 
 export const addTranscibtion = async (transcibtions) => {
     try {
@@ -104,6 +90,5 @@ export const addTranscibtion = async (transcibtions) => {
         });
 
     } catch (error) {
-        console.log(`Getting an error while add participants: ${error.message}`);
     }
 }

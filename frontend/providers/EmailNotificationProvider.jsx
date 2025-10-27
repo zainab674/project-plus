@@ -35,21 +35,17 @@ export const EmailNotificationProvider = ({ children }) => {
             // Initialize chat notification service
             const chatService = new ChatNotificationService();
             setChatNotificationService(chatService);
-            console.log('🔌 Chat notification service created for user:', user.user_id);
 
             // Initialize chat notification service with the same io instance
             if (emailService && emailService.io) {
                 chatService.init(emailService.io, user.user_id);
-                console.log('🔌 Chat notification service initialized with io instance');
             }
 
             // Set up email notification callbacks
             service.onNewEmail((notification) => {
-                console.log('📧 Global email notification received:', notification);
 
                 // Show toast notification
                 const toastId = showEmailNotificationToast(notification, handleViewEmailFromNotification);
-                console.log('🔍 EmailNotificationProvider: Toast notification shown with ID:', toastId);
 
                 // Store toast reference for management
                 setActiveToasts(prev => new Map(prev).set(notification.timestamp, toastId));
@@ -65,7 +61,6 @@ export const EmailNotificationProvider = ({ children }) => {
             });
 
             service.onEmailCountUpdate((data) => {
-                console.log('📊 Global email count updated:', data);
                 setUnreadCount(data.unread_count || 0);
             });
 
@@ -75,7 +70,6 @@ export const EmailNotificationProvider = ({ children }) => {
             // Check connection status periodically
             const connectionInterval = setInterval(() => {
                 const connected = service.isConnected();
-                console.log('🔍 EmailNotificationProvider: Connection status check:', connected);
                 setIsConnected(connected);
             }, 5000);
 
@@ -88,7 +82,6 @@ export const EmailNotificationProvider = ({ children }) => {
                 service.disconnect();
             };
         } else {
-            console.log('⚠️ EmailNotificationProvider: No user ID available');
         }
     }, [user?.user_id]);
 
@@ -98,7 +91,6 @@ export const EmailNotificationProvider = ({ children }) => {
         if (typeof window !== 'undefined') {
             // You can implement navigation logic here
             // For now, just log the action
-            console.log('Navigate to email:', notification);
 
             // Navigate to mail page
             window.location.href = '/dashboard/mail';

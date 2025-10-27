@@ -153,8 +153,8 @@ export const createTask = catchAsyncError(async (req, res, next) => {
         }
     })
 
-    if (!projectMember || projectMember.role != 'PROVIDER') {
-        return next(new ErrorHandler("You are not a provider of this project", 403));
+    if (!projectMember || (projectMember.role != 'PROVIDER' && projectMember.role != 'TEAM')) {
+        return next(new ErrorHandler("You are not a provider or team member of this project", 403));
     }
 
     //add selected memer to add task
@@ -224,7 +224,6 @@ export const createTask = catchAsyncError(async (req, res, next) => {
                 }
             });
         } catch (uploadError) {
-            console.error('File upload error:', uploadError);
             // Don't fail the task creation if file upload fails
             // Just log the error and continue
         }
@@ -237,7 +236,6 @@ export const createTask = catchAsyncError(async (req, res, next) => {
         message: media ? 'Task created successfully with attachment' : 'Task created successfully'
     });
 });
-
 
 export const getTaskById = catchAsyncError(async (req, res, next) => {
     const task_id = req.params.task_id;
@@ -289,7 +287,6 @@ export const getTaskById = catchAsyncError(async (req, res, next) => {
                     created_at: true,
                 }
             },
-
 
             Comments: {
                 select: {
@@ -353,7 +350,6 @@ export const getTaskById = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
 export const getTasksByProject = catchAsyncError(async (req, res, next) => {
     const { project_id } = req.params;
 
@@ -388,7 +384,6 @@ export const getTasksByProject = catchAsyncError(async (req, res, next) => {
         tasks: project.Tasks,
     });
 });
-
 
 export const updateTask = catchAsyncError(async (req, res, next) => {
     const { task_id } = req.params;
@@ -462,7 +457,7 @@ export const deleteTask = catchAsyncError(async (req, res, next) => {
     }
 
     const isProjectAdmin = task.project.Members.some(
-        (member) => member.user_id === user_id && member.role === "PROVIDER"
+        (member) => member.user_id === user_id && (member.role === "PROVIDER" || member.role === "TEAM")
     );
 
     if (task.created_by !== user_id && !isProjectAdmin) {
@@ -568,8 +563,6 @@ export const addMembersToTask = catchAsyncError(async (req, res, next) => {
         task.project.Members.some(member => member.user_id === id)
     );
 
-
-
     if (!isAllProviderMemberInProject) {
         return next(new ErrorHandler("Users is not a member of this project", 403));
     }
@@ -590,8 +583,6 @@ export const addMembersToTask = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
-
 export const addTranscibtion = catchAsyncError(async (req, res, next) => {
     let { task_id, name } = req.body;
     const user_id = req.user.user_id;
@@ -603,10 +594,7 @@ export const addTranscibtion = catchAsyncError(async (req, res, next) => {
         }
     });
 
-
-
     if (!task) return next(new ErrorHandler(401, "Invalid Task Id"));
-
 
     const file = req.file;
     if (!file || !name) return next(new ErrorHandler(401, "File And Name Required."));
@@ -628,13 +616,10 @@ export const addTranscibtion = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
 export const addComments = catchAsyncError(async (req, res, next) => {
     let { project_id, content } = req.body;
     const user_id = req.user.user_id;
     if (!project_id) return next(new ErrorHandler(401, "Task Id is required."));
-
-
 
     if (!content) return next(new ErrorHandler(401, "Content is required."));
 
@@ -646,8 +631,6 @@ export const addComments = catchAsyncError(async (req, res, next) => {
         }
     })
 
-
-
     // await prisma.taskProgress.create({
     //     data: {
     //         message: `User Add a comments: ${content}`,
@@ -656,7 +639,6 @@ export const addComments = catchAsyncError(async (req, res, next) => {
     //         type: "COMMENT"
     //     }
     // });
-
 
     res.status(200).json({
         success: true,
@@ -668,10 +650,6 @@ export const getComments = catchAsyncError(async (req, res, next) => {
     let { task_id: project_id } = req.params;
     const user_id = req.user.user_id;
     if (!project_id) return next(new ErrorHandler(401, "Task Id is required."));
-
-
-
-
 
     const comments = await prisma.comment.findMany({
         where: {
@@ -847,7 +825,6 @@ export const addEmail = catchAsyncError(async (req, res, next) => {
         try {
             await sendMail(emailData.subject, emailData.to, emailData.html);
         } catch (error) {
-            console.error(`Failed to send email to ${emailData.to}:`, error.message);
             // Continue with other emails even if one fails
         }
     }
@@ -858,8 +835,6 @@ export const addEmail = catchAsyncError(async (req, res, next) => {
         emailsSent: emailsToSend.length
     });
 });
-
-
 
 export const addMailClient = catchAsyncError(async (req, res, next) => {
     let { client_id, task_id, subject, content } = req.body;
@@ -1032,7 +1007,6 @@ export const addMailClient = catchAsyncError(async (req, res, next) => {
         const emailSubject = projectName ? `[Project: ${projectName}] ${subject}` : subject;
         await sendMail(emailSubject, client.email, htmlContent);
     } catch (error) {
-        console.error(`Failed to send email to client ${client.email}:`, error.message);
         return next(new ErrorHandler("Failed to send email to client", 500));
     }
 
@@ -1071,7 +1045,6 @@ export const getMails = catchAsyncError(async (req, res, next) => {
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
 
-
         whereCondition.created_at = {
             gte: startOfDay,
             lte: endOfDay,
@@ -1096,10 +1069,6 @@ export const getMails = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
-
-
-
 export const getProgress = catchAsyncError(async (req, res, next) => {
     const task_id = req.params.task_id;
     const { date } = req.query;
@@ -1108,13 +1077,11 @@ export const getProgress = catchAsyncError(async (req, res, next) => {
         task_id: parseInt(task_id)
     };
 
-
     if (date) {
         const startOfDay = new Date(date);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
-
 
         whereCondition.created_at = {
             gte: startOfDay,
@@ -1158,10 +1125,6 @@ export const getProgress = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
-
-
-
 export const getConnectMails = catchAsyncError(async (req, res, next) => {
     const user_id = req.user.user_id;
     const count = Math.min(parseInt(req.query.count) || 100, 1000); // Default to 100, max 1000 emails
@@ -1187,14 +1150,11 @@ export const getConnectMails = catchAsyncError(async (req, res, next) => {
     // Fetch emails based on the count parameter
     const mails = await fetchMail(mail, password, count);
 
-
     res.status(200).json({
         success: true,
         mails
     });
 });
-
-
 
 export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
     let sdate = req.query.sdate;
@@ -1359,7 +1319,6 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             }
         }
     });
-
 
     res.status(200).json({
         success: true,
@@ -1546,11 +1505,6 @@ export const getProjectTaskDetails = catchAsyncError(async (req, res, next) => {
     });
 });
 
-
-
-
-
-
 export const createTime = catchAsyncError(async (req, res, next) => {
     const task_id = req.params.task_id;
     const user_id = req.user.user_id;
@@ -1576,7 +1530,6 @@ export const createTime = catchAsyncError(async (req, res, next) => {
         time_id: taskTime.time_id
     });
 });
-
 
 export const stopTime = catchAsyncError(async (req, res, next) => {
     const time_id = req.params.time_id;
@@ -1858,8 +1811,8 @@ export const getTimeEfficiencyData = catchAsyncError(async (req, res, next) => {
         });
         projectIds = userProjects.map(p => p.project_id);
         
-        // If user is a provider, also get projects they created
-        if (req.user.Role === 'PROVIDER') {
+        // If user is a provider or team member, also get projects they created
+        if (req.user.Role === 'PROVIDER' || req.user.Role === 'TEAM') {
             const createdProjects = await prisma.project.findMany({
                 where: { created_by: user_id },
                 select: { project_id: true }
@@ -2165,7 +2118,6 @@ export const checkMeetingEmails = catchAsyncError(async (req, res, next) => {
             emails: meetingEmails
         });
     } catch (error) {
-        console.error('Error checking meeting emails:', error);
         res.status(500).json({
             success: false,
             message: 'Error checking meeting emails'
@@ -2204,7 +2156,6 @@ export const manualEmailPoll = catchAsyncError(async (req, res, next) => {
             message: 'Manual email polling completed successfully'
         });
     } catch (error) {
-        console.error('Error in manual email polling:', error);
         return next(new ErrorHandler("Failed to poll emails", 500));
     }
 });

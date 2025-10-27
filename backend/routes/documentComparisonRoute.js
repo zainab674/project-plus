@@ -19,13 +19,10 @@ router.post('/compare', authMiddleware, compareDocuments);
 
 // Upload and compare two new documents
 router.post('/upload-and-compare', authMiddleware, (req, res, next) => {
-    console.log('🔧 Multer middleware processing...');
     multipleUpload(req, res, (err) => {
         if (err) {
-            console.error('❌ Multer error:', err);
             return next(new ErrorHandler('File upload error: ' + err.message, 400));
         }
-        console.log('✅ Multer processing completed');
         next();
     });
 }, uploadAndCompareDocuments);

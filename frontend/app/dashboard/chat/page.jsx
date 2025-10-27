@@ -21,7 +21,7 @@ export default function Page() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedTask, setSelectTask] = useState({ task_id: -1, name: "Common Chat" });
-  const { user } = useUser();
+  const { user, loadUserWithProjects } = useUser();
   const [messages, setMessages] = useState([]);
   const [conversationId, setConversationId] = useState('');
   const { handleSendMessage, handleCall, handleCallAnswer, handleSendSignal, handleCallEnd, handelNoResponse, socketRef } = useChatHook();

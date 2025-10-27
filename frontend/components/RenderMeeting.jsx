@@ -48,7 +48,6 @@ const RenderMeeting = ({ meetings, onMeetingDeleted }) => {
     return (
         <>
             <div className='px-2 py-4 space-y-8'>
-                {console.log("meetings", meetings)}
                 {
                     meetings?.map((meeting) => (
                     <Card key={meeting.meeting_id} className='border border-primary bg-white shadow-sm hover:shadow-md transition-all duration-300'>

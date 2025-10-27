@@ -325,9 +325,7 @@ const copyTemplateDocumentsToProject = async (template, projectId, userId) => {
         // Copy root files (files not in any folder)
         await copyTemplateFilesToProject(template.files, null, templateDocumentId, userId);
 
-        console.log(`Successfully copied ${template.folders.length} folders and ${template.files.length} root files from template to user ${userId}`);
     } catch (error) {
-        console.error('Error copying template documents to project:', error);
         throw new ErrorHandler(`Failed to copy template documents: ${error.message}`, 500);
     }
 };

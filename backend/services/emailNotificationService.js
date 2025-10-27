@@ -72,7 +72,6 @@ export const sendApprovalEmail = async (userEmail, userName) => {
                 subject: '🎉 Your Registration Request Has Been Approved!',
                 html
             });
-            console.log('Approval email sent via proxy:', result.messageId);
             return { success: true, messageId: result.messageId };
         }
 
@@ -87,11 +86,9 @@ export const sendApprovalEmail = async (userEmail, userName) => {
         };
         
         const info = await transporter.sendMail(mailOptions);
-        console.log('Approval email sent via direct SMTP:', info.messageId);
         return { success: true, messageId: info.messageId };
         
     } catch (error) {
-        console.error('Error sending approval email:', error);
         return { success: false, error: error.message };
     }
 };
@@ -161,11 +158,9 @@ export const sendRejectionEmail = async (userEmail, userName, adminNotes = '') =
         };
         
         const info = await transporter.sendMail(mailOptions);
-        console.log('Rejection email sent:', info.messageId);
         return { success: true, messageId: info.messageId };
         
     } catch (error) {
-        console.error('Error sending rejection email:', error);
         return { success: false, error: error.message };
     }
 };
@@ -228,11 +223,9 @@ export const sendPendingNotificationEmail = async (userEmail, userName) => {
         };
         
         const info = await transporter.sendMail(mailOptions);
-        console.log('Pending notification email sent:', info.messageId);
         return { success: true, messageId: info.messageId };
         
     } catch (error) {
-        console.error('Error sending pending notification email:', error);
         return { success: false, error: error.message };
     }
 };

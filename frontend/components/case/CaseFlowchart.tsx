@@ -6,7 +6,6 @@ import moment from 'moment';
 // Utility function to download files with proper filename
 const downloadFile = async (url, filename) => {
   try {
-    console.log('Downloading file:', { url, filename });
     
     // Always prioritize the provided filename over URL extraction
     let finalFilename = filename;
@@ -19,7 +18,6 @@ const downloadFile = async (url, filename) => {
       finalFilename = finalFilename.split('?')[0];
     }
     
-    console.log('Final filename:', finalFilename);
     
     // First try the blob approach
     const response = await fetch(url, {
@@ -80,7 +78,6 @@ const downloadFile = async (url, filename) => {
 // Utility function to view files in new tab
 const viewFile = async (url, filename) => {
   try {
-    console.log('Viewing file:', { url, filename });
     
     // Check if it's a Cloudinary URL that might force download
     const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
@@ -797,7 +794,6 @@ const CaseFlowchart: React.FC<{
       // Add a longer delay to prevent rapid re-renders and allow data to stabilize
       renderTimeoutRef.current = setTimeout(() => {
         if (isMounted && chartRef.current && !isRenderingRef.current) {
-          console.log('Starting delayed render...');
           renderChart();
         }
       }, 1000); // Increased from 100ms to 1000ms
@@ -821,7 +817,6 @@ const CaseFlowchart: React.FC<{
       // Longer delay for filter changes to prevent rapid re-renders
       renderTimeoutRef.current = setTimeout(() => {
         if (isMounted && chartRef.current && !isRenderingRef.current) {
-          console.log('Filter change - starting delayed render...');
           renderChart();
         }
       }, 2000); // 2 second delay for filter changes
@@ -835,7 +830,6 @@ const CaseFlowchart: React.FC<{
   }, [filters]);
 
   const renderChart = async () => {
-    console.log('renderChart called, isMounted:', isMounted, 'chartRef.current:', !!chartRef.current, 'isRendering:', isRenderingRef.current);
     
     if (!isMounted) {
       console.warn('Component not mounted, skipping render');
@@ -879,7 +873,6 @@ const CaseFlowchart: React.FC<{
       const model = normalizeApi(project, caseDetails, billingEntries, projectActivities, timelineData);
       const mermaidText = buildMermaid(model, filters);
 
-      console.log('Generated Mermaid text:', mermaidText.substring(0, 200) + '...');
 
       // Check if still mounted before clearing content
       if (!isMounted || !currentRef) {
@@ -916,12 +909,10 @@ const CaseFlowchart: React.FC<{
         // Add click event listeners to task nodes
         setTimeout(() => {
           if (isMounted && currentRef && currentRef === chartRef.current) {
-            console.log('Setting up click handlers...');
             
             // Add a general click handler to the entire chart container
             const chartContainer = currentRef;
             chartContainer.addEventListener('click', (e) => {
-              console.log('Chart container clicked');
               handleNodeClick(e);
             });
             
@@ -929,7 +920,6 @@ const CaseFlowchart: React.FC<{
             const svg = currentRef.querySelector('svg');
             if (svg) {
               svg.addEventListener('click', (e) => {
-                console.log('SVG clicked');
                 handleNodeClick(e);
               });
             }
@@ -941,10 +931,8 @@ const CaseFlowchart: React.FC<{
               return text.includes('Task #') && text.includes(':');
             });
             
-            console.log('Found task nodes for styling:', taskNodes.length);
             
             taskNodes.forEach((node, index) => {
-              console.log(`Styling task node ${index}:`, node.textContent);
               (node as HTMLElement).style.cursor = 'pointer';
               
               // Add visual feedback
@@ -960,7 +948,6 @@ const CaseFlowchart: React.FC<{
           }
         }, 300);
 
-        console.log('Chart rendered successfully');
       } else {
         console.warn('Component unmounted or ref changed during rendering');
       }
@@ -982,26 +969,20 @@ const CaseFlowchart: React.FC<{
   };
 
   const handleTaskClick = (taskId: string) => {
-    console.log('handleTaskClick called with taskId:', taskId);
-    console.log('Available tasks:', project?.Tasks?.map(t => `T${t.task_id}: ${t.name}`));
 
     // Extract numeric task ID from string format like "T10"
     const numericTaskId = parseInt(taskId.replace('T', ''));
 
     if (onTaskClick && !isNaN(numericTaskId)) {
-      console.log('Calling onTaskClick with numeric ID:', numericTaskId);
       onTaskClick(numericTaskId);
     } else {
       // Fallback to internal modal
       const task = project?.Tasks?.find((t: any) => `T${t.task_id}` === taskId);
-      console.log('Found task:', task);
 
       if (task) {
-        console.log('Opening task timeline for:', task.name);
         setSelectedTask(task);
         setShowTaskTimeline(true);
       } else {
-        console.log('Task not found! Available task IDs:', project?.Tasks?.map(t => `T${t.task_id}`));
       }
     }
   };
@@ -1013,13 +994,10 @@ const CaseFlowchart: React.FC<{
     const target = e.target as HTMLElement;
     const taskId = target.id;
 
-    console.log('Node clicked:', taskId, target);
-    console.log('Target text content:', target.textContent);
-    console.log('Target parent:', target.parentElement);
+
 
     // Check if it's a task node by ID
     if (taskId && taskId.startsWith('T')) {
-      console.log('Found task by ID:', taskId);
       handleTaskClick(taskId);
       return;
     }
@@ -1030,7 +1008,6 @@ const CaseFlowchart: React.FC<{
       const match = text.match(/Task #(\d+):/);
       if (match) {
         const extractedTaskId = `T${match[1]}`;
-        console.log('Found task by text content:', extractedTaskId);
         handleTaskClick(extractedTaskId);
         return;
       }
@@ -1044,7 +1021,6 @@ const CaseFlowchart: React.FC<{
         const match = parentText.match(/Task #(\d+):/);
         if (match) {
           const extractedTaskId = `T${match[1]}`;
-          console.log('Found task in parent element:', extractedTaskId);
           handleTaskClick(extractedTaskId);
           return;
         }
@@ -1052,7 +1028,6 @@ const CaseFlowchart: React.FC<{
       parent = parent.parentElement;
     }
 
-    console.log('No task found for this click');
   };
 
   const closeTaskTimeline = () => {

@@ -1,7 +1,6 @@
 import DataUriParser from "datauri/parser.js";
 import path from "path";
 
-
 export const fileToUri = (file) => {
   try {
     if (!file || !file.buffer || !file.originalname) {
@@ -23,7 +22,6 @@ export const fileToUri = (file) => {
     
     return result;
   } catch (error) {
-    console.error('Error in fileToUri:', error);
     throw new Error(`File processing failed: ${error.message || error.toString()}`);
   }
 };

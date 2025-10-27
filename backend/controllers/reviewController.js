@@ -45,7 +45,7 @@ export const createReview = catchAsyncError(async (req, res, next) => {
     // Check if user is assigned to the task or is project admin
     const isAssigned = task.assignees.some(assignee => assignee.user_id === user_id);
     const isProjectAdmin = task.project.Members.some(member =>
-        member.user_id === user_id && member.role === 'PROVIDER'
+        member.user_id === user_id && (member.role === 'PROVIDER' || member.role === 'TEAM')
     );
 
     if (!isAssigned && !isProjectAdmin) {
@@ -148,7 +148,7 @@ export const getTaskReviews = catchAsyncError(async (req, res, next) => {
     // Check if user has access to the task
     const isAssigned = task.assignees.some(assignee => assignee.user_id === user_id);
     const isProjectAdmin = task.project.Members.some(member =>
-        member.user_id === user_id && member.role === 'PROVIDER'
+        member.user_id === user_id && (member.role === 'PROVIDER' || member.role === 'TEAM')
     );
 
     if (!isAssigned && !isProjectAdmin) {
@@ -217,7 +217,7 @@ export const getReviewById = catchAsyncError(async (req, res, next) => {
     // Check if user has access to the review
     const isAssigned = review.task.assignees.some(assignee => assignee.user_id === user_id);
     const isProjectAdmin = review.task.project.Members.some(member =>
-        member.user_id === user_id && member.role === 'PROVIDER'
+        member.user_id === user_id && (member.role === 'PROVIDER' || member.role === 'TEAM')
     );
 
     if (!isAssigned && !isProjectAdmin) {
@@ -273,7 +273,7 @@ export const updateReview = catchAsyncError(async (req, res, next) => {
 
     // Only project admins can approve/reject reviews
     const isProjectAdmin = review.task.project.Members.some(member =>
-        member.user_id === user_id && member.role === 'PROVIDER'
+        member.user_id === user_id && (member.role === 'PROVIDER' || member.role === 'TEAM')
     );
 
     if (!isProjectAdmin) {
@@ -379,7 +379,7 @@ export const deleteReview = catchAsyncError(async (req, res, next) => {
 
     // Check if user is project admin
     const isProjectAdmin = review.task.project.Members.some(member =>
-        member.user_id === user_id && member.role === 'PROVIDER'
+        member.user_id === user_id && (member.role === 'PROVIDER' || member.role === 'TEAM')
     );
 
     if (!isProjectAdmin) {

@@ -11,7 +11,6 @@ const useChatHook = () => {
     useEffect(() => {
         if (!user || socketRef.current?.connected) return;
 
-        console.log('Initializing socket connection for user:', user.user_id);
 
         // Clean up previous socket if still around
         if (socketRef.current) {
@@ -26,9 +25,7 @@ const useChatHook = () => {
         });
 
         socketRef.current.on('connect', () => {
-            console.log('✅ Socket connected successfully');
-            console.log('🔌 Socket ID:', socketRef.current.id);
-            console.log('🌐 Connected to:', `${API_URL}/chat`);
+       
             
             // Test the connection by emitting a test event
             socketRef.current.emit('test', { message: 'Connection test', user_id: user.user_id });
@@ -47,17 +44,14 @@ const useChatHook = () => {
         });
 
         socketRef.current.on('test-response', (data) => {
-            console.log('🧪 Test response received:', data);
         });
 
         // Listen for new email notifications
         socketRef.current.on('new_emails', (data) => {
-            console.log('📧 New emails received:', data);
             toast.info(`You have ${data.count} new email${data.count > 1 ? 's' : ''}!`);
         });
 
         return () => {
-            console.log("Cleaning up socket listeners");
             socketRef.current?.disconnect();
         };
     }, [user?.user_id]);
@@ -70,37 +64,24 @@ const useChatHook = () => {
             throw new Error('Conversation ID is missing');
         }
 
-        // sender_id,reciever_id,content,conversation_id,content_type
-        console.log('🚀 handleSendMessage called with data:', data);
-        console.log('🔌 Socket connected:', socketRef.current?.connected);
-        console.log('🔌 Socket ID:', socketRef.current?.id);
+       
 
         if (socketRef.current && socketRef.current.connected) {
-            console.log('📤 Emitting message through socket');
-            console.log('📤 Message data being sent:', data);
-            console.log('🔌 Socket connection status:', {
-                connected: socketRef.current.connected,
-                id: socketRef.current.id,
-                readyState: socketRef.current.io.readyState
-            });
+          
             
             // Use private chat event for new system, regular message event for old system
             const eventName = data.private_conversation_id ? ON_PRIVATE_MESSAGE : ON_MESSAGE;
-            console.log('📤 About to emit message with event:', eventName);
-            console.log('📤 Message data being emitted:', data);
+         
             socketRef.current.emit(eventName, data);
-            console.log('✅ Message emitted successfully with event:', eventName);
         } else {
             console.error('❌ Socket not connected, cannot send message');
             toast.error("Connection lost. Trying to reconnect...");
             // Try to reconnect and send the message
             if (socketRef.current) {
-                console.log('🔄 Attempting to reconnect and send message...');
                 socketRef.current.connect();
 
                 // Wait for connection and then send
                 socketRef.current.once('connect', () => {
-                    console.log('✅ Reconnected, sending message...');
                     const eventName = data.private_conversation_id ? ON_PRIVATE_MESSAGE : ON_MESSAGE;
                     socketRef.current.emit(eventName, data);
                 });
@@ -163,8 +144,12 @@ const useChatHook = () => {
 
     const handleSendProjectMessage = useCallback((data) => {
         // project_id, sender_id, content, content_type
+     
+        
         if (socketRef.current && socketRef.current.connected) {
             socketRef.current.emit(ON_PROJECT_MESSAGE, data);
+        } else {
+            console.error('❌ useChatHook: Socket not connected, cannot send project message');
         }
     }, []);
 

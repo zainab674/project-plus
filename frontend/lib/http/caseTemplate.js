@@ -48,8 +48,12 @@ export const createTemplateFolderRequest = async (templateId, folderData) => {
 };
 
 // Use template to create project
-export const useTemplateForProjectRequest = async (templateId, projectData) => {
-    return api.post(`/case-templates/${templateId}/use`, projectData);
+export const useTemplateForProjectRequest = async (templateId, formData) => {
+    return api.post(`/case-templates/${templateId}/use`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
 };
 
 // Get template categories

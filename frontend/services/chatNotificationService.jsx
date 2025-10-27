@@ -11,7 +11,6 @@ class ChatNotificationService {
     // Initialize the service with Socket.IO instance and user ID
     init(ioInstance, userId) {
         if (this.isInitialized) {
-            console.log('🔌 Chat notification service already initialized');
             return;
         }
 
@@ -19,30 +18,25 @@ class ChatNotificationService {
         this.userId = userId;
         this.isInitialized = true;
 
-        console.log('🔌 Chat notification service initialized for user:', userId);
         this.setupEventListeners();
     }
 
     // Set up event listeners for chat notifications
     setupEventListeners() {
         if (!this.io) {
-            console.log('⚠️ Chat notification service: No io instance available');
             return;
         }
 
         // Listen for chat notifications
         this.io.on('chat_notification', (data) => {
-            console.log('📱 Chat notification received:', data);
             this.handleChatNotification(data);
         });
 
         // Listen for connection status
         this.io.on('connect', () => {
-            console.log('🔌 Chat notification service: Connected to WebSocket');
         });
 
         this.io.on('disconnect', () => {
-            console.log('🔌 Chat notification service: Disconnected from WebSocket');
         });
 
         this.io.on('error', (error) => {
@@ -246,7 +240,6 @@ class ChatNotificationService {
 
     // Handle notification click (navigate to chat)
     handleChatNotificationClick(message) {
-        console.log('📱 Chat notification clicked:', message);
         
         // You can implement navigation logic here
         // For example, open chat modal, navigate to chat page, etc.
@@ -321,7 +314,6 @@ class ChatNotificationService {
         
         this.notificationCallbacks.clear();
         this.isInitialized = false;
-        console.log('🔌 Chat notification service destroyed');
     }
 }
 

@@ -22,5 +22,4 @@ export async function executeBatchMail(batch, heading, description, meeting_id, 
     const html = generateMeetingInvitation(meetingInfo);
     await sendMail("Meeting Invitation", email, html);
   }
-  console.log('Batch sent successfully!');
 }

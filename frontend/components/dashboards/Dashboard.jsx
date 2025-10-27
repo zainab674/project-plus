@@ -52,9 +52,7 @@ const DashboardContent = () => {
     try {
       const res = await getAllTaskProgressRequest(selectedDate);
       setProgress(res.data.progress)
-      console.log(" setProgress ", res.data.progress)
     } catch (error) {
-      console.log(error?.response?.data?.meesage || error?.meesage);
     }
   }, [selectedDate])
 
@@ -68,9 +66,7 @@ const DashboardContent = () => {
     try {
       const res = await getsMeetingRequest(true);
       setMeeting(res.data.meetings[0]);
-      console.log(" setMeeting ", res.data.meetings[0])
     } catch (error) {
-      console.log(error?.response?.data?.message || error.message);
     }
   }, []);
 
@@ -96,7 +92,7 @@ const DashboardContent = () => {
 
   return (
     <>
-      <TopNavigation />
+      {/* <TopNavigation /> */}
       {/* <QuickActions /> */}
 
       {/* Show Client Dashboard for CLIENT role */}
@@ -114,7 +110,7 @@ const DashboardContent = () => {
               </div>
             )}
 
-            {user?.Role === 'PROVIDER' && (
+            {(user?.Role === 'PROVIDER' || user?.Role === 'TEAM') && (
               < CreateCase />
             )}
             
@@ -126,20 +122,20 @@ const DashboardContent = () => {
               {user?.Role !== 'BILLER' && (
                 <Todo filteredProjects={filteredProjects} />
               )}
-              {user?.Role !== 'BILLER' && user?.Role !== 'TEAM' && (
+              {user?.Role !== 'BILLER' && (
                 < LawFirmTimeline 
                   timelineData={filteredTimelineData}
                   timelineLoading={filterLoading}
                 />
               )}
-              {user?.Role === 'PROVIDER' && (
+              {(user?.Role === 'PROVIDER' || user?.Role === 'TEAM') && (
                 < TimeEfficiency projectId={undefined} filteredProjects={filteredProjects} />
               )}
               <LawFirmMeetingSystem />
-              {user?.Role !== 'TEAM' && (
+              {user?.Role !== 'BILLER' && (
                 <Billing filteredProjects={filteredProjects} />
               )}
-              {user?.Role === 'PROVIDER' && (
+              {(user?.Role === 'PROVIDER' || user?.Role === 'TEAM') && (
                 <BusinessStatus filteredProjects={filteredProjects} />
               )}
             </div>
@@ -147,8 +143,8 @@ const DashboardContent = () => {
         </div>
       )}
       
-      {/* AI Legal Assistant - Floating component for case creation - Only for Provider and Admin */}
-      {(user?.Role === 'PROVIDER' || user?.Role === 'ADMIN') && (
+      {/* AI Legal Assistant - Floating component for case creation - Only for Provider, Team and Admin */}
+      {(user?.Role === 'PROVIDER' || user?.Role === 'TEAM' || user?.Role === 'ADMIN') && (
         <AILawyerAssistant />
       )}
     </>

@@ -65,7 +65,6 @@ const BusinessStatus = ({ filteredProjects = null }) => {
             setExpenses(response.data.expenses || []);
             setTotalExpenses(response.data.total || 0);
 
-            console.log("exexex", response)
         } catch (error) {
             toast.error(error?.response?.data?.message || 'Failed to load expenses');
         } finally {
@@ -98,20 +97,15 @@ const BusinessStatus = ({ filteredProjects = null }) => {
                         const billingEntries = billingEntriesResponse.data.billingEntries || [];
 
                         // Debug: Log the tasks for this case
-                        console.log(`Case ${caseItem.project_id} tasks:`, caseItem.Tasks);
 
                         const completedTasks = caseItem.Tasks?.filter(task => {
-                            console.log(`Task ${task.task_id} status:`, task.status, 'Type:', typeof task.status);
                             // Check for DONE status - handle both string and enum values
                             const status = String(task.status).trim().toUpperCase();
                             const isDone = status === 'DONE';
-                            console.log(`Task ${task.task_id} processed status:`, status, 'Is done:', isDone);
                             return isDone;
                         }) || [];
 
                         // Debug: Log all tasks for this case
-                        console.log(`Case ${caseItem.project_id} all tasks:`, caseItem.Tasks);
-                        console.log(`Case ${caseItem.project_id} completed tasks:`, completedTasks);
 
                         // Calculate billing totals for each completed task
                         const tasksWithBilling = completedTasks.map(task => {
@@ -139,7 +133,6 @@ const BusinessStatus = ({ filteredProjects = null }) => {
                             meeting: billingEntries.filter(entry => entry.item_type === 'MEETING').reduce((sum, entry) => sum + (entry.total_amount || 0), 0)
                         };
 
-                        console.log(`Case ${caseItem.project_id} completed tasks:`, completedTasks);
 
                         return {
                             ...caseItem,
@@ -150,14 +143,11 @@ const BusinessStatus = ({ filteredProjects = null }) => {
                             billingSummary
                         };
                     } catch (error) {
-                        console.log(`Error fetching data for case ${caseItem.project_id}:`, error);
 
                         const completedTasks = caseItem.Tasks?.filter(task => {
-                            console.log(`Task ${task.task_id} status (fallback):`, task.status, 'Type:', typeof task.status);
                             // More robust filtering - handle potential case sensitivity or whitespace
                             const status = String(task.status).trim().toUpperCase();
                             const isDone = status === 'DONE';
-                            console.log(`Task ${task.task_id} processed status (fallback):`, status, 'Is done:', isDone);
                             return isDone;
                         }) || [];
 
@@ -878,9 +868,6 @@ const BusinessStatus = ({ filteredProjects = null }) => {
                                                 {(() => {
                                                     // Filter completed tasks directly in the render for debugging
                                                     const completedTasks = caseItem.Tasks?.filter(task => task.status === 'DONE') || [];
-                                                    console.log(`Rendering case ${caseItem.project_id} completed tasks:`, caseItem.completedTasks);
-                                                    console.log(`Direct filter completed tasks:`, completedTasks);
-                                                    console.log(`All tasks for case ${caseItem.project_id}:`, caseItem.Tasks);
                                                     return completedTasks.length > 0;
                                                 })() ? (
                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">

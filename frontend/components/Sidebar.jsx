@@ -168,13 +168,7 @@ const Sidebar = ({ setSidebarOpen, sidebarOpen, className }) => {
                                         <Link href={'/dashboard/meeting'}>
                                             <Button variant="ghost" size="sm" className="justify-start w-full text-foreground-primary hover:bg-tbutton-hover hover:text-tbutton-text">
                                                 <Projector className="mr-2 h-4 w-4" />
-                                                Instant Meet
-                                            </Button>
-                                        </Link>
-                                        <Link href={'/dashboard/schedule-meet'}>
-                                            <Button variant="ghost" size="sm" className="justify-start w-full text-foreground-primary hover:bg-tbutton-hover hover:text-tbutton-text">
-                                                <CalendarCheck className="mr-2 h-4 w-4" />
-                                                Schedule Meet
+                                                All Meetings
                                             </Button>
                                         </Link>
                                     </div>
@@ -298,20 +292,12 @@ const Sidebar = ({ setSidebarOpen, sidebarOpen, className }) => {
 
                                 <CollapsibleContent className="px-4 py-2">
                                     <div className="flex flex-col gap-2">
-
                                         <Link href={'/dashboard/meeting'}>
                                             <Button variant="ghost" size="sm" className="justify-start w-full text-foreground-primary hover:bg-tbutton-hover hover:text-tbutton-text">
                                                 <Projector className="mr-2 h-4 w-4" />
-                                                Instant Meet
+                                                All Meetings
                                             </Button>
                                         </Link>
-                                        <Link href={'/dashboard/schedule-meet'}>
-                                            <Button variant="ghost" size="sm" className="justify-start w-full text-foreground-primary hover:bg-tbutton-hover hover:text-tbutton-text">
-                                                <CalendarCheck className="mr-2 h-4 w-4" />
-                                                Schedule Meet
-                                            </Button>
-                                        </Link>
-
                                     </div>
                                 </CollapsibleContent>
                             </Collapsible>

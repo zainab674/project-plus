@@ -14,8 +14,9 @@ import React, { useState, useRef, useEffect } from 'react'
 import { createFolderRequest, createFileRequest, getFilesRequest, sendToLawyerRequest, deleteFolderRequest, deleteFileRequest } from '@/lib/http/project'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation';
-import { Folder, File, Plus, Upload, Edit, Send, Trash2, ChevronRight, ChevronDown, FolderOpen, FileText, MoreVertical, Home, ArrowLeft, HelpCircle, Info } from 'lucide-react';
+import { Folder, File, Plus, Upload, Edit, Send, Trash2, ChevronRight, ChevronDown, FolderOpen, FileText, MoreVertical, Home, ArrowLeft, HelpCircle, Info, Eye, Download } from 'lucide-react';
 import { useUser } from '@/providers/UserProvider';
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider';
 
 const DocumentManager = () => {
   const [items, setItems] = useState([]);
@@ -24,12 +25,16 @@ const DocumentManager = () => {
   const [showHelp, setShowHelp] = useState(false);
   const containerRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [projectAttachments, setProjectAttachments] = useState([]);
+  const [showProjectAttachments, setShowProjectAttachments] = useState(false);
   const router = useRouter()
   const { user } = useUser();
+  const { selectedCase } = useDashboardFilter();
 
   useEffect(() => {
     fetchFiles();
-  }, []);
+    fetchProjectAttachments();
+  }, [selectedCase]); // Re-fetch when selected case changes
 
   const fetchFiles = async () => {
     setIsLoading(true)
@@ -43,6 +48,59 @@ const DocumentManager = () => {
       toast.error(error?.response?.data?.message || 'Failed to fetch files');
     } finally {
       setIsLoading(false)
+    }
+  };
+
+  const fetchProjectAttachments = async () => {
+    try {
+      
+      // Use comprehensive request which includes Media
+      const { getAllProjectComprehensiveRequest } = await import('@/lib/http/project');
+      const response = await getAllProjectComprehensiveRequest();
+      
+      if (response.data.success && Array.isArray(response.data.projects)) {
+        
+            // Collect all media from all projects
+            let allAttachments = [];
+            response.data.projects.forEach((project, index) => {
+              
+              // Filter by selected case if one is selected
+              if (selectedCase && project.project_id !== selectedCase.project_id) {
+                return; // Skip this project if it's not the selected one
+              }
+              
+              if (project.Media && Array.isArray(project.Media)) {
+                // Get project-level attachments (task_id is null)
+                const projectMedia = project.Media
+                  .filter(media => media.task_id === null || media.task_id === undefined)
+                  .map(media => ({
+                    ...media,
+                    projectName: project.name,
+                    projectId: project.project_id,
+                    attachmentType: 'case' // project-level attachment
+                  }));
+                
+                // Get task-level attachments
+                const taskMedia = project.Media
+                  .filter(media => media.task_id !== null && media.task_id !== undefined)
+                  .map(media => ({
+                    ...media,
+                    projectName: project.name,
+                    projectId: project.project_id,
+                    attachmentType: 'task' // task-level attachment
+                  }));
+                
+                allAttachments.push(...projectMedia, ...taskMedia);
+              }
+            });
+        
+        setProjectAttachments(allAttachments);
+      } else {
+      }
+    } catch (error) {
+      console.error('Failed to fetch project attachments:', error);
+      console.error('Error details:', error.message, error.stack);
+      // Don't show error toast as this is optional
     }
   };
 
@@ -107,17 +165,25 @@ const DocumentManager = () => {
       try {
         setIsLoading(true);
         
+        
+        let response;
         if (type === 'folder') {
-          await deleteFolderRequest(id);
-          toast.success('✅ Folder deleted successfully');
+          response = await deleteFolderRequest(id);
         } else if (type === 'file') {
-          await deleteFileRequest(id);
-          toast.success('✅ File deleted successfully');
+          response = await deleteFileRequest(id);
         }
         
-        fetchFiles(); // Refresh the file tree
+        // Only show success if we get a successful response
+        if (response?.data?.success) {
+          toast.success(`✅ ${itemType.charAt(0).toUpperCase() + itemType.slice(1)} deleted successfully`);
+          fetchFiles(); // Refresh the file tree
+        } else {
+          toast.error(`❌ Failed to delete ${itemType}: ${response?.data?.message || 'Unknown error'}`);
+        }
       } catch (error) {
-        toast.error(error?.response?.data?.message || '❌ Failed to delete item');
+        console.error(`Error deleting ${itemType}:`, error);
+        console.error('Error response:', error?.response);
+        toast.error(`❌ Failed to delete ${itemType}: ${error?.response?.data?.message || error?.message || 'Network error'}`);
       } finally {
         setIsLoading(false);
       }
@@ -146,7 +212,6 @@ const DocumentManager = () => {
       formData.append("description", description);
 
       // Fetch file data from the file.path (which is a URL)
-      console.log(file.path, "file.path")
       const fileResponse = await fetch(file.path);
       const fileData = await fileResponse.arrayBuffer(); // or .blob()
       const blob = new Blob([fileData], { type: 'application/pdf' });
@@ -167,13 +232,41 @@ const DocumentManager = () => {
   };
 
   const handleEditSend = async (file) => {
+    // This is for template documents (File table)
     router.push(`/dashboard/edit-file/${file.file_id}?file=${file.path}`)
+  };
+
+  const handleEditMediaFile = async (attachment) => {
+    // This is for Media table attachments (task/project files)
+    router.push(`/dashboard/edit-file/${attachment.media_id}?file=${encodeURIComponent(attachment.file_url)}&media_id=${attachment.media_id}&filename=${encodeURIComponent(attachment.filename)}`)
   };
 
   // User-friendly folder/file rendering with large, clear action buttons
   const renderTree = (folders = items, level = 0) => {
-    // Group folders by project_name
+    // First, group project attachments by project name and type
+    const projectAttachmentsGrouped = projectAttachments.reduce((acc, attachment) => {
+      const projectKey = attachment.projectName || 'Uncategorized';
+      if (!acc[projectKey]) {
+        acc[projectKey] = {
+          case: [], // project-level attachments
+          task: []  // task-level attachments
+        };
+      }
+      if (attachment.attachmentType === 'case') {
+        acc[projectKey].case.push(attachment);
+      } else if (attachment.attachmentType === 'task') {
+        acc[projectKey].task.push(attachment);
+      }
+      return acc;
+    }, {});
+
+    // Group folders by project_name, filtering by selected case
     const groupedByProject = folders.reduce((acc, folder) => {
+      // If a case is selected, only show folders for that case
+      if (selectedCase && folder.project_name && folder.project_name !== selectedCase.name) {
+        return acc; // Skip this folder if it doesn't belong to the selected case
+      }
+      
       let groupKey;
       
       if (folder.project_name) {
@@ -191,18 +284,208 @@ const DocumentManager = () => {
       return acc;
     }, {});
 
-    return Object.entries(groupedByProject).map(([groupKey, projectFolders]) => {
-      // Determine if this should be shown as a group
-      const shouldGroup = projectFolders.length > 1;
+    // Get all unique group keys from both folders and project attachments
+    const allGroupKeys = new Set([
+      ...Object.keys(groupedByProject),
+      ...Object.keys(projectAttachmentsGrouped)
+    ]);
+
+    return Array.from(allGroupKeys).map((groupKey) => {
+      const projectFolders = groupedByProject[groupKey] || [];
+      const attachmentGroup = projectAttachmentsGrouped[groupKey] || { case: [], task: [] };
+      const caseAttachments = attachmentGroup.case || [];
+      const taskAttachments = attachmentGroup.task || [];
+      const totalAttachments = caseAttachments.length + taskAttachments.length;
       
       // Determine the display name for the group
       const displayName = groupKey.startsWith('folder_') 
-        ? projectFolders[0].name 
+        ? (projectFolders[0]?.name || groupKey)
         : groupKey;
 
-      if (!shouldGroup) {
+      // If this is a project with attachments but no folders
+      if (totalAttachments > 0 && projectFolders.length === 0) {
+        return (
+          <div key={groupKey} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 hover:shadow-lg transition-all duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <button
+                    onClick={() => {
+                      setExpandedFolders(prev => ({
+                        ...prev,
+                        [groupKey]: !prev[groupKey]
+                      }));
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    title={expandedFolders[groupKey] ? "Hide contents" : "Show contents"}
+                  >
+                    {expandedFolders[groupKey] ? (
+                      <ChevronDown className="w-6 h-6 text-gray-600" />
+                    ) : (
+                      <ChevronRight className="w-6 h-6 text-gray-600" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setExpandedFolders(prev => ({
+                        ...prev,
+                        [groupKey]: !prev[groupKey]
+                      }));
+                    }}
+                    className="p-2 hover:bg-purple-100 rounded-lg transition-colors"
+                    title={expandedFolders[groupKey] ? "Hide contents" : "Show contents"}
+                  >
+                    <FolderOpen className="w-8 h-8 text-purple-500" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setExpandedFolders(prev => ({
+                        ...prev,
+                        [groupKey]: !prev[groupKey]
+                      }));
+                    }}
+                    className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
+                    title={expandedFolders[groupKey] ? "Hide contents" : "Show contents"}
+                  >
+                    <h3 className="text-lg font-semibold text-gray-800 hover:text-purple-600 transition-colors">
+                      {displayName}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      {caseAttachments.length > 0 && `${caseAttachments.length} case file${caseAttachments.length !== 1 ? 's' : ''}`}
+                      {caseAttachments.length > 0 && taskAttachments.length > 0 && ' • '}
+                      {taskAttachments.length > 0 && `${taskAttachments.length} task file${taskAttachments.length !== 1 ? 's' : ''}`}
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Expanded Content - Show attachments */}
+              {expandedFolders[groupKey] && (
+                <div className="mt-4 space-y-3">
+                  {/* Case-level attachments */}
+                  {caseAttachments.length > 0 && (
+                    <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                      <p className="text-sm font-medium text-purple-800 mb-2">📎 Case Files ({caseAttachments.length})</p>
+                      {caseAttachments.map((attachment, index) => (
+                        <div key={`case-${attachment.media_id}-${index}`} className="bg-white border border-purple-200 rounded-lg p-3 mb-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <FileText className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
+                                <p className="text-xs text-gray-500">
+                                  {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              {attachment.file_url && (
+                                <>
+                                  <button
+                                    onClick={() => window.open(attachment.file_url, '_blank')}
+                                    className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>View</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditMediaFile(attachment)}
+                                    className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = attachment.file_url;
+                                      link.download = attachment.filename || 'document';
+                                      link.click();
+                                    }}
+                                    className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Get</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Task-level attachments */}
+                  {taskAttachments.length > 0 && (
+                    <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm font-medium text-blue-800 mb-2">📋 Task Files ({taskAttachments.length})</p>
+                      {taskAttachments.map((attachment, index) => (
+                        <div key={`task-${attachment.media_id}-${index}`} className="bg-white border border-blue-200 rounded-lg p-3 mb-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
+                                <p className="text-xs text-gray-500">
+                                  {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
+                                  {attachment.task_id && ` • Task #${attachment.task_id}`}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              {attachment.file_url && (
+                                <>
+                                  <button
+                                    onClick={() => window.open(attachment.file_url, '_blank')}
+                                    className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>View</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditMediaFile(attachment)}
+                                    className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = attachment.file_url;
+                                      link.download = attachment.filename || 'document';
+                                      link.click();
+                                    }}
+                                    className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Get</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // Handle regular folders (existing logic)
+      const shouldGroup = projectFolders.length > 1;
+
+      if (!shouldGroup && projectFolders.length > 0) {
         // Single folder - show directly
         const folder = projectFolders[0];
+        
+        // Check if this folder also has project attachments
+        const hasAttachments = totalAttachments > 0;
         return (
           <div key={folder.folder_id} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
             {/* Folder Card */}
@@ -253,6 +536,8 @@ const DocumentManager = () => {
                     <p className="text-sm text-gray-500">
                       {folder.files?.length || 0} files
                       {folder.subfolders?.length > 0 && ` • ${folder.subfolders.length} subfolders`}
+                      {caseAttachments.length > 0 && ` • ${caseAttachments.length} case file${caseAttachments.length !== 1 ? 's' : ''}`}
+                      {taskAttachments.length > 0 && ` • ${taskAttachments.length} task file${taskAttachments.length !== 1 ? 's' : ''}`}
                     </p>
                   </button>
                 </div>
@@ -289,6 +574,115 @@ const DocumentManager = () => {
               {/* Expanded Content */}
               {expandedFolders[folder.folder_id] && (
                 <div className="mt-4 space-y-3">
+                  {/* Case-level attachments */}
+                  {caseAttachments.length > 0 && (
+                    <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                      <p className="text-sm font-medium text-purple-800 mb-2">📎 Case Files ({caseAttachments.length})</p>
+                      {caseAttachments.map((attachment, index) => (
+                        <div key={`case-${attachment.media_id}-${index}`} className="bg-white border border-purple-200 rounded-lg p-3 mb-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <FileText className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
+                                <p className="text-xs text-gray-500">
+                                  {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              {attachment.file_url && (
+                                <>
+                                  <button
+                                    onClick={() => window.open(attachment.file_url, '_blank')}
+                                    className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>View</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditMediaFile(attachment)}
+                                    className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = attachment.file_url;
+                                      link.download = attachment.filename || 'document';
+                                      link.click();
+                                    }}
+                                    className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Get</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Task-level attachments */}
+                  {taskAttachments.length > 0 && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm font-medium text-blue-800 mb-2">📋 Task Files ({taskAttachments.length})</p>
+                      {taskAttachments.map((attachment, index) => (
+                        <div key={`task-${attachment.media_id}-${index}`} className="bg-white border border-blue-200 rounded-lg p-3 mb-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
+                                <p className="text-xs text-gray-500">
+                                  {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
+                                  {attachment.task_id && ` • Task #${attachment.task_id}`}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              {attachment.file_url && (
+                                <>
+                                  <button
+                                    onClick={() => window.open(attachment.file_url, '_blank')}
+                                    className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>View</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleEditMediaFile(attachment)}
+                                    className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Edit className="w-3 h-3" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = attachment.file_url;
+                                      link.download = attachment.filename || 'document';
+                                      link.click();
+                                    }}
+                                    className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Get</span>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
                   {/* Files in this folder */}
                   {folder.files && folder.files.map(file => (
                     <div

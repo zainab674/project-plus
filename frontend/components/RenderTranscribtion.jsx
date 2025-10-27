@@ -4,7 +4,6 @@ import moment from 'moment'
 import AvatarCompoment from './AvatarCompoment'
 
 const RenderTranscribtion = ({transcribtions,handleSelectedTranscibtion}) => {
-  console.log(transcribtions,"transcribtions000000000")
   return (
     <div className='space-y-4'>
         {

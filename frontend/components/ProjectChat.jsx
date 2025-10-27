@@ -57,11 +57,9 @@ export default function ProjectChat({ project }) {
 
   // Get default task for Project Chat
   const getDefaultTask = useCallback(() => {
-    if (projectTasks.length > 0) {
-      return projectTasks[0];
-    }
+    // Always use task_id: 0 for general project chat to match UniversalChatWidget
     return { task_id: 0, name: "Project Chat" };
-  }, [projectTasks]);
+  }, []);
 
   // Initialize selected task when project or tasks change
   useEffect(() => {
@@ -218,10 +216,14 @@ export default function ProjectChat({ project }) {
   // Handle receiving messages
   const handleMessageReceive = useCallback((data) => {
 
-    // Only handle messages for this project and task
-    if (data.project_id === project?.project_id &&
-      data.task_id === selectedTask?.task_id &&
-      data.sender_id !== user?.user_id) {
+    // Only handle messages for this project
+    if (data.project_id === project?.project_id && data.sender_id !== user?.user_id) {
+      
+      // Check if message matches current task or is general project chat
+      const isGeneralProjectChat = data.task_id === -1 || data.task_id === 0;
+      const isCurrentTaskMessage = data.task_id === selectedTask?.task_id;
+      
+      if (isGeneralProjectChat || isCurrentTaskMessage) {
 
       // Check if message already exists in state to prevent duplicates
       setMessages(prev => {
@@ -264,10 +266,9 @@ export default function ProjectChat({ project }) {
         }];
       });
 
-      // Play notification sound
-      audioRef.current?.play();
-    } else {
-
+        // Play notification sound
+        audioRef.current?.play();
+      }
     }
   }, [project?.project_id, selectedTask?.task_id, user?.user_id]);
 
@@ -347,7 +348,7 @@ export default function ProjectChat({ project }) {
                 <SelectTrigger className="w-48 h-8 text-sm">
                   <SelectValue placeholder="Select task" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[80]">
                   <SelectItem value="0">Project Chat</SelectItem>
                   {projectTasks.map((task) => (
                     <SelectItem key={task.task_id} value={task.task_id.toString()}>

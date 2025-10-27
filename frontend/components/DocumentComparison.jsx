@@ -60,12 +60,7 @@ const DocumentComparison = () => {
             formData.append('document2', documents.document2);
             formData.append('comparison_type', 'detailed');
 
-            console.log('📄 Frontend: Sending documents:', {
-                document1: documents.document1?.name,
-                document2: documents.document2?.name,
-                document1Size: documents.document1?.size,
-                document2Size: documents.document2?.size
-            });
+          
 
             const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8978';
             const response = await fetch(`${API_URL}/api/v1/document-comparison/upload-and-compare`, {
@@ -76,17 +71,13 @@ const DocumentComparison = () => {
                 body: formData
             });
 
-            console.log('📄 Frontend: Response status:', response.status);
-            console.log('📄 Frontend: Response headers:', Object.fromEntries(response.headers.entries()));
-
-            if (!response.ok) {
+                  if (!response.ok) {
                 const errorText = await response.text();
                 console.error('📄 Frontend: Error response:', errorText);
                 throw new Error(`Server error: ${response.status} - ${errorText}`);
             }
 
             const data = await response.json();
-            console.log('📄 Frontend: Response data:', data);
 
             if (data.success) {
                 setComparisonResult(data);

@@ -3,7 +3,6 @@ import AvatarCompoment from './AvatarCompoment'
 import moment from 'moment'
 
 const RenderMemberDetails = ({ members }) => {
-    console.log(members)
 
     const getLegalRoleDisplay = (member) => {
         if (member.legalRole === 'CUSTOM' && member.customLegalRole) {

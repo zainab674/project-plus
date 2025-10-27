@@ -41,8 +41,6 @@ export const saveTranscription = catchAsyncError(async (req, res, next) => {
             }
         });
 
-        console.log('✅ Transcription saved:', transcription.meeting_transcribtion_id);
-
         res.status(200).json({
             success: true,
             message: "Transcription saved successfully",
@@ -56,7 +54,6 @@ export const saveTranscription = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('❌ Error saving transcription:', error);
         return next(new ErrorHandler("Failed to save transcription", 500));
     }
 });
@@ -93,10 +90,8 @@ export const handleLiveKitTranscription = catchAsyncError(async (req, res, next)
                             created_at: new Date()
                         }
                     });
-                    console.log(`✅ LiveKit transcription saved to database: ${transcription_data.text.substring(0, 50)}...`);
                 }
             } catch (dbError) {
-                console.error('❌ Error saving LiveKit transcription to database:', dbError);
                 // Don't fail the request if DB save fails
             }
         }
@@ -110,7 +105,6 @@ export const handleLiveKitTranscription = catchAsyncError(async (req, res, next)
         });
 
     } catch (error) {
-        console.error('❌ Error handling LiveKit transcription:', error);
         return next(new ErrorHandler("Failed to handle transcription", 500));
     }
 });
@@ -144,7 +138,6 @@ export const startMeetingTranscription = catchAsyncError(async (req, res, next) 
         });
 
     } catch (error) {
-        console.error('❌ Error starting meeting transcription:', error);
         return next(new ErrorHandler("Failed to start transcription collection", 500));
     }
 });
@@ -189,7 +182,6 @@ export const endMeetingTranscription = catchAsyncError(async (req, res, next) =>
         });
 
     } catch (error) {
-        console.error('❌ Error ending meeting transcription:', error);
         return next(new ErrorHandler("Failed to end meeting and save transcriptions", 500));
     }
 });
@@ -246,7 +238,6 @@ export const getTranscriptionStats = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('❌ Error getting transcription stats:', error);
         return next(new ErrorHandler("Failed to get transcription statistics", 500));
     }
 });
@@ -305,7 +296,6 @@ export const getMeetingTranscriptions = catchAsyncError(async (req, res, next) =
         });
 
     } catch (error) {
-        console.error('❌ Error fetching transcriptions:', error);
         return next(new ErrorHandler("Failed to fetch transcriptions", 500));
     }
 });
@@ -391,7 +381,6 @@ export const updateMeetingStatus = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('❌ Error updating meeting status:', error);
         return next(new ErrorHandler("Failed to update meeting status", 500));
     }
 });
@@ -478,7 +467,6 @@ export const getMeetingStats = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('❌ Error fetching meeting stats:', error);
         return next(new ErrorHandler("Failed to fetch meeting statistics", 500));
     }
 });

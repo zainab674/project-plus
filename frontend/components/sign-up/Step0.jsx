@@ -15,10 +15,8 @@ const Step0 = ({ formdata, onFormDataChange, handleNextStep, isContinueButtonDis
     }, []);
 
     const handleSubmit = useCallback(async () => {
-        console.log('🎯 Step0 handleSubmit called');
         try {
             // Call the parent's handleNextStep which will make the API call
-            console.log('📞 Calling parent handleNextStep...');
             handleNextStep();
         } catch (error) {
             console.error('❌ Error in Step0 handleSubmit:', error);

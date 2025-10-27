@@ -25,7 +25,6 @@ class LiveKitWebhookService {
             });
 
             if (response.data.success) {
-                console.log(`✅ Transcription sent to backend for meeting ${meetingId}`);
                 return true;
             } else {
                 console.error(`❌ Backend rejected transcription for meeting ${meetingId}`);
@@ -52,7 +51,6 @@ class LiveKitWebhookService {
             });
 
             if (response.data.success) {
-                console.log(`✅ Meeting start notification sent for meeting ${meetingId}`);
                 return true;
             } else {
                 console.error(`❌ Backend rejected meeting start notification for meeting ${meetingId}`);
@@ -82,7 +80,6 @@ class LiveKitWebhookService {
             });
 
             if (response.data.success) {
-                console.log(`✅ Meeting end notification sent for meeting ${meetingId}`);
                 return response.data;
             } else {
                 console.error(`❌ Backend rejected meeting end notification for meeting ${meetingId}`);

@@ -6,14 +6,8 @@ import { UserProvider } from "@/providers/UserProvider";
 import { EmailNotificationProvider } from "@/providers/EmailNotificationProvider";
 import { TimerProvider } from "@/providers/TimerProvider";
 import { DashboardFilterProvider } from "@/providers/DashboardFilterProvider";
-import RoleSelectionWrapper from "@/components/RoleSelectionWrapper";
-import TimerBanner from "@/components/TimerBanner";
 import { Suspense } from "react";
-import ConditionalAIChatbot from "@/components/ConditionalAIChatbot";
-import QuickActionsBar from "@/components/QuickActionsBar";
-import { QuickActions } from "@/components/quickActions";
-import TopNavigation from "@/components/TopNavigation";
-import ConditionalQuickActions from "@/components/ConditionalQuickActions";
+import ClientLayoutWrapper from "@/components/ClientLayoutWrapper";
 
 export const metadata = {
   title: "flexywexy.com",
@@ -29,18 +23,9 @@ export default function RootLayout({ children }) {
             <TimerProvider>
               <EmailNotificationProvider>
                 <DashboardFilterProvider>
-                  <RoleSelectionWrapper>
-                    {/* <QuickActionsBar /> */}
-
-                    <ConditionalQuickActions>
-                      <TimerBanner />
-                      <div className="">
-                        {children}
-                      </div>
-                      <ConditionalAIChatbot />
-                    </ConditionalQuickActions>
-
-                  </RoleSelectionWrapper>
+                  <ClientLayoutWrapper>
+                    {children}
+                  </ClientLayoutWrapper>
                 </DashboardFilterProvider>
               </EmailNotificationProvider>
             </TimerProvider>

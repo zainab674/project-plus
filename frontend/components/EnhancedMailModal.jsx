@@ -39,7 +39,6 @@ const EnhancedMailModal = ({ isOpen, onClose }) => {
             const res = await getTaskEmailRequest();
             setMails(res?.data?.emails || []);
         } catch (error) {
-            console.log(error?.response?.data?.message || error?.message);
             setMails([]);
         } finally {
             setMailLoading(false);
@@ -53,7 +52,6 @@ const EnhancedMailModal = ({ isOpen, onClose }) => {
             const { projects, collaboratedProjects } = res.data;
             setProjects([...projects, ...collaboratedProjects]);
         } catch (error) {
-            console.log(error?.response?.data?.message || error?.message);
             setProjects(null);
         }
     }, []);

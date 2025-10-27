@@ -681,7 +681,7 @@ model Notification {
 model Media {
   media_id   String   @id @default(uuid())
   project_id Int
-  task_id    Int
+  task_id    Int?
   user_id    Int
   file_url   String
   created_at DateTime @default(now())
@@ -691,7 +691,7 @@ model Media {
   key        String?
 
   user    User    @relation("UserMedia", fields: [user_id], references: [user_id], onDelete: Cascade)
-  task    Task    @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+  task    Task?   @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
   project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
 }
 

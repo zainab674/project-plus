@@ -86,7 +86,6 @@ const LiveKitMeeting = ({ meetingId }) => {
         throw new Error(`Invalid server URL format: ${data.serverUrl}`);
       }
 
-      console.log('🔗 Connecting to LiveKit server:', data.serverUrl);
       
       // Connect to LiveKit room
       await room.connect(data.serverUrl, data.token);
@@ -107,7 +106,6 @@ const LiveKitMeeting = ({ meetingId }) => {
     if (hasNavigated) return;
     
     setHasNavigated(true);
-    console.log('Navigating to dashboard');
     // Use window.location.href for more reliable navigation
     window.location.href = '/dashboard';
   }, [hasNavigated]);
@@ -115,7 +113,6 @@ const LiveKitMeeting = ({ meetingId }) => {
   // Handle room events
   useEffect(() => {
     const handleConnectionStateChange = (state) => {
-      console.log('Connection state changed:', state);
       if (state === ConnectionState.Disconnected) {
         setIsConnected(false);
         toast.info('Disconnected from meeting');
@@ -128,25 +125,20 @@ const LiveKitMeeting = ({ meetingId }) => {
     };
 
     const handleParticipantConnected = (participant) => {
-      console.log('Participant connected:', participant.identity);
       toast.info(`${participant.name || participant.identity} joined the meeting`);
     };
 
     const handleParticipantDisconnected = (participant) => {
-      console.log('Participant disconnected:', participant.identity);
       toast.info(`${participant.name || participant.identity} left the meeting`);
     };
 
     const handleTrackSubscribed = (track, publication, participant) => {
-      console.log('Track subscribed:', track.kind, participant.identity);
     };
 
     const handleTrackUnsubscribed = (track, publication, participant) => {
-      console.log('Track unsubscribed:', track.kind, participant.identity);
     };
 
     const handleDataReceived = (payload, participant) => {
-      console.log('Data received:', payload.topic, participant.identity);
       
       try {
         // Parse the received data
@@ -154,7 +146,6 @@ const LiveKitMeeting = ({ meetingId }) => {
         
         // Handle end meeting command
         if (data.type === 'end_meeting' && data.meetingId === meetingId) {
-          console.log('Received end meeting command from:', participant.identity);
           
           // Show notification
           toast.info('Meeting has been ended by the host');
@@ -171,7 +162,6 @@ const LiveKitMeeting = ({ meetingId }) => {
           }, 1000);
         }
       } catch (error) {
-        console.log('Could not parse data:', error);
         // Note: Transcription is now handled by LiveKit's built-in hooks
       }
     };

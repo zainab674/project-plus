@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Clock, BarChart3, TrendingUp, Calendar, FileText, Users, Gavel, DollarSign, ChevronRight, Activity, Mail, MessageSquare, Video, FileText as FileTextIcon, Workflow } from 'lucide-react';
+import { Clock, BarChart3, TrendingUp, Calendar, Users, Gavel, DollarSign, ChevronRight, Activity, Mail, MessageSquare, Video, FileText as FileTextIcon, Workflow } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { getAllProjectWithTasksRequest } from '@/lib/http/project';
 import Loader from '../Loader';
@@ -9,6 +9,7 @@ import { useUser } from '@/providers/UserProvider';
 import { getHourMinDiff } from '@/utils/calculateTIme';
 import dayjs from 'dayjs';
 import { TaskDetailModal } from '../TaskDetailModal';
+import CaseDetail from '../modals/TimelineCase';
 
 // Utility function to highlight search terms in text
 const highlightSearchTerm = (text, searchTerm) => {
@@ -29,17 +30,11 @@ const highlightSearchTerm = (text, searchTerm) => {
     });
 };
 
-// Test dayjs functionality
-console.log('Dayjs test:', {
-    now: dayjs().format('DD-MM-YYYY'),
-    parsed: dayjs('15-07-2025', 'DD-MM-YYYY').isValid(),
-    testDate: dayjs('15-07-2025', 'DD-MM-YYYY').format('DD-MM-YYYY')
-});
+
 
 // Utility function to view files in new tab with proper filename
 const viewFile = async (url, filename) => {
   try {
-    console.log('Viewing file:', { url, filename });
     
     // Check if it's a Cloudinary URL that might force download
     const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
@@ -261,7 +256,6 @@ const viewFile = async (url, filename) => {
 // Utility function to download files with proper filename
 const downloadFile = async (url, filename) => {
   try {
-    console.log('Downloading file:', { url, filename });
     
     // Always prioritize the provided filename over URL extraction
     let finalFilename = filename;
@@ -274,7 +268,6 @@ const downloadFile = async (url, filename) => {
       finalFilename = finalFilename.split('?')[0];
     }
     
-    console.log('Final filename:', finalFilename);
     
     // First try the blob approach
     const response = await fetch(url, {
@@ -485,16 +478,9 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                         let attachmentName = null;
                         
                         if (progress.type === 'MEDIA') {
-                            console.log('MEDIA progress entry found:', {
-                                progressMessage: progress.message,
-                                taskMedia: progress.task?.Media,
-                                taskObject: progress.task,
-                                progressType: progress.type,
-                                fullTaskStructure: JSON.stringify(progress.task, null, 2)
-                            });
+                      
                             
                             if (progress.task?.Media && progress.task.Media.length > 0) {
-                                console.log('Task has Media array:', progress.task.Media);
                                 
                                 // Find the most recent media that matches the progress message
                                 const recentMedia = progress.task.Media.find(media => 
@@ -505,15 +491,10 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                     hasAttachment = true;
                                     attachmentUrl = recentMedia.file_url;
                                     attachmentName = recentMedia.filename;
-                                    console.log('Attachment found:', {
-                                        filename: attachmentName,
-                                        url: attachmentUrl
-                                    });
+                                  
                                 } else {
-                                    console.log('No matching media found in progress.task.Media array');
                                 }
                             } else {
-                                console.log('Progress.task.Media is empty or undefined:', progress.task?.Media);
                             }
                         }
 
@@ -545,7 +526,6 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                 (project.Clients || []).forEach(client => {
                     (client.Documents || []).forEach(doc => {
                         // Debug: Log the document data to see available fields
-                        console.log('Document data:', doc);
                         
                         timeline.push({
                             id: `doc-${doc.document_id}`,
@@ -627,7 +607,6 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
             setProjects(allProjects);
         } catch (error) {
             setProjects(null);
-            console.log(error?.response?.data?.message || error?.message);
         } finally {
             setIsLoading(false);
         }
@@ -757,14 +736,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
         // Always show active projects
         if (project.status !== "Active") return false;
 
-        // If user is TEAM role, only show projects they're assigned to
-        if (user?.Role === 'TEAM') {
-            // Check if user is a member of this project
-            const isMember = project.Members?.some(member => member.user?.user_id === user.user_id);
-            return isMember;
-        }
-
-        // For other roles (PROVIDER, CLIENT, BILLER), show all active projects
+        // For all roles (PROVIDER, TEAM, CLIENT, BILLER), show all active projects
         return true;
     });
 
@@ -815,7 +787,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                             <p className="text-sm text-green-600 font-medium">Active Cases</p>
                                             <p className="text-2xl font-bold text-green-800">{activitySummary.activeCases}</p>
                                         </div>
-                                        <FileText className="text-green-500" size={24} />
+                                        <FileTextIcon className="text-green-500" size={24} />
                                     </div>
                                 </div>
                                 <div className="bg-purple-50 p-4 rounded-lg">
@@ -952,11 +924,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                                 <div className="flex items-center gap-1">
                                                                     <button
                                                                         onClick={() => {
-                                                                            console.log('View button clicked:', {
-                                                                                url: item.attachmentUrl,
-                                                                                filename: item.attachmentName,
-                                                                                item: item
-                                                                            });
+                                                                          
                                                                             // Use viewFile to open in new tab with proper filename
                                                                             viewFile(item.attachmentUrl, item.attachmentName);
                                                                         }}
@@ -966,11 +934,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                                     </button>
                                                                     <button
                                                                         onClick={() => {
-                                                                            console.log('Download button clicked:', {
-                                                                                url: item.attachmentUrl,
-                                                                                filename: item.attachmentName,
-                                                                                item: item
-                                                                            });
+                                                                           
                                                                             downloadFile(item.attachmentUrl, item.attachmentName);
                                                                         }}
                                                                         className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200 transition-colors"
@@ -1060,7 +1024,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                             <p className="text-sm text-blue-700">
                                 <Users className="w-4 h-4 inline mr-1" />
-                                You are viewing only the cases you are assigned to as a team member.
+                                You have full access to all cases as a team member.
                             </p>
                         </div>
                     )}
@@ -1068,13 +1032,13 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                         {projects?.length === 0 ? (
                             <div className="bg-blue-200 rounded-lg border border-blue-200 p-12 text-center">
                                 <div className="text-gray-400 mb-4">
-                                    <FileText className="w-16 h-16 mx-auto" />
+                                    <FileTextIcon className="w-16 h-16 mx-auto" />
                                 </div>
                                 <h3 className="text-lg font-medium text-gray-900 mb-2">No cases found</h3>
                             </div>
                         ) : (
                             <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6`}>
-                                {filteredProjects?.map(project => (
+                                {projects?.map(project => (
                                     <div
                                         key={project.project_id}
                                         onClick={() => setSelectedCase(project)}
@@ -1214,11 +1178,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                         <div className="flex items-center gap-1 mt-2">
                                                             <button
                                                                 onClick={() => {
-                                                                    console.log('External timeline view clicked:', {
-                                                                        url: item.attachmentUrl,
-                                                                        filename: item.attachmentName,
-                                                                        item: item
-                                                                    });
+                                                                
                                                                     // Use viewFile to open in new tab with proper filename
                                                                     viewFile(item.attachmentUrl, item.attachmentName);
                                                                 }}
@@ -1228,11 +1188,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                             </button>
                                                             <button
                                                                 onClick={() => {
-                                                                    console.log('External timeline download clicked:', {
-                                                                        url: item.attachmentUrl,
-                                                                        filename: item.attachmentName,
-                                                                        item: item
-                                                                    });
+                                                                
                                                                     downloadFile(item.attachmentUrl, item.attachmentName);
                                                                 }}
                                                                 className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded hover:bg-green-200 transition-colors"
@@ -1367,12 +1323,10 @@ const CaseWorkflowModal = ({ onClose }) => {
     const fetchCases = async () => {
         try {
             const response = await getAllProjectWithTasksRequest();
-            console.log('Fetched cases response:', response);
             
             if (response && response.data) {
                 const { projects, collaboratedProjects } = response.data;
                 const allProjects = [...(projects || []), ...(collaboratedProjects || [])];
-                console.log('All projects:', allProjects);
                 
                 setAllCases(allProjects);
                 // Set default to most recent case

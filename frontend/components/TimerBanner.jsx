@@ -15,14 +15,24 @@ const TimerBanner = () => {
 
   // Add/remove padding to body when timer is active
   useEffect(() => {
-    if (activeTimer) {
-      document.body.style.paddingTop = '60px';
-    } else {
+    if (!activeTimer) {
+      // Remove any padding when no timer is active
       document.body.style.paddingTop = '0px';
+      return;
     }
+
+    const updatePadding = () => {
+      const isMobile = window.innerWidth < 768; // md breakpoint
+      const timerPadding = isMobile ? '100px' : '10px'; // TopNavigation (64px) + QuickActions (~40px) + TimerBanner (~60px) - overlap
+      document.body.style.paddingTop = timerPadding;
+    };
+
+    updatePadding();
+    window.addEventListener('resize', updatePadding);
 
     // Cleanup on unmount
     return () => {
+      window.removeEventListener('resize', updatePadding);
       document.body.style.paddingTop = '0px';
     };
   }, [activeTimer]);
@@ -42,7 +52,7 @@ const TimerBanner = () => {
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
+      <div className="sticky top-[104px] z-[30] bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
         <div className="px-4 py-3 flex items-center justify-between">
           <div 
             className="flex items-center gap-3 cursor-pointer hover:bg-blue-800/30 rounded-lg px-3 py-2 transition-colors"

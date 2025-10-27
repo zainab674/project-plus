@@ -38,7 +38,6 @@ const BillingEntriesModal = ({ isOpen, onClose, projectId, projectName, onEntryD
         setLoading(true);
         try {
             const response = await getProjectBillingEntriesRequest(projectId);
-            console.log("these are billing entries", response.data.billingEntries)
             setBillingEntries(response.data.billingEntries || []);
             calculateSummary(response.data.billingEntries || []);
             groupEntriesByTask(response.data.billingEntries || []);

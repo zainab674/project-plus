@@ -6,12 +6,9 @@ class AgentDispatchService {
         const apiHost = process.env.LIVEKIT_HOST || process.env.LIVEKIT_URL?.replace('wss://', 'https://');
         
         if (!apiHost) {
-            console.error('❌ LIVEKIT_HOST or LIVEKIT_URL is not configured for AgentDispatchService');
             throw new Error('LIVEKIT_HOST environment variable is required for agent dispatch');
         }
 
-        console.log(`🤖 Initializing AgentDispatchClient with host: ${apiHost}`);
-        
         this.client = new AgentDispatchClient(
             apiHost,
             process.env.LIVEKIT_API_KEY,
@@ -28,16 +25,13 @@ class AgentDispatchService {
      */
     async createDispatch(roomName, agentName = 'transcriber', metadata = {}) {
         try {
-            console.log(`Dispatching agent '${agentName}' to room '${roomName}'`);
             
             const dispatch = await this.client.createDispatch(roomName, agentName, {
                 metadata: JSON.stringify(metadata)
             });
             
-            console.log(`Successfully dispatched agent:`, dispatch);
             return dispatch;
         } catch (error) {
-            console.error('Error creating agent dispatch:', error);
             throw error;
         }
     }
@@ -50,10 +44,8 @@ class AgentDispatchService {
     async listDispatches(roomName) {
         try {
             const dispatches = await this.client.listDispatch(roomName);
-            console.log(`Found ${dispatches.length} dispatches in room '${roomName}'`);
             return dispatches;
         } catch (error) {
-            console.error('Error listing dispatches:', error);
             throw error;
         }
     }
@@ -90,7 +82,6 @@ class AgentDispatchService {
             const dispatches = await this.listDispatches(roomName);
             return dispatches.some(dispatch => dispatch.agent_name === agentName);
         } catch (error) {
-            console.error('Error checking agent dispatch status:', error);
             return false;
         }
     }

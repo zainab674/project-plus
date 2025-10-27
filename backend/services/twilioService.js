@@ -1,7 +1,6 @@
 import twilio from "twilio"
 import "dotenv/config"
 
-
 export const generateToken = async (twilioFromNumber, userId = null) => {
     try {
         // Validate required environment variables
@@ -27,9 +26,6 @@ export const generateToken = async (twilioFromNumber, userId = null) => {
         const outgoingApplicationSid = requiredEnvVars.TWILIO_TWIML_APP_SID;
         
         // Log credentials for debugging (mask sensitive parts)
-        console.log('Twilio Account SID:', twilioAccountSid.substring(0, 8) + '***');
-        console.log('Twilio API Key:', twilioApiKey.substring(0, 8) + '***');
-        console.log('Twilio TwiML App SID:', outgoingApplicationSid.substring(0, 8) + '***');
         
         // Create user-specific identity
         const identity = userId ? `user_${userId}` : `user_${Date.now()}`;
@@ -59,7 +55,6 @@ export const generateToken = async (twilioFromNumber, userId = null) => {
         };
 
     } catch (error) {
-        console.error('Token generation error:', error.message);
         throw new Error(`Failed to generate Twilio token: ${error.message}`);
     }
 }

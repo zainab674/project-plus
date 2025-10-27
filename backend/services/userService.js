@@ -4,12 +4,10 @@ import { sendEmailViaProxy } from "./emailProxyService.js";
 import { generateOTP } from "../processors/generateOTPProcessor.js";
 import { prisma } from "../prisma/index.js";
 
-
 export const generateJWTToken = (user, callback) => {
   const jwttoken = jwt.sign({ user_id: user.user_id }, process.env.JWT_SECRET, { expiresIn: '15d' });
   return jwttoken;
 }
-
 
 export const sendOTPOnMail = async (user, callback) => {
   try {
@@ -29,7 +27,6 @@ export const sendOTPOnMail = async (user, callback) => {
 
     // Try to send via Vercel proxy first (for DigitalOcean deployments)
     if (process.env.USE_EMAIL_PROXY === 'true' && process.env.EMAIL_PROXY_URL) {
-      console.log('📧 Sending OTP email via Vercel proxy to:', user.email);
       
       const result = await sendEmailViaProxy({
         to: user.email,
@@ -37,13 +34,11 @@ export const sendOTPOnMail = async (user, callback) => {
         html
       });
 
-      console.log('✅ OTP email sent successfully via proxy:', result.messageId);
       callback(OTP, null);
       return;
     }
 
     // Fallback to direct SMTP
-    console.log('📧 Sending OTP email via direct SMTP to:', user.email);
     
     const transporter = createTransport({
       host: process.env.SMTP_HOST,
@@ -61,15 +56,12 @@ export const sendOTPOnMail = async (user, callback) => {
       html
     });
 
-    console.log('✅ OTP email sent successfully via direct SMTP');
     callback(OTP, null);
 
   } catch (error) {
-    console.error('❌ Error sending OTP email:', error.message);
     
     // If direct SMTP fails and we haven't tried proxy yet, try proxy as fallback
     if (process.env.USE_EMAIL_PROXY !== 'true' && process.env.EMAIL_PROXY_URL) {
-      console.log('🔄 Direct SMTP failed, trying Vercel proxy as fallback...');
       try {
         const subject = "OTP";
         const OTP = generateOTP();
@@ -91,11 +83,9 @@ export const sendOTPOnMail = async (user, callback) => {
           html
         });
 
-        console.log('✅ OTP email sent successfully via proxy fallback:', result.messageId);
         callback(OTP, null);
         return;
       } catch (proxyError) {
-        console.error('❌ Proxy fallback also failed:', proxyError.message);
         callback(null, error.message);
         return;
       }
@@ -105,12 +95,10 @@ export const sendOTPOnMail = async (user, callback) => {
   }
 };
 
-
 export const sendInviation = async (message, mail) => {
   try {
     // Try to send via Vercel proxy first (for DigitalOcean deployments)
     if (process.env.USE_EMAIL_PROXY === 'true' && process.env.EMAIL_PROXY_URL) {
-      console.log('📧 Sending invitation email via Vercel proxy to:', mail);
       
       const subject = "flexywexy.com Project Invitation";
       
@@ -136,24 +124,17 @@ export const sendInviation = async (message, mail) => {
         html
       });
 
-      console.log('✅ Invitation email sent successfully via proxy:', result.messageId);
       return result;
     }
 
     // Fallback to direct SMTP
-    console.log('📧 Sending invitation email via direct SMTP to:', mail);
     
     // Check if SMTP credentials are configured
     if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
       throw new Error('SMTP configuration is missing. Please check environment variables: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS');
     }
 
-    console.log('📧 SMTP Config:', {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      user: process.env.SMTP_USER ? '***' : 'NOT_SET',
-      pass: process.env.SMTP_PASS ? '***' : 'NOT_SET'
-    });
+      
 
     const transporter = createTransport({
       host: process.env.SMTP_HOST,
@@ -174,15 +155,12 @@ export const sendInviation = async (message, mail) => {
       text: message,
     });
 
-    console.log('✅ Invitation email sent successfully via direct SMTP:', result.messageId);
     return result;
 
   } catch (error) {
-    console.error("❌ Error sending invitation email:", error.message);
     
     // If direct SMTP fails and we haven't tried proxy yet, try proxy as fallback
     if (process.env.USE_EMAIL_PROXY !== 'true' && process.env.EMAIL_PROXY_URL) {
-      console.log('🔄 Direct SMTP failed, trying Vercel proxy as fallback...');
       try {
         const subject = "flexywexy.com Project Invitation";
         const html = `
@@ -204,16 +182,13 @@ export const sendInviation = async (message, mail) => {
           html
         });
 
-        console.log('✅ Invitation email sent successfully via proxy fallback:', result.messageId);
         return result;
       } catch (proxyError) {
-        console.error('❌ Proxy fallback also failed:', proxyError.message);
         throw error; // Throw original error
       }
     }
     
     if (error.response) {
-      console.error("Response:", error.response);
     }
     throw error;
   }
@@ -222,13 +197,7 @@ export const sendInviation = async (message, mail) => {
 // Password reset email function
 export const sendPasswordResetEmail = async (email, resetToken) => {
   try {
-    console.log('📧 Setting up email transporter...');
-    console.log('📧 SMTP Config:', {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      user: process.env.SMTP_USER ? '***' : 'NOT_SET',
-      pass: process.env.SMTP_PASS ? '***' : 'NOT_SET'
-    });
+      
 
     const transporter = createTransport({
       host: process.env.SMTP_HOST,
@@ -243,9 +212,6 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     // Get your frontend URL from environment variable or use a default
     const frontendUrl = process.env.FRONTEND_URL || 'https://flexy-frontend.vercel.app';
     const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
-    
-    console.log('📧 Frontend URL:', frontendUrl);
-    console.log('📧 Reset link generated:', resetLink);
 
     const subject = "FlexyWexy - Password Reset Request";
     const htmlContent = `
@@ -286,7 +252,6 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       </div>
     `;
 
-    console.log('📧 Sending email...');
     const result = await transporter.sendMail({
       from: `"FlexyWexy" <${process.env.SMTP_USER}>`,
       to: email,
@@ -295,20 +260,14 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       text: `Password Reset Request\n\nYou requested a password reset for your FlexyWexy account. Click this link to reset your password: ${resetLink}\n\nThis link will expire in 1 hour. If you didn't request this, please ignore this email.`,
     });
 
-    console.log("✅ Password reset email sent successfully to:", email);
-    console.log("✅ Email result:", result);
     return true;
 
   } catch (error) {
-    console.error("❌ Error sending password reset email:", error.message);
-    console.error("❌ Full error:", error);
     if (error.response) {
-      console.error("Response:", error.response);
     }
     throw error;
   }
 };
-
 
 // Helper function to process pending invitations for a user
 export const processPendingInvitations = async (userId, email) => {
@@ -327,7 +286,6 @@ export const processPendingInvitations = async (userId, email) => {
     // from invitations with invited_email: null
 
     if (existingInvitation) {
-
 
       try {
         if (existingInvitation.role === 'CLIENT') {
@@ -412,7 +370,6 @@ export const processPendingInvitations = async (userId, email) => {
             }
           });
 
-
           // Add user to project if project_id is provided
           if (existingInvitation.project_id) {
             // Check if user is already a project member
@@ -451,14 +408,12 @@ export const processPendingInvitations = async (userId, email) => {
 
         return existingInvitation;
       } catch (createError) {
-        console.error('Error processing invitation:', createError);
         throw createError;
       }
     } else {
       return null;
     }
   } catch (error) {
-    console.error('Error in processPendingInvitations:', error);
     throw error;
   }
 };

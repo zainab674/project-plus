@@ -32,10 +32,8 @@ if (process.env.NODE_ENV === 'production') {
 // Add connection health check
 prisma.$connect()
   .then(() => {
-    console.log('✅ Database connected successfully');
   })
   .catch((error) => {
-    console.error('❌ Database connection failed:', error);
   });
 
 export { prisma };

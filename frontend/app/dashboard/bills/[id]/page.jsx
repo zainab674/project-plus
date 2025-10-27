@@ -129,7 +129,6 @@ const page = ({ params }) => {
             setHours(res.data.info.workingHours)
             setTotalHour(res.data.info.totalTimeStr)
         } catch (error) {
-            console.log(error.response.data.message);
         }
     }, [id, startDate, endDate]);
 

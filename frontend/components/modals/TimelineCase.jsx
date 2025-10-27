@@ -16,7 +16,18 @@ import {
 export default function CaseDetail({ selectedCase, onClose }) {
     const [searchTerm, setSearchTerm] = useState('');
 
-    const caseData = selectedCase || mockCase;
+    // Early return if no case is selected
+    if (!selectedCase) {
+        return (
+            <div className="bg-gradient-to-br from-blue-50 via-white to-purple-50 p-6 rounded-lg border border-blue-200 shadow-lg">
+                <div className="text-center py-8 text-gray-500">
+                    <p>No case selected</p>
+                </div>
+            </div>
+        );
+    }
+
+    const caseData = selectedCase;
 
     const {
         name,
@@ -107,6 +118,57 @@ export default function CaseDetail({ selectedCase, onClose }) {
         return attachments;
     };
 
+    // Get all attachments from task Media array
+    const getAllAttachments = (task) => {
+        if (!task.Media || !Array.isArray(task.Media)) return [];
+        return task.Media.map(media => ({
+            url: media.file_url,
+            name: media.filename,
+            mimeType: media.mimeType,
+            size: media.size,
+            created_at: media.created_at,
+            user: media.user
+        }));
+    };
+
+    // Get case-level attachments (Media where task_id is null)
+    const getCaseAttachments = (caseData) => {
+        if (!caseData.Media || !Array.isArray(caseData.Media)) return [];
+        // Filter media where task_id is null or undefined (case-level attachments)
+        return caseData.Media
+            .filter(media => !media.task_id)
+            .map(media => ({
+                url: media.file_url,
+                name: media.filename,
+                mimeType: media.mimeType,
+                size: media.size,
+                created_at: media.created_at,
+                user: media.user
+            }));
+    };
+
+    // Get phase-level attachments (all attachments from tasks in a specific phase)
+    const getPhaseAttachments = (phase, tasks) => {
+        if (!tasks || !Array.isArray(tasks)) return [];
+        const phaseTasks = tasks.filter(task => task.phase === phase);
+        const phaseAttachments = [];
+        phaseTasks.forEach(task => {
+            if (task.Media && Array.isArray(task.Media)) {
+                task.Media.forEach(media => {
+                    phaseAttachments.push({
+                        url: media.file_url,
+                        name: media.filename,
+                        mimeType: media.mimeType,
+                        size: media.size,
+                        created_at: media.created_at,
+                        user: media.user
+                    });
+                });
+            }
+        });
+        return phaseAttachments;
+    };
+
     // Get approved descriptions from reviews
     const getApprovedDescriptions = (task) => {
         const approvedReviews = getApprovedReviews(task);
@@ -115,7 +177,7 @@ export default function CaseDetail({ selectedCase, onClose }) {
             .map(review => ({
                 description: review.submissionDesc,
                 createdAt: review.created_at,
-                reviewer: review.reviewer?.name || 'Unknown'
+                reviewer: review.acted_by?.name || 'Unknown'
             }));
     };
 
@@ -268,6 +330,33 @@ export default function CaseDetail({ selectedCase, onClose }) {
                 </div>
             </div>
 
+            {/* Case-Level Attachments */}
+            {getCaseAttachments(caseData).length > 0 && (
+                <div className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Paperclip className="w-5 h-5 text-indigo-500" />
+                        <h4 className="text-lg font-semibold text-indigo-900">Case Attachments ({getCaseAttachments(caseData).length})</h4>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {getCaseAttachments(caseData).map((attachment, idx) => (
+                            <a
+                                key={idx}
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm hover:bg-indigo-100 transition-colors border border-indigo-200"
+                            >
+                                <Paperclip className="w-4 h-4" />
+                                <span className="truncate max-w-[150px]">{attachment.name}</span>
+                                {attachment.size && (
+                                    <span className="text-xs text-indigo-500">({(attachment.size / 1024).toFixed(1)} KB)</span>
+                                )}
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Members */}
             <div className="bg-white p-4 rounded-lg border border-pink-100 shadow-sm">
                 <p className="text-pink-700 font-medium mb-3">Team Members</p>
@@ -321,6 +410,30 @@ export default function CaseDetail({ selectedCase, onClose }) {
                                     }`}></div>
                                 {phase}
                             </h4>
+
+                            {/* Phase-Level Attachments */}
+                            {getPhaseAttachments(phase, Tasks).length > 0 && (
+                                <div className="mb-4 p-3 bg-white rounded-lg border border-gray-200">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Paperclip className="w-4 h-4 text-gray-600" />
+                                        <span className="text-sm font-medium text-gray-700">Phase Attachments ({getPhaseAttachments(phase, Tasks).length})</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {getPhaseAttachments(phase, Tasks).map((attachment, idx) => (
+                                            <a
+                                                key={idx}
+                                                href={attachment.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs hover:bg-blue-100 transition-colors"
+                                            >
+                                                <Paperclip className="w-3 h-3" />
+                                                <span className="truncate max-w-[100px]">{attachment.name}</span>
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {tasks.length ? (
                                 tasks.map((task, taskIndex) => {
@@ -400,6 +513,30 @@ export default function CaseDetail({ selectedCase, onClose }) {
                                                     <Calendar className="w-4 h-4" />
                                                     <span>{dueIso || '—'}</span>
                                                 </div>
+                                                
+                                                {/* Show all attachments for this task */}
+                                                {getAllAttachments(task).length > 0 && (
+                                                    <div className="mt-3 pt-3 border-t border-gray-200">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <Paperclip className="w-4 h-4 text-gray-600" />
+                                                            <span className="text-xs font-medium text-gray-700">Attachments ({getAllAttachments(task).length})</span>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {getAllAttachments(task).map((attachment, idx) => (
+                                                                <a
+                                                                    key={idx}
+                                                                    href={attachment.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs hover:bg-blue-100 transition-colors"
+                                                                >
+                                                                    <Paperclip className="w-3 h-3" />
+                                                                    <span className="truncate max-w-[120px]">{attachment.name}</span>
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -480,6 +617,30 @@ export default function CaseDetail({ selectedCase, onClose }) {
                                             <Calendar className="w-4 h-4" />
                                             <span>{dueIso || '—'}</span>
                                         </div>
+                                        
+                                        {/* Show all attachments for this task */}
+                                        {getAllAttachments(task).length > 0 && (
+                                            <div className="mt-3 pt-3 border-t border-gray-200">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <Paperclip className="w-4 h-4 text-gray-600" />
+                                                    <span className="text-xs font-medium text-gray-700">Attachments ({getAllAttachments(task).length})</span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {getAllAttachments(task).map((attachment, idx) => (
+                                                        <a
+                                                            key={idx}
+                                                            href={attachment.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded-md text-xs hover:bg-blue-100 transition-colors"
+                                                        >
+                                                            <Paperclip className="w-3 h-3" />
+                                                            <span className="truncate max-w-[120px]">{attachment.name}</span>
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             );

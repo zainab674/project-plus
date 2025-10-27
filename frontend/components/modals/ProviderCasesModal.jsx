@@ -26,14 +26,12 @@ export const ProviderCasesModal = ({ isOpen, onClose, providerCases, providerNam
     };
 
     const handleExpensesClick = () => {
-        console.log('Expenses button clicked');
-        console.log('Provider cases:', providerCases);
+
         
         // Get the provider/biller ID from the first case
         if (providerCases && providerCases.length > 0) {
             // Check if it's a biller assignment or provider assignment
             const assignment = providerCases[0];
-            console.log('First assignment:', assignment);
             
             // For biller assignments, use biller_id
             // For provider assignments, use assigned_by
@@ -42,28 +40,21 @@ export const ProviderCasesModal = ({ isOpen, onClose, providerCases, providerNam
             
             if (assignment.biller_id) {
                 userId = assignment.biller_id;
-                console.log('Using biller_id:', userId);
             } else if (assignment.assigned_by) {
                 userId = assignment.assigned_by;
-                console.log('Using assigned_by:', userId);
             } else if (assignment.biller?.user_id) {
                 userId = assignment.biller.user_id;
-                console.log('Using biller.user_id:', userId);
             } else if (assignment.assignedBy?.user_id) {
                 userId = assignment.assignedBy.user_id;
-                console.log('Using assignedBy.user_id:', userId);
             } else if (assignment.project?.created_by) {
                 // Use project creator for unassigned cases
                 userId = assignment.project.created_by;
-                console.log('Using project.created_by for unassigned case:', userId);
             }
             
-            console.log('Final selected User ID:', userId);
             
             if (userId) {
                 setSelectedProviderId(userId);
                 setIsExpensesModalOpen(true);
-                console.log('Opening expenses modal with provider ID:', userId);
             } else {
                 console.error('Could not determine user ID for expenses');
                 console.error('Assignment object keys:', Object.keys(assignment));

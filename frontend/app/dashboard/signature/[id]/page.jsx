@@ -30,7 +30,6 @@ const page = ({ params, searchParams }) => {
                 viewerRef.current,
             ).then((instance) => {
                 instanceRef.current = instance;
-                console.log('WebViewer initialized');
             });
         }
     }, []);

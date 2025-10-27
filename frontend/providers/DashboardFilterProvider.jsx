@@ -162,15 +162,7 @@ export const DashboardFilterProvider = ({ children }) => {
   const filteredTimelineData = useMemo(() => {
     if (!state.timelineData) return null;
 
-    console.log('Computing filtered timeline data:', {
-      hasTimelineData: !!state.timelineData,
-      selectedCase: state.selectedCase?.name,
-      selectedMonthYear: state.selectedMonthYear,
-      selectedMonthRange: state.selectedMonthRange,
-      originalTimesLength: state.timelineData.times?.length || 0,
-      originalProgressLength: state.timelineData.progress?.length || 0,
-      originalDocumentsLength: state.timelineData.documents?.length || 0
-    });
+   
 
     const { times, progress, documents } = state.timelineData;
     let filteredTimes = times;
@@ -261,12 +253,7 @@ export const DashboardFilterProvider = ({ children }) => {
       })).filter(project => project.Clients.length > 0);
     }
 
-    console.log('Filtered timeline data result:', {
-      filteredTimesLength: filteredTimes?.length || 0,
-      filteredProgressLength: filteredProgress?.length || 0,
-      filteredDocumentsLength: filteredDocuments?.length || 0
-    });
-
+   
     return {
       times: filteredTimes,
       progress: filteredProgress,
@@ -338,18 +325,9 @@ export const DashboardFilterProvider = ({ children }) => {
       // Get project ID for filtering if a case is selected
       const projectId = state.selectedCase?.project_id || null;
 
-      console.log('Fetching timeline data with filters:', {
-        startDate,
-        endDate,
-        projectId,
-        selectedCase: state.selectedCase?.name,
-        selectedMonthYear: state.selectedMonthYear,
-        selectedMonthRange: state.selectedMonthRange
-      });
-
+   
       const response = await getAllTaskProgressRequest(startDate, endDate, null, projectId);
       
-      console.log('Timeline data response:', response.data);
       setTimelineData(response.data);
     } catch (error) {
       console.error('Error fetching timeline data:', error);

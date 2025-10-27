@@ -15,11 +15,9 @@ class EmailPollingService {
 
     start() {
         if (this.isRunning) {
-            console.log('Email polling service is already running');
             return;
         }
 
-        console.log('🚀 Starting email polling service...');
         this.isRunning = true;
         this.pollEmails();
         this.scheduleNextPoll();
@@ -31,7 +29,6 @@ class EmailPollingService {
             this.pollingTimer = null;
         }
         this.isRunning = false;
-        console.log('🛑 Email polling service stopped');
     }
 
     scheduleNextPoll() {
@@ -45,7 +42,6 @@ class EmailPollingService {
 
     async pollEmails() {
         try {
-            console.log('📧 Polling emails for connected users...');
             
             // Get all users with connected Gmail accounts
             const connectedUsers = await prisma.user.findMany({
@@ -64,19 +60,14 @@ class EmailPollingService {
                 }
             });
 
-            console.log(`Found ${connectedUsers.length} users with connected Gmail accounts`);
-
             for (const user of connectedUsers) {
                 try {
                     await this.fetchEmailsForUser(user);
                 } catch (error) {
-                    console.error(`Error fetching emails for user ${user.user_id} (${user.email}):`, error.message);
                 }
             }
 
-            console.log('✅ Email polling completed');
         } catch (error) {
-            console.error('❌ Error in email polling service:', error);
         }
     }
 
@@ -87,7 +78,6 @@ class EmailPollingService {
             const [gmailAddress, gmailPassword] = decryptData.split('|');
 
             if (!gmailAddress || !gmailPassword) {
-                console.error(`Invalid Gmail credentials for user ${user.user_id}`);
                 return;
             }
 
@@ -95,17 +85,13 @@ class EmailPollingService {
             const fetchedEmails = await fetchMail(gmailAddress, gmailPassword, 10);
 
             if (!fetchedEmails || fetchedEmails.length === 0) {
-                console.log(`No new emails found for user ${user.user_id}`);
                 return;
             }
-
-            console.log(`Found ${fetchedEmails.length} emails for user ${user.user_id}`);
 
             // Process and store emails
             const newEmails = await this.processAndStoreEmails(user, fetchedEmails);
 
             if (newEmails.length > 0) {
-                console.log(`📧 Processing ${newEmails.length} new emails for user ${user.user_id}`);
                 
                 // Notify user of new emails in real-time
                 this.notifyUserOfNewEmails(user.user_id, newEmails);
@@ -113,25 +99,18 @@ class EmailPollingService {
                 // Update email count
                 await this.updateUserEmailCount(user.user_id);
                 
-                console.log(`✅ Completed processing for user ${user.user_id}`);
             } else {
-                console.log(`No new emails to process for user ${user.user_id}`);
             }
 
         } catch (error) {
-            console.error(`Error fetching emails for user ${user.user_id}:`, error.message);
             
             // Log additional error details for debugging
             if (error.statusCode) {
-                console.error(`  Status Code: ${error.statusCode}`);
             }
             if (error.stack) {
-                console.error(`  Stack: ${error.stack}`);
             }
             
             // Log user context for debugging
-            console.error(`  User Email: ${user.email}`);
-            console.error(`  Has Credentials: ${!!user.connect_mail_hash && !!user.encryption_key && !!user.encryption_vi}`);
         }
     }
 
@@ -184,10 +163,7 @@ class EmailPollingService {
                     is_read: false
                 });
 
-                console.log(`Stored new email: ${newEmail.subject} for user ${user.user_id}`);
-
             } catch (error) {
-                console.error(`Error storing email for user ${user.user_id}:`, error.message);
             }
         }
 
@@ -213,13 +189,9 @@ class EmailPollingService {
                     });
                 }
                 
-                console.log(`Sent real-time notification for ${newEmails.length} new emails to user ${userId}`);
-                console.log(`Notification sent to room: user_${userId}`);
             } else {
-                console.log('⚠️ No io instance available for sending notifications');
             }
         } catch (error) {
-            console.error(`Error sending real-time notification to user ${userId}:`, error.message);
         }
     }
 
@@ -255,9 +227,7 @@ class EmailPollingService {
                 }
             }
 
-            console.log(`Updated email count for user ${userId}: ${unreadCount} unread emails`);
         } catch (error) {
-            console.error(`Error updating email count for user ${userId}:`, error.message);
         }
     }
 
@@ -295,7 +265,6 @@ class EmailPollingService {
                     break;
 
                 default:
-                    console.log(`Unknown email operation: ${operation}`);
                     return;
             }
 
@@ -312,23 +281,18 @@ class EmailPollingService {
                 });
             }
 
-            console.log(`Successfully handled email operation: ${operation} for email ${email_id}`);
-
         } catch (error) {
-            console.error(`Error handling email operation ${operation}:`, error.message);
         }
     }
 
     // Method to manually trigger email polling (for testing)
     async manualPoll() {
-        console.log('🔄 Manual email polling triggered');
         await this.pollEmails();
     }
 
     // Method to change polling interval
     setPollingInterval(minutes) {
         this.pollingInterval = minutes * 60 * 1000;
-        console.log(`📅 Email polling interval set to ${minutes} minutes`);
         
         // Restart polling with new interval
         if (this.isRunning) {
@@ -343,7 +307,6 @@ class EmailPollingService {
             // Convert userId to integer if it's a string
             const userIdInt = parseInt(userId, 10);
             if (isNaN(userIdInt)) {
-                console.error(`Invalid userId: ${userId}`);
                 return 0;
             }
             
@@ -355,7 +318,6 @@ class EmailPollingService {
             });
             return count;
         } catch (error) {
-            console.error(`Error getting unread count for user ${userId}:`, error.message);
             return 0;
         }
     }
@@ -363,28 +325,22 @@ class EmailPollingService {
     // Set up WebSocket event handlers
     setupWebSocketHandlers(ioInstance) {
         if (!ioInstance) {
-            console.log('⚠️ No ioInstance provided to setupWebSocketHandlers');
             return;
         }
-
-        console.log('🔌 Setting up WebSocket handlers for email polling service');
 
         // Handle user joining their personal room
         ioInstance.on('connection', (socket) => {
             const userId = socket.handshake.query.user_id;
-            console.log(`🔌 New socket connection: ${socket.id} for user: ${userId}`);
             
             if (userId) {
                 // Convert userId to integer
                 const userIdInt = parseInt(userId, 10);
                 if (isNaN(userIdInt)) {
-                    console.error(`Invalid userId from socket: ${userId}`);
                     return;
                 }
                 
                 // Join user's personal room for email notifications
                 socket.join(`user_${userIdInt}`);
-                console.log(`User ${userIdInt} joined email notification room: user_${userIdInt}`);
                 
                 // Send initial email count
                 this.getUserUnreadCount(userIdInt).then(count => {
@@ -393,13 +349,11 @@ class EmailPollingService {
                         unread_count: count,
                         timestamp: new Date()
                     });
-                    console.log(`Sent initial email count ${count} to user ${userIdInt}`);
                 });
             }
 
             // Handle email operations
             socket.on('mark_email_read', (data) => {
-                console.log(`📧 Received mark_email_read for user ${data.user_id}, email ${data.email_id}`);
                 // Convert user_id to integer
                 if (data.user_id) {
                     data.user_id = parseInt(data.user_id, 10);
@@ -408,7 +362,6 @@ class EmailPollingService {
             });
 
             socket.on('mark_email_unread', (data) => {
-                console.log(`📧 Received mark_email_unread for user ${data.user_id}, email ${data.email_id}`);
                 // Convert user_id to integer
                 if (data.user_id) {
                     data.user_id = parseInt(data.user_id, 10);
@@ -417,7 +370,6 @@ class EmailPollingService {
             });
 
             socket.on('delete_email', (data) => {
-                console.log(`📧 Received delete_email for user ${data.user_id}, email ${data.email_id}`);
                 // Convert user_id to integer
                 if (data.user_id) {
                     data.user_id = parseInt(data.user_id, 10);
@@ -426,7 +378,6 @@ class EmailPollingService {
             });
 
             socket.on('archive_email', (data) => {
-                console.log(`📧 Received archive_email for user ${data.user_id}, email ${data.email_id}`);
                 // Convert user_id to integer
                 if (data.user_id) {
                     data.user_id = parseInt(data.user_id, 10);
@@ -435,11 +386,9 @@ class EmailPollingService {
             });
 
             socket.on('request_email_count', (data) => {
-                console.log(`📊 Received request_email_count for user ${data.user_id}`);
                 // Convert user_id to integer
                 const userIdInt = parseInt(data.user_id, 10);
                 if (isNaN(userIdInt)) {
-                    console.error(`Invalid userId in request_email_count: ${data.user_id}`);
                     return;
                 }
                 this.getUserUnreadCount(userIdInt).then(count => {
@@ -448,12 +397,10 @@ class EmailPollingService {
                         unread_count: count,
                         timestamp: new Date()
                     });
-                    console.log(`Sent email count ${count} to user ${userIdInt}`);
                 });
             });
 
             socket.on('disconnect', () => {
-                console.log(`🔌 Socket disconnected: ${socket.id} for user: ${userId}`);
             });
         });
     }

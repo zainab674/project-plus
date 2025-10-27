@@ -18,7 +18,6 @@ export const createToken = catchAsyncError(async (req, res, next) => {
         const token = await generateToken("+19862108561", userId);
         res.status(200).json(token);
     } catch (error) {
-        console.error('Token creation failed:', error.message);
         return next(new ErrorHandler(`Token generation failed: ${error.message}`, 500));
     }
 });
@@ -26,16 +25,13 @@ export const createToken = catchAsyncError(async (req, res, next) => {
 // TwiML webhook endpoint for handling voice calls
 export const handleVoiceWebhook = catchAsyncError(async (req, res, next) => {
     try {
-        console.log('TwiML Voice Webhook received:', req.body);
         
         const twiml = new twilio.twiml.VoiceResponse();
         
         // Get the 'To' number from the call parameters
         const toNumber = req.body.To;
         const fromNumber = req.body.From;
-        
-        console.log(`Incoming call from ${fromNumber} to ${toNumber}`);
-        
+
         // Dial the destination number
         const dial = twiml.dial({
             callerId: fromNumber, // Use the 'From' number as caller ID
@@ -53,7 +49,6 @@ export const handleVoiceWebhook = catchAsyncError(async (req, res, next) => {
         res.send(twiml.toString());
         
     } catch (error) {
-        console.error('TwiML webhook error:', error.message);
         
         // Return a basic TwiML response even if there's an error
         const twiml = new twilio.twiml.VoiceResponse();
@@ -68,14 +63,10 @@ export const handleVoiceWebhook = catchAsyncError(async (req, res, next) => {
 // Recording status webhook
 export const handleRecordingStatus = catchAsyncError(async (req, res, next) => {
     try {
-        console.log('Recording status webhook received:', req.body);
         
         const { CallSid, RecordingStatus, RecordingUrl, RecordingDuration } = req.body;
         
         if (RecordingStatus === 'completed') {
-            console.log(`Recording completed for call ${CallSid}:`);
-            console.log(`- URL: ${RecordingUrl}`);
-            console.log(`- Duration: ${RecordingDuration} seconds`);
             
             // Update call record in database
             const updateResult = await CallService.processWebhookData({
@@ -86,24 +77,19 @@ export const handleRecordingStatus = catchAsyncError(async (req, res, next) => {
             });
             
             if (updateResult.success) {
-                console.log('Call record updated successfully in database');
                 
                 // Start transcription process in background
                 if (RecordingUrl) {
-                    console.log('Starting transcription process for call:', CallSid);
                     transcribeCallRecording(CallSid, RecordingUrl).catch(error => {
-                        console.error('Transcription failed for call', CallSid, ':', error.message);
                     });
                 }
             } else {
-                console.error('Failed to update call record:', updateResult.error);
             }
         }
         
         res.status(200).send('OK');
         
     } catch (error) {
-        console.error('Recording status webhook error:', error.message);
         res.status(200).send('OK'); // Always return OK to Twilio
     }
 });
@@ -111,7 +97,6 @@ export const handleRecordingStatus = catchAsyncError(async (req, res, next) => {
 // Call status webhook for real-time updates
 export const handleCallStatus = catchAsyncError(async (req, res, next) => {
     try {
-        console.log('Call status webhook received:', req.body);
         
         const { 
             CallSid, 
@@ -123,7 +108,6 @@ export const handleCallStatus = catchAsyncError(async (req, res, next) => {
         } = req.body;
         
         if (CallSid) {
-            console.log(`Call status update for ${CallSid}: ${CallStatus}`);
             
             // Update call record in database
             const updateData = {
@@ -138,16 +122,13 @@ export const handleCallStatus = catchAsyncError(async (req, res, next) => {
             const updateResult = await CallService.processWebhookData(updateData);
             
             if (updateResult.success) {
-                console.log('Call status updated successfully in database');
             } else {
-                console.error('Failed to update call status:', updateResult.error);
             }
         }
         
         res.status(200).send('OK');
         
     } catch (error) {
-        console.error('Call status webhook error:', error);
         res.status(200).send('OK'); // Always return OK to Twilio
     }
 });
@@ -167,7 +148,6 @@ export const getNgrokInfo = catchAsyncError(async (req, res, next) => {
                 : 'ngrok tunnel is not active'
         });
     } catch (error) {
-        console.error('Failed to get ngrok info:', error.message);
         return next(new ErrorHandler(`Failed to get ngrok info: ${error.message}`, 500));
     }
 });
@@ -182,8 +162,6 @@ export const getAvailableNumbers = catchAsyncError(async (req, res, next) => {
             type = 'local',
             limit = 20 
         } = req.query;
-
-        console.log(`Searching for ${type} numbers in ${country}${areaCode ? ` with area code ${areaCode}` : ''}${contains ? ` containing ${contains}` : ''}`);
 
         // Get the appropriate resource based on type
         let resource;
@@ -238,7 +216,6 @@ export const getAvailableNumbers = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Error fetching available numbers:', error.message);
         
         // Handle specific Twilio errors
         if (error.code) {
@@ -252,20 +229,13 @@ export const getAvailableNumbers = catchAsyncError(async (req, res, next) => {
 // Function to transcribe call recordings
 const transcribeCallRecording = async (callSid, recordingUrl) => {
     try {
-        console.log(`Starting transcription for call ${callSid}...`);
         
         // Extract RecordingSid from the URL
         const recordingSid = recordingUrl.split('/').pop();
-        console.log(`Recording SID: ${recordingSid}`);
         
         // Download the recording using Twilio client with authentication
         const recording = await twilioClient.recordings(recordingSid).fetch();
-        console.log(`Recording details:`, {
-            sid: recording.sid,
-            duration: recording.duration,
-            channels: recording.channels,
-            uri: recording.uri
-        });
+           
         
         // Use Twilio's authenticated download method
         const recordingData = await twilioClient.recordings(recordingSid).fetch();
@@ -275,9 +245,7 @@ const transcribeCallRecording = async (callSid, recordingUrl) => {
         
         // Create authenticated request using Twilio credentials
         const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-        
-        console.log(`Downloading audio with authentication...`);
-        
+
         const response = await fetch(authUrl, {
             headers: {
                 'Authorization': `Basic ${auth}`
@@ -289,13 +257,11 @@ const transcribeCallRecording = async (callSid, recordingUrl) => {
         }
         
         const audioData = await response.arrayBuffer();
-        console.log(`Downloaded recording for call ${callSid}, size: ${audioData.byteLength} bytes`);
         
         // Transcribe the audio
         const transcript = await transcribeFile(Buffer.from(audioData));
         
         if (transcript && transcript.trim()) {
-            console.log(`Transcription completed for call ${callSid}:`, transcript.substring(0, 100) + '...');
             
             // Update the call record with the transcript
             await prisma.call.update({
@@ -303,13 +269,10 @@ const transcribeCallRecording = async (callSid, recordingUrl) => {
                 data: { transcript: transcript.trim() }
             });
             
-            console.log(`Transcript saved for call ${callSid}`);
         } else {
-            console.log(`No transcript generated for call ${callSid}`);
         }
         
     } catch (error) {
-        console.error(`Transcription failed for call ${callSid}:`, error.message);
         throw error;
     }
 };

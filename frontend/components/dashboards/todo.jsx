@@ -3,9 +3,13 @@
 
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Calendar, ChevronDown, Maximize2, Clock, X, User, AlertCircle } from 'lucide-react';
+import { Calendar, ChevronDown, Maximize2, Clock, X, User, AlertCircle, Play, Square } from 'lucide-react';
 import { getAllUserTasksRequest } from '@/lib/http/task';
 import Link from 'next/link';
+import { useTimer } from '@/providers/TimerProvider';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 
 const Todo = ({ filteredProjects = null }) => {
     const [selectedDay, setSelectedDay] = useState('Monday');
@@ -17,6 +21,12 @@ const Todo = ({ filteredProjects = null }) => {
     const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
     const [showCustomDateInput, setShowCustomDateInput] = useState(false);
     const [showCustomRangeInput, setShowCustomRangeInput] = useState(false);
+    const [showStopDialog, setShowStopDialog] = useState(false);
+    const [workDescription, setWorkDescription] = useState('');
+    const [selectedTaskForStop, setSelectedTaskForStop] = useState(null);
+
+    // Timer functionality
+    const { activeTimer, startTimer, stopTimer, loadingStart, loadingStop } = useTimer();
 
     // Filter tasks based on filtered projects
     const filteredTasks = useMemo(() => {
@@ -49,7 +59,6 @@ const Todo = ({ filteredProjects = null }) => {
                 typeof task === 'object' &&
                 task.task_id
             );
-            console.log("valid", validTasks)
 
             setAllTasks(validTasks);
         } catch (err) {
@@ -200,6 +209,40 @@ const Todo = ({ filteredProjects = null }) => {
             setShowDateDropdown(false);
             setCustomDateRange({ start: '', end: '' });
         }
+    };
+
+    // Timer handlers
+    const handleStartTimer = async (task) => {
+        try {
+            await startTimer(
+                task.task_id, 
+                task.name, 
+                task.project_id || 1, 
+                task.project?.name || 'Unknown Project'
+            );
+            toast.success('Timer started successfully!');
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to start timer');
+        }
+    };
+
+    const handleStopTimer = async () => {
+        if (!activeTimer) return;
+        
+        try {
+            await stopTimer(workDescription);
+            setShowStopDialog(false);
+            setWorkDescription('');
+            setSelectedTaskForStop(null);
+            toast.success('Timer stopped successfully!');
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to stop timer');
+        }
+    };
+
+    const handleStopClick = (task) => {
+        setSelectedTaskForStop(task);
+        setShowStopDialog(true);
     };
 
     // Circular progress component
@@ -390,21 +433,58 @@ const Todo = ({ filteredProjects = null }) => {
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex items-center space-x-3">
-                                                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${task.status === 'DONE' ? 'bg-green-100 text-green-800' :
-                                                            task.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
-                                                                task.status === 'OVER_DUE' ? 'bg-red-100 text-red-800' :
-                                                                    task.status === 'IN_REVIEW' ? 'bg-purple-100 text-purple-800' :
-                                                                        'bg-blue-100 text-blue-800'
-                                                            }`}>
-                                                            {task.status.replace('_', ' ')}
-                                                        </span>
-                                                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${task.priority === 'HIGH' ? 'bg-red-100 text-red-800' :
-                                                            task.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                                                                'bg-green-100 text-green-800'
-                                                            }`}>
-                                                            {task.priority} Priority
-                                                        </span>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center space-x-3">
+                                                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${task.status === 'DONE' ? 'bg-green-100 text-green-800' :
+                                                                task.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
+                                                                    task.status === 'OVER_DUE' ? 'bg-red-100 text-red-800' :
+                                                                        task.status === 'IN_REVIEW' ? 'bg-purple-100 text-purple-800' :
+                                                                            'bg-blue-100 text-blue-800'
+                                                                }`}>
+                                                                {task.status.replace('_', ' ')}
+                                                            </span>
+                                                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${task.priority === 'HIGH' ? 'bg-red-100 text-red-800' :
+                                                                task.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                                                                    'bg-green-100 text-green-800'
+                                                                }`}>
+                                                                {task.priority} Priority
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        {/* Timer Controls */}
+                                                        <div className="flex items-center space-x-2">
+                                                            {activeTimer && activeTimer.task_id === task.task_id ? (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        handleStopClick(task);
+                                                                    }}
+                                                                    disabled={loadingStop}
+                                                                    className="bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                                                                >
+                                                                    <Square className="h-4 w-4 mr-1" />
+                                                                    {loadingStop ? 'Stopping...' : 'Stop Timer'}
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        handleStartTimer(task);
+                                                                    }}
+                                                                    disabled={loadingStart === task.task_id || (activeTimer && activeTimer.task_id !== task.task_id)}
+                                                                    className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                                                                >
+                                                                    <Play className="h-4 w-4 mr-1" />
+                                                                    {loadingStart === task.task_id ? 'Starting...' : 'Start Timer'}
+                                                                </Button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -664,6 +744,47 @@ const Todo = ({ filteredProjects = null }) => {
                     isOpen={showModal}
                     onClose={() => setShowModal(false)}
                 />
+
+                {/* Stop Timer Dialog */}
+                <Dialog open={showStopDialog} onOpenChange={setShowStopDialog}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Stop Timer</DialogTitle>
+                            <DialogDescription>
+                                Add a work description for the time spent on "{selectedTaskForStop?.name}"
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-medium text-gray-700">
+                                    Work Description (Optional)
+                                </label>
+                                <textarea
+                                    className="w-full mt-1 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    rows={3}
+                                    placeholder="Describe what you worked on..."
+                                    value={workDescription}
+                                    onChange={(e) => setWorkDescription(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowStopDialog(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleStopTimer}
+                                disabled={loadingStop}
+                                className="bg-red-600 hover:bg-red-700"
+                            >
+                                {loadingStop ? 'Stopping...' : 'Stop Timer'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
     );

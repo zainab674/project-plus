@@ -94,18 +94,15 @@ export default function Phone() {
         try {
             // Don't start transcription if already transcribing the same call
             if (isTranscribing && currentCallSid === callSid) {
-                console.log('Already transcribing this call:', callSid);
                 return;
             }
 
             // Clean up any existing transcription service first
             if (transcribeServiceRef.current) {
-                console.log('Cleaning up existing transcription service...');
                 transcribeServiceRef.current.disconnect();
                 transcribeServiceRef.current = null;
             }
 
-            console.log('Starting new transcription service for call:', callSid);
             const service = new TranscribedService({ 
                 call_sid: callSid,
                 user_id: 1 // You might want to get this from auth context
@@ -113,7 +110,6 @@ export default function Phone() {
 
             // Listen for transcription events
             service.io.on('transcript', (data) => {
-                console.log('Received transcript:', data);
                 setCallTranscript(prev => prev + ' ' + data.text);
             });
 
@@ -123,7 +119,6 @@ export default function Phone() {
             setCurrentCallSid(callSid);
             setCallTranscript('');
             
-            console.log('Transcription service started successfully');
         } catch (error) {
             console.error('Failed to start transcription:', error);
             toast.error('Failed to start transcription');
@@ -134,7 +129,6 @@ export default function Phone() {
 
     const stopTranscription = () => {
         try {
-            console.log('Stopping transcription service...');
             if (transcribeServiceRef.current) {
                 transcribeServiceRef.current.disconnect();
                 transcribeServiceRef.current = null;
@@ -142,7 +136,6 @@ export default function Phone() {
             setTranscribeService(null);
             setIsTranscribing(false);
             setCurrentCallSid(null);
-            console.log('Transcription service stopped successfully');
         } catch (error) {
             console.error('Failed to stop transcription:', error);
             // Force cleanup even if there's an error
@@ -162,7 +155,6 @@ export default function Phone() {
                 await audioContext.resume();
             }
             setIsAudioContextResumed(true);
-            console.log('AudioContext resumed successfully');
             return true;
         } catch (error) {
             console.error('Failed to resume AudioContext:', error);
@@ -177,16 +169,13 @@ export default function Phone() {
             
             // Check if AudioContext is available
             if (!isAudioContextResumed) {
-                console.log('AudioContext not resumed, attempting to initialize...');
                 const audioSuccess = await initializeAudioContext();
                 if (!audioSuccess) {
                     throw new Error('AudioContext initialization failed');
                 }
             }
             
-            console.log('Requesting Twilio token...');
             const res = await createTwilioToken({});
-            console.log('Token response:', res.data);
             
             const { token, from, expiresAt } = res.data;
             
@@ -196,10 +185,8 @@ export default function Phone() {
             
             // Only clean up existing device if we're not already registered
             if (deviceRef.current && deviceRef.current.state !== 'registered') {
-                console.log('Cleaning up unregistered device');
                 deviceRef.current.destroy();
             } else if (deviceRef.current && deviceRef.current.state === 'registered') {
-                console.log('Device already registered, updating token only');
                 // Update token without destroying the device
                 deviceRef.current.updateToken(token);
                 setIsReady(true);
@@ -209,16 +196,13 @@ export default function Phone() {
                 return;
             }
             
-            console.log('Initializing Twilio Device with token:', token.substring(0, 20) + '...');
             
             // Test token validity by decoding it
             try {
                 const tokenParts = token.split('.');
                 if (tokenParts.length === 3) {
                     const payload = JSON.parse(atob(tokenParts[1]));
-                    console.log('Token payload:', payload);
-                    console.log('Token expires at:', new Date(payload.exp * 1000));
-                    console.log('Token grants:', payload.grants);
+                   
                 }
             } catch (decodeError) {
                 console.warn('Could not decode token:', decodeError);
@@ -231,11 +215,9 @@ export default function Phone() {
             });
 
             // Log device state changes
-            console.log('Device created, state:', twilioDevice.state);
             
             // Check if device is already ready
             if (twilioDevice.state === 'registered') {
-                console.log('Device already registered, setting ready state');
                 setIsReady(true);
                 setIsLoading(false);
                 setTokenExpiry(expiresAt);
@@ -244,12 +226,9 @@ export default function Phone() {
             
             // Try to manually register if needed
             setTimeout(() => {
-                console.log('Device state after 2 seconds:', twilioDevice.state);
                 if (twilioDevice.state === 'unregistered') {
-                    console.log('Attempting to register device...');
                     twilioDevice.register();
                 } else if (twilioDevice.state === 'registered' && !isReady) {
-                    console.log('Device registered after 2 seconds, setting ready state');
                     setIsReady(true);
                     setIsLoading(false);
                     setTokenExpiry(expiresAt);
@@ -259,13 +238,8 @@ export default function Phone() {
 
             // Add more debugging for registration process
             setTimeout(() => {
-                console.log('Device state after 5 seconds:', twilioDevice.state);
                 if (twilioDevice.state === 'unregistered') {
-                    console.log('Device still unregistered after 5 seconds');
-                    console.log('Device capabilities:', twilioDevice.capabilities);
-                    console.log('Device edge:', twilioDevice.edge);
                 } else if (twilioDevice.state === 'registered' && !isReady) {
-                    console.log('Device is registered but UI not updated, fixing...');
                     setIsReady(true);
                     setIsLoading(false);
                     setTokenExpiry(expiresAt);
@@ -275,7 +249,6 @@ export default function Phone() {
 
             // Add comprehensive event logging
             twilioDevice.on("registered", () => {
-                console.log("Device registered with Twilio");
                 setIsReady(true);
                 setIsLoading(false);
                 setTokenExpiry(expiresAt);
@@ -283,12 +256,10 @@ export default function Phone() {
             });
 
             twilioDevice.on("unregistered", () => {
-                console.log("Device unregistered from Twilio");
                 setIsReady(false);
             });
 
             twilioDevice.on("tokenWillExpire", () => {
-                console.log("Token will expire soon, refreshing...");
                 if (!isRefreshingToken) {
                     setIsRefreshingToken(true);
                     getToken().finally(() => setIsRefreshingToken(false));
@@ -296,7 +267,6 @@ export default function Phone() {
             });
 
             twilioDevice.on("ready", () => {
-                console.log("Twilio Device Ready");
                 setIsReady(true);
                 setIsLoading(false);
                 setTokenExpiry(expiresAt);
@@ -323,13 +293,11 @@ export default function Phone() {
 
             // Handle call connection
             twilioDevice.on("connect", (conn) => {
-                console.log("Call Connected");
                 toast.success("Call connected!");
             });
 
             // Handle call disconnection
             twilioDevice.on("disconnect", () => {
-                console.log("Call Disconnected");
                 setConnection(null);
                 setControllView(null);
                 stopTimer();
@@ -448,12 +416,10 @@ export default function Phone() {
                 const timeUntilExpiry = tokenExpiry - Date.now();
                 // Refresh token 5 minutes before expiry
                 if (timeUntilExpiry <= 300000 && timeUntilExpiry > 0 && !isRefreshingToken) {
-                    console.log("Token expiring soon, refreshing...");
                     toast.warning("Phone token expiring soon. Refreshing...");
                     setIsRefreshingToken(true);
                     getToken().finally(() => setIsRefreshingToken(false));
                 } else if (timeUntilExpiry <= 0 && !isRefreshingToken) {
-                    console.log("Token expired, refreshing...");
                     toast.warning("Phone token expired. Refreshing...");
                     setIsRefreshingToken(true);
                     getToken().finally(() => setIsRefreshingToken(false));
@@ -488,34 +454,20 @@ export default function Phone() {
 
         try {
             const formattedNumber = validation.formatted;
-            
-            console.log('Attempting to make call:');
-            console.log('To:', formattedNumber);
-            console.log('From:', fromNumber);
-            console.log('Device state:', device.state);
-            console.log('Device capabilities:', device.capabilities);
-            console.log('Device edge:', device.edge);
-            console.log('Device region:', device.region);
-            console.log('Token expiry:', tokenExpiry);
-            console.log('Current time:', Date.now());
+         
             
         const connection = await device.connect({
                 params: { To: formattedNumber, From: fromNumber }
         });
 
         // Log Call SID immediately after connection
-        console.log('Call SID:', connection.parameters.CallSid);
-        console.log('Call Parameters:', connection.parameters);
-        
+      
         // Check if Call SID is available
         if (!connection.parameters.CallSid) {
             console.warn('WARNING: Call SID is undefined - call may not be properly established');
-            console.log('Connection state:', connection.status);
-            console.log('Connection object:', connection);
-            
+          
             // Wait a bit and check again
             setTimeout(() => {
-                console.log('Call SID after 2 seconds:', connection.parameters.CallSid);
                 if (!connection.parameters.CallSid) {
                     console.error('CRITICAL: Call SID still undefined after 2 seconds - TwiML Application issue likely');
                     toast.error('Call setup failed - check TwiML Application configuration');
@@ -545,7 +497,6 @@ export default function Phone() {
             setCallHistory(prev => [callRecord, ...prev]);
 
         connection.on("accept", () => {
-            console.log('ACCEPT', connection.parameters.CallSid);
             setControllView('processing');
             setStatus("Connected");
             startTimer();
@@ -567,8 +518,6 @@ export default function Phone() {
         });
 
         connection.on("disconnect", () => {
-            console.log('DISCONNECT', connection.parameters.CallSid);
-            console.log("Call disconnected event received");
             setStatus("Call Ended");
             setIsDisconnecting(false);
             
@@ -650,7 +599,6 @@ export default function Phone() {
                 const newMuteState = !isMuted;
                 connection.mute(newMuteState);
                 setIsMuted(newMuteState);
-                console.log(newMuteState ? "Muted" : "Unmuted");
                 toast.info(newMuteState ? "Microphone muted" : "Microphone unmuted");
             } catch (error) {
                 console.error("Failed to toggle mute:", error);
@@ -661,9 +609,7 @@ export default function Phone() {
 
     const hangupCall = useCallback(() => {
         if (connection && !isDisconnecting) {
-            try {
-                console.log("Manually hanging up call...");
-                console.log("Hangup Call SID:", connection.parameters.CallSid);
+            try{
                 setIsDisconnecting(true);
                 connection.disconnect();
                 // Don't immediately clear state - let the disconnect event handler do it
@@ -765,7 +711,6 @@ export default function Phone() {
             const response = await updateCallStatus(callRecord.call_id, updateData);
             
             if (response.data.success) {
-                console.log('Call transcript saved successfully');
                 // Update local history
                 setCallHistory(prev => 
                     prev.map(call => 

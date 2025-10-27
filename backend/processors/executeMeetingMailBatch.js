@@ -7,5 +7,4 @@ export async function executeUpdateMailsBatch(html, batch) {
     const { email } = item.user;
     await sendMail("Meeting Update: Scheduled/Canceled and Voting Status", email, html);
   }
-  console.log('Batch sent successfully!');
 }

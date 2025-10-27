@@ -19,6 +19,7 @@ import contactRouter from './contactRoute.js'
 import transcriptionRouter from './transcriptionRoute.js'
 import caseTemplateRouter from './caseTemplateRoute.js'
 import documentComparisonRouter from './documentComparisonRoute.js'
+import notesRouter from './notesRoute.js'
 
 router.use('/user',userRouter);
 router.use('/project',projectRouter);
@@ -39,6 +40,7 @@ router.use('/contacts',contactRouter);
 router.use('/transcription',transcriptionRouter);
 router.use('/case-templates',caseTemplateRouter);
 router.use('/document-comparison',documentComparisonRouter);
+router.use('/notes',notesRouter);
 
 
 export default router;

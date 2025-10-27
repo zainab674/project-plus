@@ -67,7 +67,6 @@ export const fetchMail = (email,password,count=50) => {
                         msg.once('end', () => {
                             simpleParser(buffer, (err, mail) => {
                                 if (err) {
-                                    console.error(`Error parsing email: ${err.message}`);
                                 } else {
                                     emails.push({
                                         subject: mail.subject || '(No Subject)',
@@ -99,7 +98,6 @@ export const fetchMail = (email,password,count=50) => {
                     });
 
                     f.once('end', () => {
-                        console.log('Done fetching emails.');
                     });
                 });
             });
@@ -112,7 +110,6 @@ export const fetchMail = (email,password,count=50) => {
         });
 
         imap.once('end', () => {
-            console.log('IMAP connection closed.');
         });
 
         imap.connect();

@@ -75,15 +75,11 @@ export default function Page() {
 
     // Listen for real-time email updates from global context
     useEffect(() => {
-        console.log('🔍 Mail page: emailService changed:', emailService);
-        console.log('🔍 Mail page: isConnected:', isConnected);
         
         if (emailService) {
-            console.log('🔍 Mail page: Setting up new email listener');
             
             // Set up a listener for new emails that updates the local mail list
             const handleNewEmail = (notification) => {
-                console.log('📧 Mail page received new email notification:', notification);
                 
                 if (notification.emails && notification.emails.length > 0) {
                     // Update mails list with new emails
@@ -113,7 +109,6 @@ export default function Page() {
 
             // Add the listener to the email service
             emailService.onNewEmail(handleNewEmail);
-            console.log('🔍 Mail page: New email listener set up successfully');
 
             return () => {
                 // Clean up the listener
@@ -122,17 +117,11 @@ export default function Page() {
                 }
             };
         } else {
-            console.log('⚠️ Mail page: No emailService available');
         }
     }, [emailService, getAllMail]);
 
     // Debug real-time connection status
-    useEffect(() => {
-        console.log('🔍 Mail page: Connection status changed:', isConnected);
-        if (emailService) {
-            console.log('🔍 Mail page: Email service connection status:', emailService.isConnected());
-        }
-    }, [isConnected, emailService]);
+    
 
     const getAllMail = useCallback(async () => {
         try {
@@ -147,7 +136,6 @@ export default function Page() {
                 // setUnreadCount(unread); // This is now managed by the global context
             }
         } catch (error) {
-            console.log(error?.response?.data?.message || error?.message);
         } finally {
             setIsLoading(false);
         }
@@ -309,7 +297,6 @@ export default function Page() {
                     <Button 
                         onClick={() => {
                             // Simple toast test
-                            console.log('🔍 Testing simple toast...');
                             toast.info('Simple test toast!', {
                                 position: "top-right",
                                 autoClose: 3000,
@@ -323,7 +310,6 @@ export default function Page() {
                     <Button 
                         onClick={() => {
                             // Simulate real-time notification
-                            console.log('🔍 Simulating real-time notification...');
                             if (emailService) {
                                 // Simulate receiving a new email notification
                                 const mockNotification = {
@@ -340,9 +326,7 @@ export default function Page() {
                                 
                                 // Trigger the notification handler directly
                                 emailService.onNewEmailCallback?.(mockNotification);
-                                console.log('✅ Simulated notification sent');
                             } else {
-                                console.log('❌ No email service available');
                             }
                         }}
                         variant="outline"
@@ -353,22 +337,10 @@ export default function Page() {
                     <Button 
                         onClick={() => {
                             // Debug current state
-                            console.log('🔍 === DEBUG INFO ===');
-                            console.log('User ID:', user?.user_id);
-                            console.log('Email Service:', emailService);
-                            console.log('Is Connected:', isConnected);
-                            console.log('Unread Count:', unreadCount);
-                            
+                          
                             if (emailService) {
-                                console.log('Service Connection Status:', emailService.isConnected());
-                                console.log('Service User ID:', emailService.userId);
-                                console.log('Service IO:', emailService.io);
-                                console.log('Service Callbacks:', {
-                                    onNewEmail: !!emailService.onNewEmailCallback,
-                                    onEmailCountUpdate: !!emailService.onEmailCountUpdateCallback
-                                });
+                              
                             }
-                            console.log('==================');
                         }}
                         variant="outline"
                         className="border-gray-300 hover:bg-gray-50"
@@ -379,10 +351,8 @@ export default function Page() {
                         onClick={async () => {
                             // Test backend email polling
                             try {
-                                console.log('🔄 Testing backend email polling...');
                                 const response = await fetch('/test/email-poll');
                                 const result = await response.json();
-                                console.log('Backend response:', result);
                                 
                                 if (result.success) {
                                     toast.success('Backend email polling triggered!', {

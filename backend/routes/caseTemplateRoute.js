@@ -60,7 +60,7 @@ router
 // Use template to create project
 router
     .route("/:templateId/use")
-    .post(authMiddleware, useTemplateForProject);
+    .post(authMiddleware, multipleUpload, useTemplateForProject);
 
 // Save edited document as template
 router

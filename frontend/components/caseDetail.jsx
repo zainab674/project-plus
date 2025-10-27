@@ -7,7 +7,6 @@ import React, { useState } from 'react';
 import { Calendar, User, FileText, Building, Tag, AlertCircle } from 'lucide-react';
 
 const CaseDetail = ({ selectedCase }) => {
-    { console.log("selectedCase", selectedCase) }
     
     // Early return if no case is selected
     if (!selectedCase) {

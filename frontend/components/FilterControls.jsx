@@ -33,7 +33,7 @@ const CasesDropdown = () => {
 
   // Filter only active projects for the dropdown
   const activeProjects = React.useMemo(() => {
-    return projects.filter(project => project.status === 'Active');
+    return projects;
   }, [projects]);
 
   const handleCaseSelect = (project) => {
@@ -79,7 +79,7 @@ const CasesDropdown = () => {
             )}
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            {activeCasesCount} active cases available
+            {activeCasesCount}  cases available
           </p>
         </div>
 

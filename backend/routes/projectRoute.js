@@ -30,7 +30,7 @@ import {
     deleteFolder,
     deleteFile
 } from '../controllers/projectController.js';
-import singleUpload from "../middlewares/multerMiddleware.js";
+import singleUpload, { multipleUpload } from "../middlewares/multerMiddleware.js";
 const router = express.Router();
 
 router.route('/get-file').get(authMiddleware, getTemplateDocumentFiles);
@@ -38,7 +38,11 @@ router.route('/send').post(authMiddleware, singleUpload, sendToLawyer);
 router.route('/send-client').post(authMiddleware, singleUpload, sendToClient);
 
 
-router.route('/').post(authMiddleware, createProject).get(authMiddleware, getMyProjects)
+router.route('/').post(
+    authMiddleware,
+    multipleUpload,
+    createProject
+).get(authMiddleware, getMyProjects)
 router.route('/with-tasks').get(authMiddleware, getMyProjectsWithTasks);
 router.route('/comprehensive').get(authMiddleware, getMyProjectsComprehensive);
 router.route('/invite').post(authMiddleware, generateInvitationLink);

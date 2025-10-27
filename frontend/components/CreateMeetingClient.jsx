@@ -26,12 +26,7 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
     const [specificProject, setSpecificProject] = useState(null);
     const [fetchedClients, setFetchedClients] = useState(null);
 
-    // Debug logging
-    console.log('CreateMeetingClient - Clients prop:', Clients);
-    console.log('CreateMeetingClient - Clients length:', Clients?.length);
-    console.log('CreateMeetingClient - project_id:', project_id);
-
-    // Load full user data when component mounts or when user changes
+  // Load full user data when component mounts or when user changes
     useEffect(() => {
         if (user && !user.Projects && !hasFullUserData) {
             loadUserWithProjects().then(fullUser => {
@@ -131,10 +126,6 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
     // Use Clients prop if available, otherwise use fetched clients
     const availableClients = Clients || fetchedClients;
     
-    // Debug logging
-    console.log('CreateMeetingClient - fetchedClients:', fetchedClients);
-    console.log('CreateMeetingClient - availableClients:', availableClients);
-
     // Don't render until user data is loaded OR specific project is loaded
     if (!userWithProjects || (!userWithProjects.Projects && !specificProject)) {
         return (

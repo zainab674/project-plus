@@ -1,9 +1,9 @@
 'use client'
 
 import { usePathname } from 'next/navigation';
-import { QuickActions } from './quickActions';
+import QuickActions from './quickActions';
 
-const ConditionalQuickActions = ({ children }) => {
+const ConditionalQuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
   const pathname = usePathname();
   
   // Define authentication routes where QuickActions should be hidden
@@ -23,7 +23,7 @@ const ConditionalQuickActions = ({ children }) => {
   
   // For all other routes, render with QuickActions wrapper
   return (
-    <QuickActions>
+    <QuickActions isSidebarMode={isSidebarMode} setIsSidebarMode={setIsSidebarMode}>
       {children}
     </QuickActions>
   );

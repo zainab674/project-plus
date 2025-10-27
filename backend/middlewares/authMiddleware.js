@@ -13,8 +13,6 @@ export const authMiddleware = catchAsyncError(async (req, res, next) => {
   
   // Reduced debug logging - only log in development
   if (process.env.NODE_ENV === 'development') {
-    console.log("🔍 Auth Middleware - Token:", token ? "Present" : "Missing");
-    console.log("📝 Request:", req.method, req.originalUrl);
   }
   
   if (!token) {
@@ -59,7 +57,6 @@ export const authMiddleware = catchAsyncError(async (req, res, next) => {
     }
 
     if (process.env.NODE_ENV === 'development') {
-      console.log("✅ User authenticated:", user.user_id);
     }
     
     req.user = user;
@@ -264,7 +261,4 @@ export const authWithFullData = catchAsyncError(async (req, res, next) => {
     next();
   });
 });
-
-
-
 

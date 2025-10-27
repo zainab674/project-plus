@@ -34,7 +34,6 @@ const JoditEditor = dynamic(
 // Utility function to view files in new tab with proper filename
 const viewFile = async (url, filename) => {
   try {
-    console.log('Viewing file:', { url, filename });
     
     // Check if it's a Cloudinary URL that might force download
     const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
@@ -254,7 +253,7 @@ const AttachmentsCard = ({ task, media, loadingMedia, onMediaUpdate }) => {
                             className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors disabled:opacity-50"
                         >
                             <FileText className="w-3 h-3" />
-                            Internal Doc
+                            Select Document
                         </button>
                         
                         {attachments.length > 0 && (
@@ -341,13 +340,13 @@ const AttachmentsCard = ({ task, media, loadingMedia, onMediaUpdate }) => {
                 onClose={() => setShowInternalDocSelector(false)}
                 onSelect={handleInternalDocUpload}
                 phase={task.phase}
+                projectId={task.project_id}
             />
         </InfoCard>
     )
 }
 
 const UpdateTask = ({ project, task, onClose, isOpen, getProjectDetails }) => {
-    console.log("heelo", task)
     const [selectedMember, setSelectedMember] = useState([]);
     const [isDisabled, setIsDiabled] = useState(false);
     const [isLoading, setIsLoading] = useState(false);

@@ -80,8 +80,6 @@ export const approveRequest = catchAsyncError(async (req, res, next) => {
     const { request_id, admin_notes } = req.body;
     const admin_id = req.user?.user_id;
 
-    console.log(`🚀 Starting approval process for request: ${request_id}`);
-
     if (!request_id) return next(new ErrorHandler("Request ID is required", 400));
 
     const request = await prisma.userRegistrationRequest.findUnique({
@@ -90,8 +88,6 @@ export const approveRequest = catchAsyncError(async (req, res, next) => {
 
     if (!request) return next(new ErrorHandler("Registration request not found", 404));
     if (request.status !== 'PENDING') return next(new ErrorHandler("Request is not pending", 400));
-
-    console.log(`📋 Approving registration for: ${request.name} (${request.email})`);
 
     // Mark approved on request
     const updated = await prisma.userRegistrationRequest.update({
@@ -105,7 +101,6 @@ export const approveRequest = catchAsyncError(async (req, res, next) => {
     });
 
     // Create a new user from the approved registration request
-    console.log(`👤 Creating new user account for: ${updated.name}`);
     const newUser = await prisma.user.create({
         data: {
             name: updated.name,
@@ -119,16 +114,12 @@ export const approveRequest = catchAsyncError(async (req, res, next) => {
             Role: 'PROVIDER', // Default role for approved users
         },
     });
-    console.log(`✅ User account created successfully with ID: ${newUser.user_id}`);
 
     // Send OTP to the new user
-    console.log(`📧 Sending OTP to new user: ${newUser.email}`);
     await sendOTPOnMail(newUser, async (OTP, err) => {
         if (err) {
-            console.error('❌ Error sending OTP:', err);
             return; // do not fail the approval
         }
-        console.log(`🔐 OTP generated successfully for user: ${newUser.email}`);
         const hash_otp = crypto.createHash('sha256').update(OTP.toString()).digest('hex');
         await prisma.oTP.create({
             data: {
@@ -136,27 +127,20 @@ export const approveRequest = catchAsyncError(async (req, res, next) => {
                 user_id: newUser.user_id,
             },
         });
-        console.log(`✅ OTP stored in database for user: ${newUser.email}`);
     });
 
     // Send approval notification email to the user
     try {
         if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-            console.warn('⚠️ SMTP credentials not configured - skipping approval email');
         } else {
             const emailResult = await sendApprovalEmail(updated.email, updated.name);
             if (emailResult.success) {
-                console.log(`✅ Approval email sent successfully to ${updated.email}`);
             } else {
-                console.error('❌ Approval email failed:', emailResult.error);
             }
         }
     } catch (e) {
-        console.error('❌ Error sending approval email:', e);
         // Don't fail the approval process if email fails
     }
-
-    console.log(`🎉 Registration approval completed successfully for: ${updated.name} (${updated.email})`);
 
     res.status(200).json({
         success: true,
@@ -195,7 +179,6 @@ export const rejectRequest = catchAsyncError(async (req, res, next) => {
     try {
         await sendRejectionEmail(updated.email, updated.name, admin_notes);
     } catch (e) {
-        console.error('Error sending rejection email:', e);
     }
 
     res.status(200).json({
@@ -311,8 +294,6 @@ export const getAllUsers = catchAsyncError(async (req, res, next) => {
 });
 
 /** -------- GET USER DETAILS -------- */
-
-
 
 // export const getUserDetails = catchAsyncError(async (req, res, next) => {
 //     try {
@@ -1078,9 +1059,6 @@ export const getUserDetails = catchAsyncError(async (req, res, next) => {
     }
 });
 
-
-
-
 /** -------- UPDATE USER ROLE -------- */
 export const updateUserRole = catchAsyncError(async (req, res, next) => {
     try {
@@ -1599,7 +1577,6 @@ export const deleteUser = catchAsyncError(async (req, res, next) => {
                 where: { user_id: parseInt(userId) }
             });
         }
-
 
         // Check if user has created projects
         const userProjects = await prisma.project.findFirst({
