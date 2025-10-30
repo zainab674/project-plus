@@ -16,15 +16,15 @@ import CreateMeeting from "@/components/CreateMeeting"
 import { getsMeetingRequest } from "@/lib/http/meeting"
 import { useUser } from "@/providers/UserProvider"
 import CreateMeetingClient from "@/components/CreateMeetingClient"
+import { useRouter } from "next/navigation"
 
 export default function Page() {
     const [createMeeting, setCreateMeeting] = useState(false);
     const [createMeetingClient, setCreateMeetingClient] = useState(false);
-    const [createScheduledMeeting, setCreateScheduledMeeting] = useState(false);
-    const [createScheduledMeetingClient, setCreateScheduledMeetingClient] = useState(false);
     const [meetings, setMeetings] = useState([]);
     const [scheduledMeetings, setScheduledMeetings] = useState([]);
     const { user } = useUser();
+    const router = useRouter();
 
     const getMeetings = useCallback(async () => {
         try {
@@ -79,11 +79,11 @@ export default function Page() {
                                 {
                                     (user?.Role === "PROVIDER" || user?.Role === "TEAM") &&
                                     <>
-                                        <Button className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all" onClick={() => setCreateMeeting(true)}>
+                                        <Button className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all" onClick={() => router.push('/dashboard/meeting/create')}>
                                             <Plus className="mr-2 h-4 w-4" />
                                             New Instant Meeting
                                         </Button>
-                                        <Button className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all" onClick={() => setCreateMeetingClient(true)}>
+                                        <Button className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all" onClick={() => router.push('/dashboard/meeting/create-client')}>
                                             <Plus className="mr-2 h-4 w-4" />
                                             New Client Meeting
                                         </Button>
@@ -140,13 +140,13 @@ export default function Page() {
                                         <>
                                             <Button
                                                 className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
-                                                onClick={() => setCreateScheduledMeeting(true)}
+                                                onClick={() => router.push('/dashboard/meeting/create?scheduled=true')}
                                             >
                                                 Schedule Team Meeting
                                             </Button>
                                             <Button
                                                 className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
-                                                onClick={() => setCreateScheduledMeetingClient(true)}
+                                                onClick={() => router.push('/dashboard/meeting/create-client?scheduled=true')}
                                             >
                                                 Schedule Client Meeting
                                             </Button>
@@ -218,10 +218,6 @@ export default function Page() {
             </div>
             <CreateMeeting open={createMeeting} onClose={() => setCreateMeeting(false)} isScheduled={false} getMeetings={getMeetings} project_id={null} />
             <CreateMeetingClient open={createMeetingClient} onClose={() => setCreateMeetingClient(false)} isScheduled={false} getMeetings={getMeetings} project_id={null} />
-            
-            {/* Scheduled Meeting Creation Modals */}
-            <CreateMeeting open={createScheduledMeeting} onClose={() => setCreateScheduledMeeting(false)} isScheduled={true} getMeetings={getScheduledMeetings} project_id={null} />
-            <CreateMeetingClient open={createScheduledMeetingClient} onClose={() => setCreateScheduledMeetingClient(false)} isScheduled={true} getMeetings={getScheduledMeetings} project_id={null} />
         </>
     )
 }

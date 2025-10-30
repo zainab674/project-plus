@@ -5,11 +5,11 @@ import { getColorByFirstLetter } from '@/utils/getColorByFirstLetter'
 
 
 
-const AvatarCompoment = ({ name,color,...props}) => {
+const AvatarCompoment = ({ name, color, src, ...props}) => {
 
     return (
         <Avatar  {...props} className={`!w-[2rem] !h-[2rem] ${props.className}`}>
-            <AvatarImage src="/placeholder.svg?height=32&width=32" alt="User" /> 
+            {src && <AvatarImage src={src} alt={name || "User"} />}
             <AvatarFallback className={`text-white`} style={{background: getColorByFirstLetter(name)}}>
                 {getNameAvatar(name)}
             </AvatarFallback>

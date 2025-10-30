@@ -13,7 +13,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar'
+import { Avatar, AvatarFallback } from '../ui/avatar'
 import { getNameAvatar } from '@/utils/getNameAvatar'
 import MultiSelect from "@/components/ui/multi-select";
 import AvatarCompoment from '../AvatarCompoment'
@@ -22,7 +22,7 @@ import { updateTaskRequest } from '@/lib/http/task'
 import { getMediaByTaskIdRequest, uploadMediaRequest, deleteMediaRequest } from '@/lib/http/media'
 import dynamic from 'next/dynamic'
 import { useUser } from '@/providers/UserProvider'
-import { Textarea } from '@headlessui/react'
+import { Textarea } from '@/components/ui/textarea'
 import BigDialog from './BigDialog'
 import moment from 'moment'
 import InternalDocumentSelector from '../InternalDocumentSelector'
@@ -579,7 +579,6 @@ const UpdateTask = ({ project, task, onClose, isOpen, getProjectDetails }) => {
                                         <SelectItem value={member?.user?.user_id?.toString()} key={member?.user?.user_id}>
                                             <div className='flex items-center gap-3'>
                                                 <Avatar className="w-[2rem] h-[2rem]">
-                                                    <AvatarImage src="/placeholder.svg?height=32&width=32" alt="User" />
                                                     <AvatarFallback className="bg-primary/10 text-black">{getNameAvatar(member?.user?.name)}</AvatarFallback>
                                                 </Avatar>
                                                 <span className='text-black'>{member?.user?.name}</span>
@@ -652,13 +651,12 @@ const UpdateTask = ({ project, task, onClose, isOpen, getProjectDetails }) => {
                             <TypeOutline className="h-5 w-5 text-black" />
                             <span className='text-black text-sm font-medium'>Description</span>
                         </div>
-                        <div className="border border-primary rounded-md">
-                            <Textarea
-                                placeholder="Description"
-                                onChange={(e) => setFormdata(prev => ({ ...prev, description: e.target.value }))}
-                                value={formdata.description}
-                            />
-                        </div>
+                        <Textarea
+                            placeholder="Description"
+                            onChange={(e) => setFormdata(prev => ({ ...prev, description: e.target.value }))}
+                            value={formdata.description}
+                            className="w-full focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary text-black"
+                        />
                     </div>
 
                     {/* Attachments Section */}

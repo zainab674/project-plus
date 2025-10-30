@@ -1,846 +1,587 @@
-"use client"
-import { getAllTaskProgressRequest } from '@/lib/http/task';
-import { getRecentDatesWithLabels } from '@/utils/getRecentDatesWithLabels';
-import React, { useMemo, useState } from 'react'
-import { Select, SelectGroup, SelectLabel, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import moment from 'moment';
-import Loader from '@/components/Loader';
-import { getHourMinDiff } from '@/utils/calculateTIme';
-import Timer from '@/components/Timer';
-import { useUser } from '@/providers/UserProvider';
-import { Input } from '@/components/ui/input';
+"use client";
 
-// Utility function to download files with proper filename
-const downloadFile = async (url, filename) => {
-  try {
-    
-    // Always prioritize the provided filename over URL extraction
-    let finalFilename = filename;
-    
-    // Only extract from URL if no filename is provided at all
-    if (!finalFilename && url) {
-      const urlParts = url.split('/');
-      finalFilename = urlParts[urlParts.length - 1];
-      // Remove query parameters if any
-      finalFilename = finalFilename.split('?')[0];
-    }
-    
-    
-    // First try the blob approach
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': '*/*',
-      },
-    });
-    
-    if (!response.ok) {
-      console.error('Fetch failed:', response.status, response.statusText);
-      // Fallback to direct link approach
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = finalFilename || 'document';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+import React, { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Clock, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useUser } from '@/providers/UserProvider';
+import { useTimelineState } from '@/hooks/useTimelineState';
+import LawFirmTimeline from '@/components/dashboards/timeLine';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { downloadFile, viewFile as viewFileUtil } from '@/utils/fileUtils';
+import { getAllProjectComprehensiveRequest } from '@/lib/http/project';
+import Loader from '@/components/Loader';
+import {
+  CheckCircle,
+  FileText,
+  Calendar,
+  MessageCircle,
+  BarChart3,
+} from 'lucide-react';
+
+export default function TimelinePage() {
+  const router = useRouter();
+  const { user, loadUserWithProjects } = useUser();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+
+  // Use timeline state from hook
+  const {
+    selectedProjectForTimeline,
+    setSelectedProjectForTimeline,
+    timelineData,
+    timelineLoading,
+    fetchTimelineData,
+  } = useTimelineState();
+
+  // Fetch projects on mount
+  useEffect(() => {
+    fetchProjects();
+  }, [user]);
+
+  const fetchProjects = async () => {
+    setProjectsLoading(true);
+    try {
+      // If we already have projects from user context, use them
+      if (user?.Projects && user.Projects.length > 0) {
+        const userProjects = user.Projects || [];
+        const userCollaboration = user.Collaboration || [];
+
+        // Convert collaboration data to project format
+        const collaboratedProjects = userCollaboration.map((collab) => ({
+          ...collab.project,
+          isCollabrationProject: true,
+        }));
+
+        // Deduplicate projects by project_id
+        const projectMap = new Map();
+
+        // Add user's own projects first
+        userProjects.forEach((project) => {
+          if (project?.project_id) {
+            projectMap.set(project.project_id, project);
+          }
+        });
+
+        // Add collaborated projects if not already present
+        collaboratedProjects.forEach((project) => {
+          if (project?.project_id && !projectMap.has(project.project_id)) {
+            projectMap.set(project.project_id, project);
+          }
+        });
+
+        const allProjects = Array.from(projectMap.values());
+        setProjects(allProjects);
+        setProjectsLoading(false);
       return;
     }
     
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = finalFilename || 'document';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Clean up the blob URL after a delay
-    setTimeout(() => {
-      URL.revokeObjectURL(blobUrl);
-    }, 1000);
-    
-  } catch (error) {
-    console.error('Download error:', error);
-    // Fallback to direct link approach
-    try {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename || 'document';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (fallbackError) {
-      console.error('Fallback download also failed:', fallbackError);
-      // Last resort - open in new tab
-      window.open(url, '_blank');
-    }
-  }
-};
+      // If not, fetch from API
+      const res = await getAllProjectComprehensiveRequest();
+      const { projects, collaboratedProjects } = res.data;
 
-// Utility function to view files in new tab
-const viewFile = async (url, filename) => {
-  try {
-    
-    // Check if it's a Cloudinary URL that might force download
-    const isCloudinaryUrl = url.includes('cloudinary.com') && url.includes('raw/upload');
-    
-    if (isCloudinaryUrl) {
-      // For Cloudinary URLs, fetch the content and display it inline
-      try {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error('Failed to fetch file');
+      // Deduplicate projects by project_id
+      const projectMap = new Map();
+
+      // Add user's own projects first
+      const projectsArray = projects || [];
+      projectsArray.forEach((project) => {
+        if (project?.project_id) {
+          projectMap.set(project.project_id, project);
         }
-        
-        const contentType = response.headers.get('content-type') || '';
-        const fileContent = await response.text();
-        
-        // Create a new window and display the content inline
-        const newWindow = window.open('', '_blank');
-        
-        if (newWindow) {
-          // Create a simpler approach using data attributes
-          const escapedContent = fileContent.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-          const escapedContentType = contentType.replace(/"/g, '&quot;');
-          const escapedUrl = url.replace(/"/g, '&quot;');
-          const escapedFilename = (filename || 'document').replace(/"/g, '&quot;');
-          
-          newWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>${filename || 'Document Viewer'}</title>
-              <style>
-                body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #f5f5f5; }
-                .viewer-container { 
-                  max-width: 1200px; 
-                  margin: 0 auto; 
-                  background: white; 
-                  border-radius: 8px; 
-                  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                  overflow: hidden;
-                }
-                .header { 
-                  background: #f8f9fa; 
-                  padding: 15px 20px; 
-                  border-bottom: 1px solid #dee2e6;
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                }
-                .content { 
-                  padding: 20px; 
-                  min-height: 400px;
-                  overflow: auto;
-                }
-                .fallback { 
-                  text-align: center; 
-                  padding: 50px; 
-                  color: #6c757d;
-                }
-                .fallback a { 
-                  color: #0066cc; 
-                  text-decoration: none; 
-                  margin: 0 10px;
-                }
-                .fallback a:hover { 
-                  text-decoration: underline; 
-                }
-                .btn {
-                  padding: 8px 16px;
-                  border: none;
-                  border-radius: 4px;
-                  cursor: pointer;
-                  text-decoration: none;
-                  display: inline-block;
-                  font-size: 14px;
-                }
-                .btn-primary {
-                  background: #007bff;
-                  color: white;
-                }
-                .btn-secondary {
-                  background: #6c757d;
-                  color: white;
-                }
-                .btn:hover {
-                  opacity: 0.9;
-                }
-                pre {
-                  white-space: pre-wrap;
-                  word-wrap: break-word;
-                  font-family: 'Courier New', monospace;
-                  background: #f8f9fa;
-                  padding: 15px;
-                  border-radius: 4px;
-                  border: 1px solid #e9ecef;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="viewer-container">
-                <div class="header">
-                  <h3 style="margin: 0; color: #495057;">${filename || 'Document Viewer'}</h3>
-                  <div>
-                    <a href="${url}" download="${filename || 'document'}" class="btn btn-secondary">Download</a>
-                    <button onclick="window.close()" class="btn btn-primary">Close</button>
-                  </div>
-                </div>
-                <div class="content" id="content" 
-                     data-content="${escapedContent}" 
-                     data-content-type="${escapedContentType}" 
-                     data-url="${escapedUrl}" 
-                     data-filename="${escapedFilename}">
-                  <!-- Content will be loaded here -->
-                </div>
-              </div>
-              <script>
-                function getContentDisplay(content, contentType, url, filename) {
-                  if (contentType.includes('text/plain') || contentType.includes('text/csv')) {
-                    return '<pre>' + escapeHtml(content) + '</pre>';
-                  } else if (contentType.includes('text/html')) {
-                    return content;
-                  } else if (contentType.includes('application/json')) {
-                    try {
-                      const json = JSON.parse(content);
-                      return '<pre>' + escapeHtml(JSON.stringify(json, null, 2)) + '</pre>';
-                    } catch (e) {
-                      return '<pre>' + escapeHtml(content) + '</pre>';
-                    }
-                  } else if (contentType.includes('image/')) {
-                    return '<img src="' + url + '" style="max-width: 100%; height: auto;" alt="Image preview" />';
-                  } else if (contentType.includes('pdf')) {
-                    return '<iframe src="' + url + '" style="width: 100%; height: 600px; border: none;"></iframe>';
-                  } else {
-                    return '<div class="fallback"><h4>Preview not available</h4><p>This file type cannot be previewed in the browser.</p><a href="' + url + '" download="' + filename + '">Download File</a></div>';
-                  }
-                }
-                
-                function escapeHtml(text) {
-                  const div = document.createElement('div');
-                  div.textContent = text;
-                  return div.innerHTML;
-                }
-                
-                // Load content after page is ready
-                document.addEventListener('DOMContentLoaded', function() {
-                  const contentDiv = document.getElementById('content');
-                  const content = contentDiv.getAttribute('data-content');
-                  const contentType = contentDiv.getAttribute('data-content-type');
-                  const url = contentDiv.getAttribute('data-url');
-                  const filename = contentDiv.getAttribute('data-filename');
-                  
-                  const displayContent = getContentDisplay(content, contentType, url, filename);
-                  contentDiv.innerHTML = displayContent;
-                });
-              </script>
-            </body>
-            </html>
-          `);
-          newWindow.document.close();
-        } else {
-          // Fallback if popup is blocked
-          window.open(url, '_blank');
+      });
+
+      // Add collaborated projects if not already present
+      const collaboratedProjectsArray = collaboratedProjects || [];
+      collaboratedProjectsArray.forEach((project) => {
+        if (project?.project_id && !projectMap.has(project.project_id)) {
+          projectMap.set(project.project_id, project);
         }
-      } catch (fetchError) {
-        console.error('Fetch error:', fetchError);
-        // Fallback to direct link approach
-        window.open(url, '_blank');
-      }
-    } else {
-      // For non-Cloudinary URLs, use the original iframe approach
-      const newWindow = window.open('', '_blank');
-      
-      if (newWindow) {
-        newWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>${filename || 'Document Viewer'}</title>
-            <style>
-              body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
-              .viewer-container { width: 100%; height: 100vh; }
-              iframe { width: 100%; height: 100%; border: none; }
-              .fallback { text-align: center; padding: 50px; }
-              .fallback a { color: #0066cc; text-decoration: none; }
-              .fallback a:hover { text-decoration: underline; }
-            </style>
-          </head>
-          <body>
-            <div class="viewer-container">
-              <iframe src="${url}" onerror="showFallback()"></iframe>
-            </div>
-            <div class="fallback" id="fallback" style="display: none;">
-              <h3>File Preview Not Available</h3>
-              <p>This file cannot be previewed in the browser.</p>
-              <a href="${url}" download="${filename || 'document'}">Download File</a>
-            </div>
-            <script>
-              function showFallback() {
-                document.getElementById('fallback').style.display = 'block';
-                document.querySelector('.viewer-container').style.display = 'none';
-              }
-            </script>
-          </body>
-          </html>
-        `);
-        newWindow.document.close();
-      } else {
-        // Fallback if popup is blocked
-        window.open(url, '_blank');
-      }
-    }
-    
-  } catch (error) {
-    console.error('View error:', error);
-    // Fallback to direct link approach
-    window.open(url, '_blank');
-  }
-};
+      });
 
-const page = () => {
-  const [progress, setProgress] = React.useState([]);
-  const [dates, setDates] = React.useState(getRecentDatesWithLabels(90));
-  const [selectedDate, setSelectedDate] = React.useState(dates[0]);
-  const [selectedEndDate, setSelectedEndDate] = React.useState(dates[0]);
-  const [selectedType, setSelectedType] = React.useState(null);
-  const [loading, setLoading] = useState(false);
-  const [documents, setDocuments] = useState([]);
-  const [times, setTimes] = useState([]);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [username, setUsername] = useState("");
-  const [progressUsername, setProgressUsername] = useState("");
-  const [globalSearchTerm, setGlobalSearchTerm] = useState("");
-  const { user } = useUser();
-
-  const filterTimes = useMemo(() => {
-    if (!times || !Array.isArray(times)) return [];
-    
-    let filteredTimes = times;
-    
-    // Apply username filter
-    if (username) {
-      filteredTimes = filteredTimes.map(project => ({
-        ...project,
-        Time: project.Time ? project.Time.filter(time => time.user?.name.toLowerCase().includes(username.toLowerCase())) : []
-      })).filter(project => project.Time && project.Time.length > 0);
-    }
-    
-    // Apply global search filter
-    if (globalSearchTerm) {
-      filteredTimes = filteredTimes.map(project => ({
-        ...project,
-        Time: project.Time ? project.Time.filter(time => 
-          time.user?.name.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-          time.task?.name.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-          time.work_description?.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-          project.name.toLowerCase().includes(globalSearchTerm.toLowerCase())
-        ) : []
-      })).filter(project => project.Time && project.Time.length > 0);
-    }
-    
-    return filteredTimes;
-  },[times, username, globalSearchTerm]);
-
-  const filterProgress = useMemo(() => {
-    if (!progress || !Array.isArray(progress)) return [];
-    
-    let filteredProgress = progress;
-    
-    // Apply progressUsername filter
-    if (progressUsername) {
-      filteredProgress = filteredProgress.map(project => ({
-        ...project,
-        Tasks: project.Tasks ? project.Tasks.map(task => ({
-          ...task,
-          Progress: task.Progress ? task.Progress.filter(progress => progress.user?.name.toLowerCase().includes(progressUsername.toLowerCase())) : []
-        })).filter(task => task.Progress && task.Progress.length > 0) : []
-      })).filter(project => project.Tasks && project.Tasks.some(task => task.Progress && task.Progress.length > 0));
-    }
-    
-    // Apply global search filter
-    if (globalSearchTerm) {
-      filteredProgress = filteredProgress.map(project => ({
-        ...project,
-        Tasks: project.Tasks ? project.Tasks.map(task => ({
-          ...task,
-          Progress: task.Progress ? task.Progress.filter(progress => 
-            progress.user?.name.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-            progress.message?.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-            progress.type?.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-            task.name?.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-            project.name.toLowerCase().includes(globalSearchTerm.toLowerCase())
-          ) : []
-        })).filter(task => task.Progress && task.Progress.length > 0) : []
-      })).filter(project => project.Tasks && project.Tasks.some(task => task.Progress && task.Progress.length > 0));
-    }
-    
-    return filteredProgress;
-  }, [progress, progressUsername, globalSearchTerm]);
-
-  const filterDocuments = useMemo(() => {
-    if (!documents || !Array.isArray(documents)) return [];
-    
-    let filteredDocuments = documents;
-    
-    // Apply global search filter
-    if (globalSearchTerm) {
-      filteredDocuments = filteredDocuments.map(project => ({
-        ...project,
-        Clients: project.Clients ? project.Clients.map(client => ({
-          ...client,
-          Documents: client.Documents ? client.Documents.filter(document => 
-            document.name?.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-            document.description?.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-            document.status?.toLowerCase().includes(globalSearchTerm.toLowerCase()) ||
-            project.name.toLowerCase().includes(globalSearchTerm.toLowerCase())
-          ) : []
-        })).filter(client => client.Documents && client.Documents.length > 0) : []
-      })).filter(project => project.Clients && project.Clients.some(client => client.Documents && client.Documents.length > 0));
-    }
-    
-    return filteredDocuments;
-  }, [documents, globalSearchTerm]);
-
-  const getProgress = React.useCallback(async () => {
-    try {
-      setLoading(true)
-      const res = await getAllTaskProgressRequest(selectedDate?.date, selectedEndDate.date, selectedType, selectedProject);
-      
-      // Add safety checks for the response data
-      setProgress(res.data?.progress || [])
-      setTimes(res.data?.times || []);
-      setDocuments(res.data?.documents || [])
+      const allProjects = Array.from(projectMap.values());
+      setProjects(allProjects);
     } catch (error) {
-      // Set empty arrays on error to prevent undefined errors
-      setProgress([])
-      setTimes([]);
-      setDocuments([])
+      console.error('Error fetching projects:', error);
+      setProjects([]);
     } finally {
-      setLoading(false)
+      setProjectsLoading(false);
     }
-  }, [selectedDate?.date, selectedType, selectedProject, selectedEndDate?.date]);
+  };
 
-  React.useEffect(() => {
-    getProgress();
-  }, [selectedDate?.date, selectedType, selectedProject, selectedEndDate?.date]);
+  // Filter projects based on search term
+  const filteredProjects = useMemo(() => {
+    if (!projects || !searchTerm) return projects;
+    return projects.filter(
+      (project) =>
+        project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [projects, searchTerm]);
 
-  if (loading) {
-    return <>
-      <div className="h-screen bg-secondary m-2 rounded-md flex items-center justify-center">
-        <Loader />
-      </div>
-    </>
-  }
+  // Handle project selection
+  const handleProjectSelect = async (project) => {
+    setSelectedProject(project);
+    setSelectedProjectForTimeline(project);
+
+    // Fetch timeline data for this project
+    try {
+      await fetchTimelineData(project.project_id);
+      console.log('✅ Timeline data fetched for project:', project.name);
+    } catch (error) {
+      console.error('❌ Error fetching timeline data:', error);
+    }
+  };
+
+  // Handle back button
+  const handleBack = () => {
+    if (selectedProject) {
+      setSelectedProject(null);
+      setSelectedProjectForTimeline(null);
+    }
+  };
 
   return (
-    <div className="h-screen bg-secondary m-2 rounded-md overflow-y-auto p-8">
-      <div className="flex justify-between flex-1 mt-5">
-        <h1 className="text-4xl text-foreground-primary uppercase font-bold">Timeline</h1>
-        <div className="flex gap-2 justify-end">
-          <Input
-            type="text"
-            placeholder="Search everything..."
-            className="bg-white border-primary text-black w-[250px]"
-            value={globalSearchTerm}
-            onChange={(e) => setGlobalSearchTerm(e.target.value)}
-          />
-          <Select onValueChange={(value) => setSelectedDate(value)}>
-            <SelectTrigger className="w-[180px] bg-white border-primary text-black">
-              <SelectValue placeholder={"Start Date"} />
-            </SelectTrigger>
-            <SelectContent className="bg-white border-primary">
-              <SelectGroup>
-                <SelectLabel className="text-gray-400">Dates</SelectLabel>
-                {
-                  dates.map(date => (
-                    <SelectItem 
-                      value={date} 
-                      key={date.date}
-                      className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text"
-                    >
-                      {date.label}
-                    </SelectItem>
-                  ))
-                }
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-
-          <Select onValueChange={(value) => setSelectedEndDate(value)}>
-            <SelectTrigger className="w-[180px] bg-white border-primary text-black">
-              <SelectValue placeholder={"End Date"} />
-            </SelectTrigger>
-            <SelectContent className="bg-white border-primary">
-              <SelectGroup>
-                <SelectLabel className="text-gray-400">Dates</SelectLabel>
-                {
-                  dates.map(date => (
-                    <SelectItem 
-                      value={date} 
-                      key={date.date}
-                      className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text"
-                    >
-                      {date.label}
-                    </SelectItem>
-                  ))
-                }
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-
-          <Select onValueChange={(value) => setSelectedProject(value)} value={selectedProject}>
-            <SelectTrigger className="w-[180px] bg-white border-primary text-black">
-              <SelectValue placeholder={"Select Project"} />
-            </SelectTrigger>
-            <SelectContent className="bg-white border-primary">
-              <SelectGroup>
-                <SelectLabel className="text-gray-400">Select Project</SelectLabel>
-                <SelectItem 
-                  value={null}
-                  className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text"
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Clock className="w-6 h-6 text-gray-600" />
+            <h1 className="text-2xl font-semibold text-gray-800">
+              {selectedProject ? `Timeline: ${selectedProject.name}` : 'Select Case for Timeline'}
+            </h1>
+          </div>
+          {selectedProject && (
+            <Button
+              onClick={() => fetchTimelineData(selectedProject.project_id)}
+              disabled={timelineLoading}
+              variant="outline"
+              size="sm"
+              className="border-gray-300 hover:bg-gray-50"
+            >
+              {timelineLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              ) : (
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  All
-                </SelectItem>
-                {
-                  user?.Projects.map(project => (
-                    <SelectItem 
-                      value={project.project_id} 
-                      key={project.project_id}
-                      className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text"
-                    >
-                      {project.name}
-                    </SelectItem>
-                  ))
-                }
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              )}
+              Refresh
+            </Button>
+          )}
         </div>
       </div>
-      <div className="flex justify-between flex-1 mt-10">
-        <h1 className="text-3xl text-foreground-primary uppercase">{selectedDate?.label} Working Hour</h1>
-        <div className="flex gap-2 justify-end">
-          <Input
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto p-6">
+        {!selectedProject ? (
+          /* Case Selection View */
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            {/* Search Bar */}
+            <div className="mb-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
             type="text"
-            placeholder="Search User by Name"
-            className="bg-white border-primary text-black w-[180px]"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Search cases..."
+                  className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
 
-      {
-        filterTimes.map(project => (
-          <div className='mt-5'>
-            <h1 className='text-2xl text-foreground-primary'>{project.name}</h1>
+            {/* Projects List */}
+            {projectsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredProjects?.map((project, index) => (
+                  <button
+                    key={`${project.project_id}-${index}`}
+                    onClick={() => handleProjectSelect(project)}
+                    className="text-left p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all duration-200 group"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors truncate">
+                        {project.name}
+                      </h3>
+                      <span
+                        className={`ml-2 text-xs px-2 py-1 rounded-full ${
+                          project.status === 'Active'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {project.status || 'Unknown'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      Client: {project.client_name || 'N/A'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {project.description
+                        ? project.description.length > 100
+                          ? `${project.description.substring(0, 100)}...`
+                          : project.description
+                        : 'No description available'}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <div className="flex-1 overflow-auto mt-2">
-              <Table className="border-collapse border border-primary rounded-md">
-                <TableHeader className="border-b border-primary bg-primary/10">
-                  <TableRow>
-                    <TableHead className="!w-[80px] border-r border-primary last:border-r-0 text-foreground-primary font-semibold">#</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Task</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">User</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">START</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">DESCRIPTION</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Date</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">TOTAL</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {
-                    project.Time.map((time, index) => (
-                      <TableRow key={index}>
-                        <TableCell className='border-r border-primary last:border-r-0 text-foreground-secondary'>
-                          {index + 1}
-                        </TableCell>
-                        <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                          {time.task?.name}
-                        </TableCell>
-                        <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                          {time.user?.name}
-                        </TableCell>
-                        <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                          {
-                            time.status != "PROCESSING" &&
-                            <>{moment(time.start).format("h:mm A")} - {moment(time?.end).format("h:mm A")}</>
-                          }
-                          {
-                            time.status == "PROCESSING" &&
-                            <>{moment(time.start).format("h:mm A")} - Working...</>
-                          }
-                        </TableCell>
-                        <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                          {time.work_description || "NA"}
-                        </TableCell>
-                        <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                          {moment(time.created_at).format("DD MMM YYYY")}
-                        </TableCell>
-                        <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                          {
-                            time.status != "PROCESSING" &&
-                            <>{getHourMinDiff(time.start, time.end)}</>
-                          }
-                          {
-                            time.status == "PROCESSING" &&
-                            <span className='text-green-500'><Timer startTime={time.start} /></span>
-                          }
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  }
-                </TableBody>
-              </Table>
+            {!projectsLoading && filteredProjects?.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500">No cases found.</p>
             </div>
+            )}
           </div>
-        ))
-      }
-
-      <div className="flex justify-between flex-1 mt-16">
-        <h1 className="text-3xl text-foreground-primary uppercase">{selectedDate?.label} Progress</h1>
-        <div className="flex gap-2 justify-end">
-          <Input
-            type="text"
-            placeholder="Search User by Name"
-            className="bg-white border-primary text-black w-[180px]"
-            value={progressUsername}
-            onChange={(e) => setProgressUsername(e.target.value)}
-          />
-
-          <Select onValueChange={(value) => setSelectedType(value)}>
-            <SelectTrigger className="w-[180px] bg-white border-primary text-black">
-              <SelectValue placeholder="Select a Type" />
-            </SelectTrigger>
-            <SelectContent className="bg-white border-primary">
-              <SelectGroup>
-                <SelectLabel className="text-gray-400">Type</SelectLabel>
-                <SelectItem value={null} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">ALL</SelectItem>
-                <SelectItem value={"MAIL"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">MAIL</SelectItem>
-                <SelectItem value={"MEETING"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">MEETING</SelectItem>
-                <SelectItem value={"CHAT"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">CHAT</SelectItem>
-                <SelectItem value={"CALL"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">CALL</SelectItem>
-                <SelectItem value={"COMMENT"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">COMMENT</SelectItem>
-                <SelectItem value={"TRANSCRIBTION"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">TRANSCRIBTION</SelectItem>
-                <SelectItem value={"STATUS_CHANGED"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">STATUS_CHANGED</SelectItem>
-                <SelectItem value={"MEDIA"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">MEDIA</SelectItem>
-                <SelectItem value={"OTHER"} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">OTHER</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+        ) : (
+          /* Timeline View */
+          <div className="space-y-6">
+            {/* Case Overview */}
+            <div className="bg-gray-50 rounded-lg p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold text-gray-800 mb-2">Case Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      <span className="font-medium">Name:</span> {selectedProject?.name}
+                    </p>
+                    <p>
+                      <span className="font-medium">Status:</span>
+                      <span
+                        className={`ml-2 px-2 py-1 rounded-full text-xs ${
+                          selectedProject?.status === 'Active'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}
+                      >
+                        {selectedProject?.status || 'Unknown'}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="font-medium">Client:</span>{' '}
+                      {selectedProject?.client_name || 'N/A'}
+                    </p>
+                    <p>
+                      <span className="font-medium">Description:</span>{' '}
+                      {selectedProject?.description || 'No description available'}
+                    </p>
         </div>
       </div>
 
-      {(!filterProgress || filterProgress.length === 0) && (
-        <div className="flex items-center justify-center mt-10">
-          <h2 className="text-gray-600 text-lg">No progress found for the selected date range</h2>
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold text-gray-800 mb-2">Team Members</h3>
+                  <div className="space-y-2">
+                    {selectedProject?.Members && selectedProject.Members.length > 0 ? (
+                      selectedProject.Members.map((member, index) => (
+                        <div key={index} className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span>{member.user?.name || 'Unknown'}</span>
+                          <span className="text-gray-500">({member.role})</span>
         </div>
-      )}
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-sm">No team members assigned</p>
+                    )}
+                  </div>
+                </div>
 
-      {
-        filterProgress && filterProgress.length > 0 && filterProgress.map(project => (
-          <div className='mt-5' key={project.project_id}>
-            <h1 className='text-2xl text-foreground-primary'>{project.name}</h1>
-
-            <div className="flex-1 overflow-auto mt-2">
-              <Table className="border-collapse border border-primary rounded-md">
-                <TableHeader className="border-b border-primary bg-primary/10">
-                  <TableRow>
-                    <TableHead className="!w-[80px] border-r border-primary last:border-r-0 text-foreground-primary font-semibold">#</TableHead>
-                    <TableHead className="w-[300px] border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Task Name</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">User Name</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Message</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Type</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {
-                    project.Tasks && project.Tasks.map(task => (
-                      <React.Fragment key={task.task_id}>
-                        {
-                          task.Progress && task.Progress.map((progress, index) => (
-                            <TableRow key={`${task.task_id}-${progress.progress_id}-${index}`}>
-                              <TableCell className='border-r border-primary last:border-r-0 text-foreground-secondary'>
-                                {index + 1}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {progress.task?.name}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {progress.user?.name}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {progress?.message}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {progress?.type}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {moment(progress.created_at).format("DD MMM YYYY")}
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        }
-                      </React.Fragment>
-                    ))
-                  }
-                </TableBody>
-              </Table>
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold text-gray-800 mb-2">Quick Stats</h3>
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      <span className="font-medium">Tasks:</span>{' '}
+                      {selectedProject?.Tasks?.length || 0}
+                    </p>
+                    <p>
+                      <span className="font-medium">Documents:</span>{' '}
+                      {selectedProject?.Media?.length || 0}
+                    </p>
+                    <p>
+                      <span className="font-medium">Time Entries:</span>{' '}
+                      {selectedProject?.Time?.length || 0}
+                    </p>
+                    <p>
+                      <span className="font-medium">Comments:</span>{' '}
+                      {selectedProject?.Comments?.length || 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* Tabs for different sections */}
+            <Tabs defaultValue="timeline" className="w-full">
+              <TabsList className="grid w-full grid-cols-5">
+                <TabsTrigger value="timeline" className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Timeline
+                </TabsTrigger>
+                <TabsTrigger value="tasks" className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  Tasks
+                </TabsTrigger>
+                <TabsTrigger value="documents" className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Documents
+                </TabsTrigger>
+                <TabsTrigger value="meetings" className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Time Entries
+                </TabsTrigger>
+                <TabsTrigger value="reviews" className="flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4" />
+                  Comments
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="timeline" className="mt-6">
+                {timelineLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                      <p className="text-gray-500">Loading timeline data...</p>
+                    </div>
+                  </div>
+                ) : timelineData ? (
+                  <LawFirmTimeline
+                    selectedProjectForTimeline={selectedProject}
+                    timelineData={timelineData}
+                    timelineLoading={timelineLoading}
+                  />
+                ) : (
+                  <div className="text-center py-12">
+                    <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-600 mb-2">
+                      No Timeline Data Available
+                    </h3>
+                    <p className="text-gray-500">
+                      No timeline data found for this project in the selected date range.
+                    </p>
+                    {timelineData && (
+                      <div className="mt-4 text-sm text-gray-400">
+                        <p>Progress: {timelineData.progress?.length || 0} items</p>
+                        <p>Time entries: {timelineData.times?.length || 0} items</p>
+                        <p>Documents: {timelineData.documents?.length || 0} items</p>
           </div>
-        ))
-      }
-
-      <div className="flex justify-between flex-1 mt-16">
-        <h1 className="text-3xl text-foreground-primary uppercase">{selectedDate?.label} Documents</h1>
+                    )}
       </div>
+                )}
+              </TabsContent>
 
-      {
-        filterDocuments && filterDocuments.length > 0 && filterDocuments.map(project => (
-          <div className='mt-5' key={project.project_id}>
-            <h1 className='text-2xl text-foreground-primary'>{project.name}</h1>
+              <TabsContent value="tasks" className="mt-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Project Tasks</h3>
+                  {selectedProject?.Tasks && selectedProject.Tasks.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedProject.Tasks.map((task, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-800">{task.name}</h4>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs ${
+                                task.status === 'completed'
+                                  ? 'bg-green-100 text-green-800'
+                                  : task.status === 'in_progress'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {task.status || 'pending'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">
+                            {task.description || 'No description'}
+                          </p>
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <span>
+                              Due:{' '}
+                              {task.due_date
+                                ? new Date(task.due_date).toLocaleDateString()
+                                : 'No due date'}
+                            </span>
+                            <span>Priority: {task.priority || 'Medium'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500">No tasks found for this project</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
 
-            <div className="flex-1 overflow-auto mt-2">
-              <Table className="border-collapse border border-primary rounded-md">
-                <TableHeader className="border-b border-primary bg-primary/10">
-                  <TableRow>
-                    <TableHead className="!w-[80px] border-r border-primary last:border-r-0 text-foreground-primary font-semibold">#</TableHead>
-                    <TableHead className="w-[300px] border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Name</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Description</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Date</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Status</TableHead>
-                    <TableHead className="border-r border-primary last:border-r-0 text-foreground-primary font-semibold">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {
-                    project.Clients.map(client => (
-                      <>
-                        {
-                          client.Documents.map((document, index) => {
-                            // Debug: Log the document data to see available fields
-                            
-                            return (
-                            <TableRow key={index}>
-                              <TableCell className='border-r border-primary last:border-r-0 text-foreground-secondary'>
-                                {index + 1}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {document.name}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {document.description}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {moment(document.created_at).format("DD MMM YYYY")}
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {
-                                  user?.Role == "PROVIDER" &&
-                                  (
-                                    <Select 
-                                      onValueChange={(status) => handleUpdateStatus(status, document.document_id)} 
-                                      value={document.status} 
-                                      className='w-full'
-                                    >
-                                      <SelectTrigger className="w-full bg-white border-primary text-black">
-                                        <SelectValue placeholder="Select a status" />
-                                      </SelectTrigger>
-                                      <SelectContent className="bg-white border-primary">
-                                        <SelectGroup>
-                                          <SelectLabel className="text-gray-400">Status</SelectLabel>
-                                          <SelectItem value="PENDING" className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">PENDING</SelectItem>
-                                          <SelectItem value="REJECTED" className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">REJECTED</SelectItem>
-                                          <SelectItem value="APPROVED" className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">APPROVED</SelectItem>
-                                        </SelectGroup>
-                                      </SelectContent>
-                                    </Select>
-                                  )
-                                }
-                                {
-                                  user?.Role == "CLIENT" &&
-                                  (
-                                    <span>{document.status}</span>
-                                  )
-                                }
-                              </TableCell>
-                              <TableCell className="border-r border-primary last:border-r-0 text-foreground-secondary">
-                                {
-                                  user?.Role == "PROVIDER" &&
-                                  (
-                                    <>
-                                      {
-                                        document.filename && document.file_url &&
-                                        <div className="flex items-center gap-2">
-                                          <a target='__black' href={document.file_url} className='text-primary hover:text-primary/80 underline'>{document.filename}</a>
-                                          <button
-                                            onClick={() => downloadFile(document.file_url, document.filename)}
-                                            className="text-green-600 hover:text-green-800 text-xs px-2 py-1 border border-green-300 rounded"
-                                          >
-                                            Download
-                                          </button>
+              <TabsContent value="documents" className="mt-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    Project Documents
+                  </h3>
+                  {selectedProject?.Media && selectedProject.Media.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedProject.Media.map((doc, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-800">
+                              {doc.filename || 'Unnamed Document'}
+                            </h4>
+                            <span className="text-xs text-gray-500">
+                              {doc.created_at
+                                ? new Date(doc.created_at).toLocaleDateString()
+                                : 'Unknown date'}
+                            </span>
                                         </div>
-                                      }
-                                      {
-                                        !document.filename &&
-                                        <span>No Document Uploaded</span>
-                                      }
-                                    </>
-                                  )
-                                }
-                                {
-                                  user?.Role == "CLIENT" &&
-                                  (
-                                    <div className='flex items-center gap-3'>
-                                      {
-                                        document.filename && document.file_url &&
                                         <div className="flex items-center gap-2">
-                                          <button
-                                            onClick={() => viewFile(document.file_url, document.filename)}
-                                            className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 border border-blue-300 rounded"
+                            <FileText className="w-4 h-4 text-gray-400" />
+                            <span className="text-xs text-gray-500">
+                              {doc.mimeType || 'Unknown type'}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {doc.size
+                                ? `${(doc.size / 1024 / 1024).toFixed(2)} MB`
+                                : 'Unknown size'}
+                            </span>
+                            {doc.file_url && (
+                              <div className="flex gap-2 ml-auto">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => viewFileUtil(doc.file_url)}
+                                  className="h-6 px-2 text-xs"
                                           >
                                             View
-                                          </button>
-                                          <button
-                                            onClick={() => downloadFile(document.file_url, document.filename)}
-                                            className="text-green-600 hover:text-green-800 text-xs px-2 py-1 border border-green-300 rounded"
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => downloadFile(doc.file_url, doc.filename)}
+                                  className="h-6 px-2 text-xs"
                                           >
                                             Download
-                                          </button>
-                                        </div>
-                                      }
-                                      <Input
-                                        type="file"
-                                        onChange={(e) => hadleUpload(e, document.document_id)}
-                                        className="bg-white border-primary text-black"
-                                      />
-                                    </div>
-                                  )
-                                }
-                              </TableCell>
-                            </TableRow>
-                            );
-                          })
-                        }
-                      </>
-                    ))
-                  }
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        ))
-      }
-    </div>
-  )
-}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500">No documents found for this project</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
 
-export default page
+              <TabsContent value="meetings" className="mt-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    Project Time Entries
+                  </h3>
+                  {selectedProject?.Time && selectedProject.Time.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedProject.Time.map((timeEntry, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-800">
+                              {timeEntry.task?.name || 'General Time Entry'}
+                            </h4>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs ${
+                                timeEntry.status === 'PROCESSING'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : timeEntry.status === 'COMPLETED'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {timeEntry.status || 'unknown'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">
+                            Time entry by {timeEntry.user?.name || 'Unknown user'}
+                          </p>
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <span>
+                              Start:{' '}
+                              {timeEntry.start
+                                ? new Date(timeEntry.start).toLocaleString()
+                                : 'No start time'}
+                            </span>
+                            <span>
+                              End:{' '}
+                              {timeEntry.end ? new Date(timeEntry.end).toLocaleString() : 'Ongoing'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500">No time entries found for this project</p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="reviews" className="mt-6">
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Project Comments</h3>
+                  {selectedProject?.Comments && selectedProject.Comments.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedProject.Comments.map((comment, index) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-800">
+                              Comment by {comment.user?.name || 'Unknown user'}
+                            </h4>
+                            <span className="text-xs text-gray-500">
+                              {comment.created_at
+                                ? new Date(comment.created_at).toLocaleDateString()
+                                : 'Unknown date'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">
+                            {comment.content || 'No content'}
+                          </p>
+                        </div>
+                      ))}
+                                        </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500">No comments found for this project</p>
+                                    </div>
+                  )}
+            </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

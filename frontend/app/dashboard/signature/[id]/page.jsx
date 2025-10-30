@@ -83,9 +83,9 @@ const page = ({ params, searchParams }) => {
           const res = await uploadSignRequest(formData);
           toast.success(res.data.message);
           
-          // Navigate back to the signature list page after successful upload
+          // Navigate to the signature list page after successful upload
           setTimeout(() => {
-            router.back();
+            router.push('/dashboard');
           }, 1500); // Small delay to show success message
           
         } catch (error) {

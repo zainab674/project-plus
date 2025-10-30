@@ -11,7 +11,7 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar'
+import { Avatar, AvatarFallback } from '../ui/avatar'
 import { getNameAvatar } from '@/utils/getNameAvatar'
 import MultiSelect from "@/components/ui/multi-select";
 import AvatarCompoment from '../AvatarCompoment'
@@ -312,7 +312,6 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
                                     <SelectItem value={member?.user?.user_id} key={member?.user?.user_id}>
                                         <div className='flex items-center gap-3'>
                                             <Avatar className="w-[2rem] h-[2rem]">
-                                                <AvatarImage src="/placeholder.svg?height=32&width=32" alt="User" />
                                                 <AvatarFallback className="bg-primary/10 text-black">{getNameAvatar(member?.user?.name)}</AvatarFallback>
                                             </Avatar>
                                             <span className='text-black'>{member?.user?.name}</span>

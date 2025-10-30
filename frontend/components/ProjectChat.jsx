@@ -325,8 +325,16 @@ export default function ProjectChat({ project }) {
     );
   }
 
+  // Debug: Log project tasks
+  useEffect(() => {
+    if (project) {
+      console.log('ProjectChat - Project:', project.name);
+      console.log('ProjectChat - Tasks:', project.Tasks?.length || 0, project.Tasks);
+    }
+  }, [project]);
+
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-md relative border border-gray-200">
+    <div className="flex flex-col h-full bg-white rounded-md relative border border-gray-200">
       {/* Header */}
       <div className="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center space-x-3">
@@ -345,16 +353,24 @@ export default function ProjectChat({ project }) {
             <div className="flex items-center space-x-2">
               <ListTodo className="w-4 h-4 text-gray-500" />
               <Select value={selectedTask?.task_id?.toString() || "0"} onValueChange={handleTaskChange}>
-                <SelectTrigger className="w-48 h-8 text-sm">
-                  <SelectValue placeholder="Select task" />
+                <SelectTrigger className="w-48 h-8 text-sm border-gray-300">
+                  <SelectValue placeholder="Select task">
+                    {selectedTask?.name || "Project Chat"}
+                  </SelectValue>
                 </SelectTrigger>
-                <SelectContent className="z-[80]">
+                <SelectContent className="z-[80] max-h-[300px] overflow-y-auto">
                   <SelectItem value="0">Project Chat</SelectItem>
-                  {projectTasks.map((task) => (
-                    <SelectItem key={task.task_id} value={task.task_id.toString()}>
-                      {task.name}
+                  {projectTasks && projectTasks.length > 0 ? (
+                    projectTasks.map((task) => (
+                      <SelectItem key={task.task_id} value={task.task_id.toString()}>
+                        {task.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-tasks" disabled className="text-gray-400">
+                      No tasks available
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>

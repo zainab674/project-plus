@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ChevronDown, HelpCircle, Info, LayoutGrid, MessageCircle, Rocket, Star, Users, X } from 'lucide-react'
@@ -116,7 +116,6 @@ export default function Page() {
                 <CardContent className="p-4">
                   <div className="flex items-start gap-4">
                     <Avatar>
-                      <AvatarImage src="/placeholder.svg?height=40&width=40" />
                       <AvatarFallback>RM</AvatarFallback>
                     </Avatar>
                     <div className="flex-1">

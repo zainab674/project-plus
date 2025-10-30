@@ -23,16 +23,35 @@ export const useTimelineState = () => {
 
       // Fetch timeline data using the task progress API
       const res = await getAllTaskProgressRequest(startDate, endDate, null, projectId);
+      
+      console.log('📊 Timeline API response:', res);
 
-      if (res.data && res.data.success) {
-        const timelineData = {
-          progress: res.data.progress || [],
-          times: res.data.times || [],
-          documents: res.data.documents || []
-        };
-        setTimelineData(timelineData);
+      if (res.data) {
+        // The API returns data with progress, times, and documents arrays
+        // Check if success flag exists, if not, assume success
+        const hasSuccess = res.data.success !== false;
+        
+        if (hasSuccess) {
+          const timelineData = {
+            progress: Array.isArray(res.data.progress) ? res.data.progress : [],
+            times: Array.isArray(res.data.times) ? res.data.times : [],
+            documents: Array.isArray(res.data.documents) ? res.data.documents : []
+          };
+          console.log('✅ Setting timeline data:', timelineData);
+          console.log('Progress items:', timelineData.progress.length);
+          console.log('Time entries:', timelineData.times.length);
+          console.log('Documents:', timelineData.documents.length);
+          setTimelineData(timelineData);
+        } else {
+          console.warn('⚠️ Timeline API returned error');
+          setTimelineData({
+            progress: [],
+            times: [],
+            documents: []
+          });
+        }
       } else {
-        console.warn('⚠️ Timeline API returned no data or error');
+        console.warn('⚠️ No data in API response');
         setTimelineData({
           progress: [],
           times: [],

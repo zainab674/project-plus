@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'react-toastify';
 import { useUser } from '@/providers/UserProvider';
@@ -245,7 +245,6 @@ const CaseAssignmentModal = ({ isOpen, onClose }) => {
                                                         >
                                                             <div className="flex items-center gap-3">
                                                                 <Avatar className="w-8 h-8">
-                                                                    <AvatarImage src="/placeholder.svg" />
                                                                     <AvatarFallback className="bg-green-100 text-green-600">
                                                                         {member.user?.name?.charAt(0) || 'B'}
                                                                     </AvatarFallback>
@@ -332,7 +331,6 @@ const CaseAssignmentModal = ({ isOpen, onClose }) => {
                                                                     <div className="flex items-center gap-2 text-sm text-gray-600">
                                                                         <span>Assigned to:</span>
                                                                         <Avatar className="w-6 h-6">
-                                                                            <AvatarImage src="/placeholder.svg" />
                                                                             <AvatarFallback className="bg-green-100 text-green-600 text-xs">
                                                                                 {assignedBiller.user?.name?.charAt(0) || 'B'}
                                                                             </AvatarFallback>
@@ -415,7 +413,6 @@ const CaseAssignmentModal = ({ isOpen, onClose }) => {
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-sm text-gray-600">Assigned to:</span>
                                                                     <Avatar className="w-8 h-8">
-                                                                        <AvatarImage src="/placeholder.svg" />
                                                                         <AvatarFallback className="bg-green-100 text-green-600">
                                                                             {biller?.user?.name?.charAt(0) || 'B'}
                                                                         </AvatarFallback>

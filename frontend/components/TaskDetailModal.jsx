@@ -27,7 +27,8 @@ import {
     Eye,
     Paperclip,
     Download,
-    FileIcon
+    FileIcon,
+    Folder
 } from 'lucide-react'
 import { useUser } from '@/providers/UserProvider'
 import { useTimer } from '@/providers/TimerProvider'
@@ -903,6 +904,15 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                                         </span>
                                         <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </button>
+
+                                    {(project?.name || task.project?.name) && (
+                                        <div className="flex items-center gap-1">
+                                            <Folder className="w-3 h-3" />
+                                            <span className="text-gray-700 font-medium">
+                                                {project?.name || task.project?.name}
+                                            </span>
+                                        </div>
+                                    )}
 
                                     <div className="flex items-center gap-1">
                                         <Calendar className="w-3 h-3" />

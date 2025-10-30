@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   MessageCircle, 
   StickyNote, 
@@ -57,6 +58,7 @@ const UniversalChatWidget = () => {
     return { x: 'calc(100% - 200px)', y: '16px' };
   });
   
+  const router = useRouter();
   const fileInputRef = useRef(null);
   const widgetRef = useRef(null);
   const dragRef = useRef(null);
@@ -504,7 +506,11 @@ const UniversalChatWidget = () => {
                   {/* View Chat Button */}
                   {projectForChat && (
                     <Button
-                      onClick={() => setIsChatModalOpen(true)}
+                      onClick={() => {
+                        if (projectForChat?.project_id) {
+                          router.push(`/dashboard/project/${projectForChat.project_id}/chat`);
+                        }
+                      }}
                       variant="outline"
                       className="w-full flex items-center gap-2 h-8 text-xs"
                     >

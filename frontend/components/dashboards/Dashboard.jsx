@@ -24,7 +24,6 @@ import RecentCases from './recentCases';
 import TopNavigation from '../TopNavigation';
 import { QuickActions } from '../quickActions';
 import { useUser } from "@/providers/UserProvider"
-import AILawyerAssistant from '../AILawyerAssistant';
 import { DashboardFilterProvider, useDashboardFilter } from '@/providers/DashboardFilterProvider';
 
 
@@ -141,11 +140,6 @@ const DashboardContent = () => {
             </div>
           </div>
         </div>
-      )}
-      
-      {/* AI Legal Assistant - Floating component for case creation - Only for Provider, Team and Admin */}
-      {(user?.Role === 'PROVIDER' || user?.Role === 'TEAM' || user?.Role === 'ADMIN') && (
-        <AILawyerAssistant />
       )}
     </>
   );

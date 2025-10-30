@@ -12,17 +12,38 @@ import RenderScheduleMeeting from "@/components/RenderScheduleMeeting";
 import CreateMeeting from "@/components/CreateMeeting";
 import CreateMeetingClient from "@/components/CreateMeetingClient";
 import { getsMeetingRequest } from "@/lib/http/meeting";
+import { getAllProjectRequest } from "@/lib/http/project";
 import { useUser } from "@/providers/UserProvider";
+import { useRouter } from "next/navigation";
 
-const MeetingModal = ({ isOpen, onClose }) => {
+const MeetingModal = ({ isOpen, onClose, selectedProject: initialSelectedProject }) => {
     const [activeTab, setActiveTab] = useState('meetings');
     const [createMeeting, setCreateMeeting] = useState(false);
     const [createMeetingClient, setCreateMeetingClient] = useState(false);
-    const [createScheduledMeeting, setCreateScheduledMeeting] = useState(false);
-    const [createScheduledMeetingClient, setCreateScheduledMeetingClient] = useState(false);
     const [meetings, setMeetings] = useState([]);
     const [scheduledMeetings, setScheduledMeetings] = useState([]);
+    const [selectedProject, setSelectedProject] = useState(initialSelectedProject);
+    const [projects, setProjects] = useState([]);
     const { user } = useUser();
+    const router = useRouter();
+    
+    // Update selected project when prop changes
+    useEffect(() => {
+        if (initialSelectedProject !== selectedProject) {
+            setSelectedProject(initialSelectedProject);
+        }
+    }, [initialSelectedProject]);
+    
+    // Fetch projects when modal opens
+    const fetchProjects = useCallback(async () => {
+        try {
+            const res = await getAllProjectRequest();
+            const { projects, collaboratedProjects } = res.data;
+            setProjects([...projects, ...collaboratedProjects]);
+        } catch (error) {
+            console.error('Error fetching projects:', error);
+        }
+    }, []);
 
     const getMeetings = useCallback(async () => {
         try {
@@ -53,8 +74,20 @@ const MeetingModal = ({ isOpen, onClose }) => {
         if (isOpen) {
             getMeetings();
             getScheduledMeetings();
+            if (!initialSelectedProject) {
+                fetchProjects();
+            }
         }
-    }, [isOpen, getMeetings, getScheduledMeetings]);
+    }, [isOpen, getMeetings, getScheduledMeetings, fetchProjects, initialSelectedProject]);
+    
+    // Filter meetings by selected project
+    const filteredMeetings = selectedProject 
+        ? meetings.filter(m => m.project_id === selectedProject.project_id)
+        : meetings;
+    
+    const filteredScheduledMeetings = selectedProject
+        ? scheduledMeetings.filter(m => m.project_id === selectedProject.project_id)
+        : scheduledMeetings;
 
     return (
         <>
@@ -87,7 +120,34 @@ const MeetingModal = ({ isOpen, onClose }) => {
                         >
                             <Dialog.Panel className="w-full max-w-6xl transform overflow-hidden rounded-2xl bg-white shadow-xl transition-all flex flex-col max-h-[90vh]">
                                 <div className="flex-shrink-0 flex justify-between items-center p-6 border-b border-gray-200">
+                                    <div className="flex items-center gap-4">
                                         <h2 className="text-xl font-semibold text-gray-900">Meetings</h2>
+                                        {!initialSelectedProject && (
+                                            <Select value={selectedProject?.project_id || 'all'} onValueChange={(value) => {
+                                                if (value === 'all') {
+                                                    setSelectedProject(null);
+                                                } else {
+                                                    const project = projects.find(p => p.project_id === parseInt(value));
+                                                    setSelectedProject(project);
+                                                }
+                                            }}>
+                                                <SelectTrigger className="w-[250px]">
+                                                    <SelectValue placeholder="Select a project" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All Projects</SelectItem>
+                                                    {projects.map(project => (
+                                                        <SelectItem key={project.project_id} value={project.project_id.toString()}>
+                                                            {project.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                        {selectedProject && (
+                                            <span className="text-sm text-gray-600">({selectedProject.name})</span>
+                                        )}
+                                    </div>
                                     <button
                                         onClick={onClose}
                                         className="text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300 rounded"
@@ -136,8 +196,8 @@ const MeetingModal = ({ isOpen, onClose }) => {
                                                     </div>
 
                                                     {/* Meetings Content */}
-                                                    {meetings.length > 0 ? (
-                                                        <RenderMeeting meetings={meetings} onMeetingDeleted={handleMeetingDeleted} />
+                                                    {filteredMeetings.length > 0 ? (
+                                                        <RenderMeeting meetings={filteredMeetings} onMeetingDeleted={handleMeetingDeleted} />
                                                     ) : (
                                                         <div className="flex flex-col h-[400px] items-center justify-center text-black gap-4">
                                                             <p>No meetings</p>
@@ -168,13 +228,21 @@ const MeetingModal = ({ isOpen, onClose }) => {
                                                                 <>
                                                                     <Button
                                                                         className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
-                                                                        onClick={() => setCreateScheduledMeeting(true)}
+                                                                        onClick={() => {
+                                                                            onClose();
+                                                                            const projectParam = selectedProject ? `&project=${selectedProject.project_id}` : '';
+                                                                            router.push(`/dashboard/meeting/create?scheduled=true${projectParam}`);
+                                                                        }}
                                                                     >
                                                                         Schedule Team Meeting
                                                                     </Button>
                                                                     <Button
                                                                         className="bg-tbutton-bg text-tbutton-text hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
-                                                                        onClick={() => setCreateScheduledMeetingClient(true)}
+                                                                        onClick={() => {
+                                                                            onClose();
+                                                                            const projectParam = selectedProject ? `&project=${selectedProject.project_id}` : '';
+                                                                            router.push(`/dashboard/meeting/create-client?scheduled=true${projectParam}`);
+                                                                        }}
                                                                     >
                                                                         Schedule Client Meeting
                                                                     </Button>
@@ -199,9 +267,9 @@ const MeetingModal = ({ isOpen, onClose }) => {
                                                         </TabsList>
 
                                                         <TabsContent value="pending">
-                                                            {scheduledMeetings?.filter(meeting => meeting.status == "PENDING").length > 0 ? (
+                                                            {filteredScheduledMeetings?.filter(meeting => meeting.status == "PENDING").length > 0 ? (
                                                                 <RenderScheduleMeeting 
-                                                                    meetings={scheduledMeetings?.filter(meeting => meeting.status == "PENDING")} 
+                                                                    meetings={filteredScheduledMeetings?.filter(meeting => meeting.status == "PENDING")} 
                                                                     getMeetings={getScheduledMeetings}
                                                                     onMeetingDeleted={handleMeetingDeleted}
                                                                 />
@@ -212,9 +280,9 @@ const MeetingModal = ({ isOpen, onClose }) => {
                                                             )}
                                                         </TabsContent>
                                                         <TabsContent value="canceled">
-                                                            {scheduledMeetings?.filter(meeting => meeting.status == "CANCELED").length > 0 ? (
+                                                            {filteredScheduledMeetings?.filter(meeting => meeting.status == "CANCELED").length > 0 ? (
                                                                 <RenderScheduleMeeting 
-                                                                    meetings={scheduledMeetings?.filter(meeting => meeting.status == "CANCELED")} 
+                                                                    meetings={filteredScheduledMeetings?.filter(meeting => meeting.status == "CANCELED")} 
                                                                     getMeetings={getScheduledMeetings}
                                                                     onMeetingDeleted={handleMeetingDeleted}
                                                                 />
@@ -225,9 +293,9 @@ const MeetingModal = ({ isOpen, onClose }) => {
                                                             )}
                                                         </TabsContent>
                                                         <TabsContent value="scheduled">
-                                                            {scheduledMeetings?.filter(meeting => meeting.status == "SCHEDULED").length > 0 ? (
+                                                            {filteredScheduledMeetings?.filter(meeting => meeting.status == "SCHEDULED").length > 0 ? (
                                                                 <RenderScheduleMeeting 
-                                                                    meetings={scheduledMeetings?.filter(meeting => meeting.status == "SCHEDULED")} 
+                                                                    meetings={filteredScheduledMeetings?.filter(meeting => meeting.status == "SCHEDULED")} 
                                                                     getMeetings={getScheduledMeetings}
                                                                     onMeetingDeleted={handleMeetingDeleted}
                                                                 />
@@ -250,12 +318,8 @@ const MeetingModal = ({ isOpen, onClose }) => {
         </Transition>
 
             {/* Meeting Creation Modals */}
-            <CreateMeeting open={createMeeting} onClose={() => setCreateMeeting(false)} isScheduled={false} getMeetings={getMeetings} project_id={null} />
-            <CreateMeetingClient open={createMeetingClient} onClose={() => setCreateMeetingClient(false)} isScheduled={false} getMeetings={getMeetings} project_id={null} />
-            
-            {/* Scheduled Meeting Creation Modals */}
-            <CreateMeeting open={createScheduledMeeting} onClose={() => setCreateScheduledMeeting(false)} isScheduled={true} getMeetings={getScheduledMeetings} project_id={null} />
-            <CreateMeetingClient open={createScheduledMeetingClient} onClose={() => setCreateScheduledMeetingClient(false)} isScheduled={true} getMeetings={getScheduledMeetings} project_id={null} />
+            <CreateMeeting open={createMeeting} onClose={() => setCreateMeeting(false)} isScheduled={false} getMeetings={getMeetings} project_id={selectedProject?.project_id || null} />
+            <CreateMeetingClient open={createMeetingClient} onClose={() => setCreateMeetingClient(false)} isScheduled={false} getMeetings={getMeetings} project_id={selectedProject?.project_id || null} />
         </>
     );
 };

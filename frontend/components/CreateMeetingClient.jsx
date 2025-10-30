@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useMemo } from 'react'
 import BigDialog from './Dialogs/BigDialog'
 import { Label } from './ui/label'
 import { Input } from './ui/input'
@@ -6,14 +6,15 @@ import { Textarea } from './ui/textarea'
 import { Button } from './Button'
 import { Select, SelectGroup, SelectLabel, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { useUser } from '@/providers/UserProvider'
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider'
 import { toast } from 'react-toastify'
 import { createMeetingClientRequest } from '@/lib/http/meeting'
 import { getProjectRequest } from '@/lib/http/project'
 import { useRouter } from 'next/navigation'
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients, project_id = null }) => {
-    const { user, loadUserWithProjects, hasFullUserData } = useUser();
+    const { user } = useUser();
+    const { selectedCase, setSelectedCase, projects: filterProjects } = useDashboardFilter();
     const [selectProject, setSelectedProject] = useState(project_id || '');
     const [selectTask, setSelectedTask] = useState('');
     const [selectClient, setSelectedClient] = useState('');
@@ -22,22 +23,8 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [fullUserData, setFullUserData] = useState(null);
     const [specificProject, setSpecificProject] = useState(null);
     const [fetchedClients, setFetchedClients] = useState(null);
-
-  // Load full user data when component mounts or when user changes
-    useEffect(() => {
-        if (user && !user.Projects && !hasFullUserData) {
-            loadUserWithProjects().then(fullUser => {
-                setFullUserData(fullUser);
-            }).catch(error => {
-                console.error('CreateMeetingClient - Error loading user with projects:', error);
-            });
-        } else if (user && user.Projects) {
-            setFullUserData(user);
-        }
-    }, [user, loadUserWithProjects, hasFullUserData]);
 
     // Fetch specific project when project_id is provided
     useEffect(() => {
@@ -48,10 +35,27 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
                 console.error('CreateMeetingClient - Error fetching specific project:', error);
             });
         }
-    }, [project_id, specificProject]);
+    }, [project_id]);
 
-    // Use specific project if available, otherwise use fullUserData
-    const userWithProjects = specificProject ? { Projects: [specificProject] } : (fullUserData || user);
+    // Get projects from DashboardFilterProvider (already loaded centrally)
+    const projects = useMemo(() => {
+        if (specificProject) {
+            return [specificProject];
+        }
+        
+        // Use projects from DashboardFilterProvider instead of user.Projects
+        return filterProjects || [];
+    }, [filterProjects, specificProject]);
+
+    // Auto-select project from top navigation if one is selected globally
+    useEffect(() => {
+        if (open && selectedCase && !selectProject && !specificProject) {
+            const project = projects.find(p => p.project_id === selectedCase.project_id);
+            if (project) {
+                setSelectedProject(project.project_id);
+            }
+        }
+    }, [open, selectedCase, projects, specificProject, selectProject]);
 
     const router = useRouter();
 
@@ -62,11 +66,19 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
         }
     }, [project_id]);
 
-    // Reset task selection when project changes
+    // Reset task selection when project changes and sync with top navigation
     useEffect(() => {
         setSelectedTask('');
         setHeading('');
         setSelectedClient('');
+        
+        // Update global selected case when project changes
+        if (selectProject && projects.length > 0) {
+            const project = projects.find(p => p.project_id === selectProject);
+            if (project) {
+                setSelectedCase(project);
+            }
+        }
         
         // If no Clients prop provided (opened from dashboard), fetch clients for selected project
         if (!Clients && selectProject && selectProject !== '') {
@@ -77,7 +89,7 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
                 setFetchedClients([]);
             });
         }
-    }, [selectProject, Clients]);
+    }, [selectProject, Clients, projects, setSelectedCase]);
 
     const handleSubmit = useCallback(async (e) => {
         e.preventDefault();
@@ -111,23 +123,23 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
     }, [selectTask, selectClient, heading, description, isScheduled, date, time]);
 
     useEffect(() => {
-        if (selectTask && userWithProjects && selectProject) {
-            const project = userWithProjects.Projects.find(project => project.project_id == selectProject);
-            const task = project?.Tasks.find(task => task.task_id == selectTask);
+        if (selectTask && selectProject && projects.length > 0) {
+            const project = projects.find(p => p.project_id == selectProject);
+            const task = project?.Tasks?.find(t => t.task_id == selectTask);
             if (!heading && task) {
                 setHeading(task.name);
             }
         }
-    }, [selectTask, userWithProjects, selectProject, heading]);
+    }, [selectTask, selectProject, heading, projects]);
 
     // Get current project details
-    const currentProject = userWithProjects?.Projects?.find(project => project?.project_id == selectProject);
+    const currentProject = projects.find(project => project?.project_id == selectProject);
     
     // Use Clients prop if available, otherwise use fetched clients
     const availableClients = Clients || fetchedClients;
     
-    // Don't render until user data is loaded OR specific project is loaded
-    if (!userWithProjects || (!userWithProjects.Projects && !specificProject)) {
+    // Show loading only if we're waiting for user data
+    if (!user) {
         return (
             <BigDialog open={open} onClose={onClose}>
                 <div className='px-2 py-3'>
@@ -150,61 +162,60 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
 
                     <form onSubmit={handleSubmit} className="space-y-8">
                         <div className="space-y-2">
-                            <Label htmlFor="project" className="text-black">Project</Label>
-                            <Select onValueChange={(value) => setSelectedProject(value)} value={selectProject}>
+                            <Label htmlFor="project" className="text-black">Project (Optional)</Label>
+                            <Select 
+                                onValueChange={(value) => setSelectedProject(value)} 
+                                value={selectProject || ''}
+                            >
                                 <SelectTrigger className="w-full bg-white border-primary text-black">
-                                    <SelectValue placeholder="Select a project" />
+                                    <SelectValue placeholder="Select a project (optional)" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-white border-primary">
+                                <SelectContent className="bg-white border-primary z-[9999]">
                                     <SelectGroup>
-                                        <SelectLabel className="text-gray-400">Projects</SelectLabel>
-                                        {
-                                            userWithProjects?.Projects?.map((project, index) => (
-                                                <SelectItem value={`${project.project_id}`} key={`${project.project_id}-${index}`} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">{project?.name}</SelectItem>
-                                            ))
-                                        }
+                                        <SelectLabel className="text-gray-400">Projects ({projects.length})</SelectLabel>
+                                        {projects.map((project, index) => (
+                                            <SelectItem value={`${project.project_id}`} key={`${project.project_id}-${index}`} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">
+                                                {project?.name}
+                                            </SelectItem>
+                                        ))}
                                     </SelectGroup>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="task" className="text-black">Task</Label>
+                            <Label htmlFor="task" className="text-black">Task (Optional)</Label>
                             <Select onValueChange={(value) => setSelectedTask(value)} value={selectTask} disabled={!selectProject}>
                                 <SelectTrigger className="w-full bg-white border-primary text-black">
-                                    <SelectValue placeholder={selectProject ? "Select a task" : "Please select a project first"} />
+                                    <SelectValue placeholder={selectProject ? "Select a task (optional)" : "Please select a project first"} />
                                 </SelectTrigger>
-                                <SelectContent className="bg-white border-primary">
+                                <SelectContent className="bg-white border-primary z-[9999]">
                                     <SelectGroup>
                                         <SelectLabel className="text-gray-400">Tasks</SelectLabel>
-                                        {
-                                            currentProject?.Tasks?.map((task, index) => (
-                                                <SelectItem value={`${task.task_id}`} key={`${task.task_id}-${index}`} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">{task?.name}</SelectItem>
-                                            ))
-                                        }
+                                        {(currentProject?.Tasks || []).map((task, index) => (
+                                            <SelectItem value={`${task.task_id}`} key={`${task.task_id}-${index}`} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">
+                                                {task?.name}
+                                            </SelectItem>
+                                        ))}
                                     </SelectGroup>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="description" className="text-black">Client</Label>
+                            <Label htmlFor="description" className="text-black">Client (Optional)</Label>
                             <Select onValueChange={(value) => setSelectedClient(value)} value={selectClient}>
                                 <SelectTrigger className="w-full bg-white border-primary text-black">
                                     <SelectValue placeholder="Select a client" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-white border-primary">
+                                <SelectContent className="bg-white border-primary z-[9999]">
                                     <SelectGroup>
                                         <SelectLabel className="text-gray-400">Clients</SelectLabel>
-                                        {availableClients && availableClients.length > 0 ? (
-                                            availableClients.map((client, index) => (
-                                                <SelectItem value={client.user.user_id.toString()} key={`${client.user_id}`} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">{client?.user.name}</SelectItem>
-                                            ))
-                                        ) : (
-                                            <SelectItem value="no-clients" disabled className="text-gray-400">
-                                                No clients found for this project
+                                        {(availableClients || []).map((client, index) => (
+                                            <SelectItem value={client.user.user_id.toString()} key={`${client.user.user_id}-${index}`} className="text-black hover:!bg-tbutton-bg hover:!text-tbutton-text">
+                                                {client?.user.name}
                                             </SelectItem>
-                                        )}
+                                        ))}
                                     </SelectGroup>
                                 </SelectContent>
                             </Select>
@@ -289,7 +300,7 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
                         <Button
                             type="submit"
                             className="w-full h-12 bg-tbutton-bg text-tbutton-text disabled:opacity-40 hover:bg-tbutton-hover hover:text-tbutton-text transition-all"
-                            disabled={isLoading || !selectProject || !selectTask || !selectClient || !heading || !description}
+                            disabled={isLoading || !heading || !description}
                             isLoading={isLoading}
                         >
                             Create Now
@@ -302,4 +313,3 @@ const CreateMeetingClient = ({ open, onClose, isScheduled, getMeetings, Clients,
 }
 
 export default CreateMeetingClient
-

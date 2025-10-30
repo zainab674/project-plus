@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUser } from '../providers/UserProvider';
 import { toast } from 'sonner';
 import { getOrCreatePrivateConversationRequest } from '@/lib/http/chat';
@@ -18,19 +19,20 @@ import { useChatState } from '../hooks/useChatState';
 import { useProjectState } from '../hooks/useProjectState';
 import { useSendMailState } from '../hooks/useSendMailState';
 import { useNotificationState } from '../hooks/useNotificationState';
+import { useDashboardFilter } from '../providers/DashboardFilterProvider';
 
 // Import components
 import { QuickActionsContent } from './QuickActionsContent';
 import { TimelineCasesModal } from './modals/TimelineCasesModal';
 import { LawFirmTimelineModal } from './modals/LawFirmTimelineModal';
 import { EnhancedMailModal } from './modals/EnhancedMailModal';
-import TimerModal from './modals/TimerModal';
 import CaseModal from './modals/caseModal';
 import AddTaskModal from './modals/AddTaskModal';
 import MeetingModal from './modals/meetingModel';
 import BillerModal from './modals/BillerModal';
-import CaseAssignmentModal from './modals/CaseAssignmentModal';
 import FlowchartModal from './modals/FlowchartModal';
+import TimerModal from './modals/TimerModal';
+import { useContextDetection } from '@/hooks/useContextDetection';
 
 // Import icons
 import {
@@ -52,10 +54,22 @@ import {
   X,
   Building,
   User,
+  StickyNote,
+  MessageSquare,
+  Brain,
 } from 'lucide-react';
 
 const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
+  const router = useRouter();
   const { user, loadUserWithProjects } = useUser();
+  
+  // Get context for project detection
+  const {
+    context,
+    getProjectDetails,
+    getTaskDetails,
+    hasProject,
+  } = useContextDetection();
   
   // State for search functionality
   const [searchTerm, setSearchTerm] = useState('');
@@ -114,10 +128,6 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
     }
   }, [timelineState, modalState]);
 
-  const openTimerModal = useCallback(() => {
-    modalState.openTimerModal();
-    projectState.fetchProjects();
-  }, [modalState, projectState]);
 
   // Close handlers with cleanup
   const closeFlowchartModal = useCallback(() => {
@@ -147,6 +157,12 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
   const [isEnhancedChatModalOpen, setIsEnhancedChatModalOpen] = useState(false);
   const [selectedChatType, setSelectedChatType] = useState('');
   const [selectedChatRecipient, setSelectedChatRecipient] = useState(null);
+  
+  // Selected project state for Meetings modals
+  const [selectedMeetingProject, setSelectedMeetingProject] = useState(null);
+  
+  // Get filter context
+  const { selectedCase } = useDashboardFilter();
   
   // Chat state
   const [chatMessages, setChatMessages] = useState([]);
@@ -738,23 +754,39 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
     setChatMessageValue('');
   }, []);
 
+  // Internal Chat handlers
+  const openInternalChatModal = useCallback(() => {
+    // Navigate to chat page - it will auto-detect project from context or show general chat
+    if (selectedCase?.project_id) {
+      // If specific project selected, go to project chat page
+      router.push(`/dashboard/project/${selectedCase.project_id}/chat`);
+    } else {
+      // Navigate to general chat page - it will auto-detect from context (timer, URL, etc.)
+      router.push('/dashboard/chat');
+    }
+  }, [selectedCase, router]);
+
+
   // Define all available actions (after functions are defined)
   const allActions = [
     { name: 'Dashboard', icon: BarChart3, route: '/dashboard', color: 'bg-slate-200' },
-    { name: 'Cases', icon: Briefcase, route: '/cases', color: 'bg-purple-200' },
-    { name: 'Add Task', icon: Plus, route: '', color: 'bg-blue-200', action: modalState.openAddTaskModal },
-    { name: 'Timer', icon: Clock, route: '', color: 'bg-green-200', action: openTimerModal },
-    { name: 'TimeLine', icon: Clock, route: '/timeline', color: 'bg-orange-200' },
-    { name: 'Meeting', icon: Calendar, route: '', color: 'bg-pink-200', action: modalState.openMeetingModal },
+    { name: 'Cases', icon: Briefcase, route: '/dashboard/cases', color: 'bg-purple-200' },
+    { name: 'Add Task', icon: Plus, route: '/dashboard/tasks/add', color: 'bg-blue-200' },
+    { name: 'Timer', icon: Clock, route: '/dashboard/timer', color: 'bg-green-200' },
+    { name: 'TimeLine', icon: Clock, route: '/dashboard/timeline', color: 'bg-orange-200' },
+    { name: 'Meeting', icon: Calendar, route: '/dashboard/meeting', color: 'bg-pink-200' },
     { name: 'Mail', icon: Mail, route: '', color: 'bg-red-200', action: modalState.openEnhancedMailModal },
-    { name: 'Chat', icon: MessageCircle, route: '', color: 'bg-yellow-200', action: openEnhancedChatModal },
+    { name: 'Chat', icon: MessageCircle, route: '/dashboard/chat', color: 'bg-yellow-200' },
+    { name: 'Notes', icon: StickyNote, route: '/dashboard/notes', color: 'bg-emerald-200' },
+    { name: 'Internal Chat', icon: MessageSquare, route: '', color: 'bg-blue-200', action: openInternalChatModal },
     { name: 'Team', icon: Users, route: '/dashboard/team', color: 'bg-emerald-200' },
     { name: 'TemplateDocs', icon: FileText, route: '/dashboard/template-documents', color: 'bg-indigo-200' },
     { name: 'CompareDocs', icon: GitCompare, route: '/document-comparison', color: 'bg-violet-200' },
     { name: 'Flowchart', icon: GitBranch, route: '/dashboard/flowchart', color: 'bg-cyan-200' },
     { name: 'Phone', icon: Phone, route: '/dashboard/phone', color: 'bg-teal-200' },
-    { name: 'InviteBiller', icon: DollarSign, route: '', color: 'bg-green-200', action: modalState.openBillerModal },
-    { name: 'AssignToBiller', icon: Briefcase, route: '', color: 'bg-indigo-200', action: modalState.openCaseAssignmentModal },
+    { name: 'InviteBiller', icon: DollarSign, route: '/dashboard/invite-biller', color: 'bg-green-200' },
+    { name: 'AssignToBiller', icon: Briefcase, route: '/dashboard/case-assignment', color: 'bg-indigo-200' },
+    { name: 'AI Assistant', icon: Brain, route: '/dashboard/ai-assistant', color: 'bg-green-500', isAIAssistant: true },
   ];
 
   // Filter actions based on user role
@@ -772,24 +804,43 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
       );
       return clientActions;
     } else if (user?.Role === 'TEAM' || user?.Role === 'PROVIDER') {
+      // Show all actions including AI Assistant for TEAM and PROVIDER
+      return allActions;
+    } else if (user?.Role === 'ADMIN') {
+      // Show all actions including AI Assistant for ADMIN
       return allActions;
     } else {
-      return allActions.filter(action => action.name !== 'Phone System');
+      // For other roles, filter out AI Assistant and Phone System
+      return allActions.filter(action => 
+        action.name !== 'Phone System' && action.name !== 'AI Assistant'
+      );
     }
   }, [user?.Role, allActions]);
+
+  // Wrapper for meeting modal
+  const openMeetingModalWithFilter = useCallback(() => {
+    // If a specific case is selected, use it; otherwise, clear selection to show dropdown
+    setSelectedMeetingProject(selectedCase);
+    modalState.openMeetingModal();
+  }, [selectedCase, modalState]);
+
+  const closeMeetingModalWithCleanup = useCallback(() => {
+    modalState.closeMeetingModal();
+    setSelectedMeetingProject(null);
+  }, [modalState]);
 
   // Modal functions object to pass to QuickActionsContent
   const modalFunctions = {
     openCasesModal: modalState.openCasesModal,
     openAddTaskModal: modalState.openAddTaskModal,
-    openTimerModal: openTimerModal,
     openEnhancedChatModal: openEnhancedChatModal,
     openTimelineCasesModal: openTimelineCasesModal,
     openFlowchartModal: openFlowchartModal,
-    openMeetingModal: modalState.openMeetingModal,
+    openMeetingModal: openMeetingModalWithFilter,
     openEnhancedMailModal: openEnhancedMailModal,
     openBillerModal: modalState.openBillerModal,
-    openCaseAssignmentModal: modalState.openCaseAssignmentModal,
+    openInternalChatModal: openInternalChatModal,
+    openTimerModal: modalState.openTimerModal,
   };
 
   // If sidebar mode, return sidebar layout with children
@@ -848,13 +899,6 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
           onLoadMore={mailState.loadMoreMails}
         />
 
-        {/* Timer Modal */}
-        <TimerModal
-          isOpen={modalState.isTimerModalOpen}
-          onClose={modalState.closeTimerModal}
-          projects={projectState.projects || []}
-        />
-
         {/* Case Modal */}
         <CaseModal
           isOpen={modalState.isCaseModalOpen}
@@ -870,7 +914,8 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
         {/* Meeting Modal */}
         <MeetingModal
           isOpen={modalState.isMeetingModalOpen}
-          onClose={modalState.closeMeetingModal}
+          onClose={closeMeetingModalWithCleanup}
+          selectedProject={selectedMeetingProject}
         />
 
         {/* Biller Modal */}
@@ -879,11 +924,6 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
           onClose={modalState.closeBillerModal}
         />
 
-        {/* Case Assignment Modal */}
-        <CaseAssignmentModal
-          isOpen={modalState.isCaseAssignmentModalOpen}
-          onClose={modalState.closeCaseAssignmentModal}
-        />
 
         {/* Flowchart Modal */}
         <FlowchartModal
@@ -1229,6 +1269,7 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
             </div>
           </div>
         )}
+
       </>
     );
   }
@@ -1310,12 +1351,6 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
       <BillerModal
         isOpen={modalState.isBillerModalOpen}
         onClose={modalState.closeBillerModal}
-      />
-
-      {/* Case Assignment Modal */}
-      <CaseAssignmentModal
-        isOpen={modalState.isCaseAssignmentModalOpen}
-        onClose={modalState.closeCaseAssignmentModal}
       />
 
       {/* Flowchart Modal */}
@@ -1662,8 +1697,9 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
           </div>
         </div>
       )}
-    </>
-  );
-};
+
+      </>
+    );
+  }
 
 export default QuickActions;

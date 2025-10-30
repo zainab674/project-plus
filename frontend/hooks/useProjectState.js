@@ -80,7 +80,18 @@ export const useProjectState = (user, loadUserWithProjects = null) => {
       });
       
       const allProjects = Array.from(projectMap.values());
-      setProjects(allProjects);
+      
+      // Only update if projects actually changed (check by IDs to avoid unnecessary updates)
+      setProjects(prevProjects => {
+        if (prevProjects && prevProjects.length === allProjects.length) {
+          const prevIds = new Set(prevProjects.map(p => p.project_id));
+          const newIds = new Set(allProjects.map(p => p.project_id));
+          if (prevIds.size === newIds.size && [...prevIds].every(id => newIds.has(id))) {
+            return prevProjects; // No change, return previous to prevent re-render
+          }
+        }
+        return allProjects;
+      });
       return;
     }
 
@@ -111,7 +122,18 @@ export const useProjectState = (user, loadUserWithProjects = null) => {
       });
       
       const allProjects = Array.from(projectMap.values());
-      setProjects(allProjects);
+      
+      // Only update if projects actually changed (check by IDs to avoid unnecessary updates)
+      setProjects(prevProjects => {
+        if (prevProjects && prevProjects.length === allProjects.length) {
+          const prevIds = new Set(prevProjects.map(p => p.project_id));
+          const newIds = new Set(allProjects.map(p => p.project_id));
+          if (prevIds.size === newIds.size && [...prevIds].every(id => newIds.has(id))) {
+            return prevProjects; // No change, return previous to prevent re-render
+          }
+        }
+        return allProjects;
+      });
     } catch (error) {
       console.error('❌ Error fetching projects:', error);
       setProjects(null);
