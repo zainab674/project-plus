@@ -14,10 +14,14 @@ import { getNameAvatar } from '@/utils/getNameAvatar';
 import { Checkbox } from '../ui/checkbox';
 
 const UpdateCaseModal = ({ onClose, caseToUpdate }) => {
+    const { user } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [teamMembers, setTeamMembers] = useState([]);
     const [selectedTeamMembers, setSelectedTeamMembers] = useState([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    
+    // Check if current user is the project owner
+    const isProjectOwner = caseToUpdate?.created_by === user?.user_id;
 
     const [caseData, setCaseData] = useState({
         name: '',
@@ -277,7 +281,7 @@ const UpdateCaseModal = ({ onClose, caseToUpdate }) => {
 
 
 
-                    {teamMembers.length > 0 && (
+                    {teamMembers.length > 0 && isProjectOwner && (
                         <div className="space-y-2">
                             <label className="flex items-center text-base font-semibold text-slate-700 mb-2">
                                 <Users className="w-4 h-4 mr-2 text-slate-500" />

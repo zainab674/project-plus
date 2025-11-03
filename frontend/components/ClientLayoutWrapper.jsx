@@ -26,8 +26,8 @@ export default function ClientLayoutWrapper({ children }) {
   // Hide QuickActions, TimerBanner on auth pages too
   const isAuthPage = shouldHideNavigation;
 
-  // Show tabs only for dashboard routes (not auth pages)
-  const shouldShowTabs = !isAuthPage && pathname?.startsWith('/dashboard');
+  // Show tabs only for dashboard routes and ai-legal-doc (not auth pages)
+  const shouldShowTabs = !isAuthPage && (pathname?.startsWith('/dashboard') || pathname?.startsWith('/ai-legal-doc'));
 
   return (
     <>

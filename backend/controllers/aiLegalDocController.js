@@ -2063,11 +2063,18 @@ export const convertDocxTrackChangesToHtml = catchAsyncError(async (req, res, ne
           body {
             font-family: 'Times New Roman', serif;
             line-height: 1.8;
-            color: #000;
+            color: #000 !important;
             max-width: 900px;
             margin: 0 auto;
             padding: 20px;
             background: #fff;
+          }
+          /* Ensure all text is black by default */
+          body * {
+            color: #000 !important;
+          }
+          p, div, span, h1, h2, h3, h4, h5, h6 {
+            color: #000 !important;
           }
           /* Green underline for insertions - MUST be visible */
           ins, .insertion {
@@ -2088,6 +2095,7 @@ export const convertDocxTrackChangesToHtml = catchAsyncError(async (req, res, ne
           }
           p {
             margin: 12px 0;
+            color: #000 !important;
           }
           /* Ensure nested elements maintain styles */
           ins *, .insertion * {
@@ -2097,6 +2105,17 @@ export const convertDocxTrackChangesToHtml = catchAsyncError(async (req, res, ne
           del *, .deletion * {
             color: inherit !important;
             text-decoration: inherit !important;
+          }
+          /* Override any inline styles that might set red color */
+          [style*="color: red"],
+          [style*="color:red"],
+          [style*="color: #f00"],
+          [style*="color:#f00"],
+          [style*="color: #ff0000"],
+          [style*="color:#ff0000"],
+          [style*="color: rgb(255, 0, 0)"],
+          [style*="color:rgb(255, 0, 0)"] {
+            color: #000 !important;
           }
         </style>
       </head>

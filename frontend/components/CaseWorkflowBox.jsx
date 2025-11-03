@@ -358,6 +358,7 @@ const CaseWorkflowBox = ({
         phaseName={selectedPhaseName}
         tasks={selectedPhaseTasks}
         onTaskClick={handleTaskClickFromPhase}
+        projectId={currentCase?.project_id}
       />
 
     </div>

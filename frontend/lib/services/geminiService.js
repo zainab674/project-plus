@@ -1,10 +1,10 @@
-// Gemini API Service for AI Chatbot
-// This service handles communication with Google's Gemini API
+// OpenAI API Service for AI Chatbot
+// This service handles communication with OpenAI's API
 
-class GeminiService {
+class OpenAIService {
     constructor() {
-        this.apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'AIzaSyD2cD5oHKpZUgiZGX05aiHLJsFMJc1uRKg';
-        this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+        this.apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+        this.baseUrl = 'https://api.openai.com/v1/chat/completions';
     }
 
     // Website knowledge base for context
@@ -106,33 +106,30 @@ STYLE RULES:
     async generateResponse(userMessage, conversationHistory = []) {
         try {
             if (!this.apiKey) {
-                throw new Error('Gemini API key not configured');
+                throw new Error('OpenAI API key not configured');
             }
 
             // Prepare the conversation context
             const context = this.getWebsiteContext();
 
-            // Format conversation history
+            // Format conversation history for OpenAI
             const formattedHistory = conversationHistory.map(msg => ({
-                role: msg.type === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.content }]
+                role: msg.type === 'user' ? 'user' : 'assistant',
+                content: msg.content
             }));
 
             // Create the request payload
+            const messages = [
+                { role: 'system', content: context },
+                ...formattedHistory,
+                { role: 'user', content: `User Question: ${userMessage}\n\nRespond ONLY in the strict Markdown format described. Please provide a helpful, detailed response about FlexyWexy based on the context above. Focus on practical steps and specific features.` }
+            ];
+
             const requestBody = {
-                contents: [
-                    {
-                        parts: [{
-                            text: `${context}\n\nUser Question: ${userMessage}\n\nRespond ONLY in the strict Markdown format described.Please provide a helpful, detailed response about FlexyWexy based on the context above. Focus on practical steps and specific features.`
-                        }]
-                    }
-                ],
-                generationConfig: {
-                    temperature: 0.7,
-                    topK: 40,
-                    topP: 0.95,
-                    maxOutputTokens: 1024,
-                }
+                model: 'gpt-4',
+                messages: messages,
+                temperature: 0.7,
+                max_tokens: 1024
             };
 
             // Make the API request
@@ -140,28 +137,28 @@ STYLE RULES:
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-goog-api-key': this.apiKey
+                    'Authorization': `Bearer ${this.apiKey}`
                 },
                 body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
-                throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+                throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
 
-            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+            if (data.choices && data.choices[0] && data.choices[0].message) {
                 return {
-                    content: data.candidates[0].content.parts[0].text,
+                    content: data.choices[0].message.content,
                     success: true
                 };
             } else {
-                throw new Error('Invalid response format from Gemini API');
+                throw new Error('Invalid response format from OpenAI API');
             }
 
         } catch (error) {
-            console.error('Gemini API Error:', error);
+            console.error('OpenAI API Error:', error);
 
             // Fallback to local response generation
             return this.generateFallbackResponse(userMessage);
@@ -292,5 +289,5 @@ If you need more specific help, please provide more details about what you're tr
 }
 
 // Create and export a singleton instance
-const geminiService = new GeminiService();
-export default geminiService;
+const openaiService = new OpenAIService();
+export default openaiService;

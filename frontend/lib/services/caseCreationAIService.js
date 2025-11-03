@@ -3,8 +3,8 @@
 
 class CaseCreationAIService {
     constructor() {
-        this.apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-        this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+        this.apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+        this.baseUrl = 'https://api.openai.com/v1/chat/completions';
     }
 
     // Get the legal case creation context
@@ -89,43 +89,36 @@ class CaseCreationAIService {
     async processConversation(userMessage, conversationHistory = [], currentCaseData = {}) {
         try {
             if (!this.apiKey) {
-                throw new Error('Gemini API key not configured');
+                throw new Error('OpenAI API key not configured');
             }
 
             // Prepare the conversation context
             const context = this.getCaseCreationContext();
             
-            // Format conversation history for context
+            // Format conversation history for OpenAI
             const formattedHistory = conversationHistory.map(msg => ({
-                role: msg.type === 'user' ? 'user' : 'model',
-                parts: [{ text: msg.content }]
+                role: msg.type === 'user' ? 'user' : 'assistant',
+                content: msg.content
             }));
 
             // Create the request payload
-            const requestBody = {
-                contents: [
-                    {
-                        parts: [{
-                            text: `${context}
-
-Current Case Data: ${JSON.stringify(currentCaseData)}
-
-Conversation History: ${JSON.stringify(formattedHistory)}
+            const messages = [
+                { role: 'system', content: context },
+                ...formattedHistory,
+                { role: 'user', content: `Current Case Data: ${JSON.stringify(currentCaseData)}
 
 User Message: ${userMessage}
 
 Please respond with the exact JSON format specified above. Be conversational but gather all required information systematically.
 
-REMEMBER: Respond ONLY with valid JSON, no markdown, no code blocks, no extra text.`
-                        }]
-                    }
-                ],
-                generationConfig: {
-                    temperature: 0.3, // Lower temperature for more consistent JSON output
-                    topK: 40,
-                    topP: 0.95,
-                    maxOutputTokens: 2048,
-                }
+REMEMBER: Respond ONLY with valid JSON, no markdown, no code blocks, no extra text.` }
+            ];
+
+            const requestBody = {
+                model: 'gpt-4',
+                messages: messages,
+                temperature: 0.3, // Lower temperature for more consistent JSON output
+                max_tokens: 2048
             };
 
             // Make the API request
@@ -133,19 +126,19 @@ REMEMBER: Respond ONLY with valid JSON, no markdown, no code blocks, no extra te
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-goog-api-key': this.apiKey
+                    'Authorization': `Bearer ${this.apiKey}`
                 },
                 body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
-                throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+                throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
 
-            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-                const responseText = data.candidates[0].content.parts[0].text;
+            if (data.choices && data.choices[0] && data.choices[0].message) {
+                const responseText = data.choices[0].message.content;
                 
                 try {
                     // Extract JSON from the response text
@@ -167,7 +160,7 @@ REMEMBER: Respond ONLY with valid JSON, no markdown, no code blocks, no extra te
                     return this.generateFallbackResponse(userMessage, currentCaseData);
                 }
             } else {
-                throw new Error('Invalid response format from Gemini API');
+                throw new Error('Invalid response format from OpenAI API');
             }
 
         } catch (error) {

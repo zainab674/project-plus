@@ -19,7 +19,7 @@ const router = express.Router();
 
 // Test endpoint
 router.get('/test', (req, res) => {
-    res.json({ success: true, message: 'Document comparison service is running' });
+    res.json({ success: true, message: 'AI Legal Doc service is running' });
 });
 
 // Compare two existing documents

@@ -304,15 +304,15 @@ const AIAssistantPage = () => {
     }
   };
 
-  // Understand user intent with Gemini
+  // Understand user intent with OpenAI
   const understandUserIntent = async (userMessage, conversationHistory) => {
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
       if (!apiKey) {
-        throw new Error('Gemini API key not configured');
+        throw new Error('OpenAI API key not configured');
       }
 
-      const prompt = `You are an AI legal assistant. Analyze the user's message and return JSON:
+      const systemPrompt = `You are an AI legal assistant. Analyze the user's message and return JSON:
 {
     "intent": "case_creation" | "list_cases" | "general_help" | "other",
     "confidence": 0.0-1.0,
@@ -326,30 +326,39 @@ const AIAssistantPage = () => {
     "suggestions": ["array of suggestions"]
 }
 
-CONVERSATION HISTORY:
-${conversationHistory.map(msg => `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`).join('\n')}
-
-USER MESSAGE: "${userMessage}"
-
 Return only valid JSON:`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      const userPrompt = `CONVERSATION HISTORY:
+${conversationHistory.map(msg => `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`).join('\n')}
+
+USER MESSAGE: "${userMessage}"`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
+          model: 'gpt-4',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.3,
+          max_tokens: 1024
         })
       });
 
       if (!response.ok) {
-        throw new Error(`Gemini API request failed: ${response.status}`);
+        throw new Error(`OpenAI API request failed: ${response.status}`);
       }
 
       const data = await response.json();
-      const geminiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const jsonMatch = geminiResponse.match(/\{[\s\S]*\}/);
+      const openaiResponse = data.choices?.[0]?.message?.content || '';
+      const jsonMatch = openaiResponse.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('Invalid response format from Gemini');
+        throw new Error('Invalid response format from OpenAI');
       }
 
       return JSON.parse(jsonMatch[0]);

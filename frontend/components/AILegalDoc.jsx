@@ -338,7 +338,7 @@ const AILegalDoc = () => {
                     <div className="whitespace-pre-wrap mb-4">{content}</div>
                     
                     {/* Render HTML documents with styling preserved */}
-                    <div className="document-comparison-container space-y-4 mt-4">
+                    <div className="ai-legal-doc-container space-y-4 mt-4">
                         {messageData.htmlDocuments.document1 && (
                             <div className="document-preview-wrapper border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
                                 <h4 className="font-semibold text-sm mb-3 text-gray-700">
@@ -348,7 +348,8 @@ const AILegalDoc = () => {
                                     className="document-preview doc1-preview prose prose-sm max-w-none"
                                     style={{
                                         fontFamily: 'inherit',
-                                        lineHeight: '1.6'
+                                        lineHeight: '1.6',
+                                        color: '#000'
                                     }}
                                     dangerouslySetInnerHTML={{ 
                                         __html: DOMPurify.sanitize(messageData.htmlDocuments.document1, {
@@ -358,6 +359,20 @@ const AILegalDoc = () => {
                                         })
                                     }}
                                 />
+                                <style>{`
+                                    .doc1-preview,
+                                    .doc1-preview * {
+                                        color: #000 !important;
+                                    }
+                                    .doc1-preview ins,
+                                    .doc1-preview .fx-ins {
+                                        color: #065f46 !important;
+                                    }
+                                    .doc1-preview del,
+                                    .doc1-preview .fx-del {
+                                        color: #991b1b !important;
+                                    }
+                                `}</style>
                             </div>
                         )}
                         
@@ -370,7 +385,8 @@ const AILegalDoc = () => {
                                     className="document-preview doc2-preview prose prose-sm max-w-none"
                                     style={{
                                         fontFamily: 'inherit',
-                                        lineHeight: '1.6'
+                                        lineHeight: '1.6',
+                                        color: '#000'
                                     }}
                                     dangerouslySetInnerHTML={{ 
                                         __html: DOMPurify.sanitize(messageData.htmlDocuments.document2, {
@@ -380,6 +396,20 @@ const AILegalDoc = () => {
                                         })
                                     }}
                                 />
+                                <style>{`
+                                    .doc2-preview,
+                                    .doc2-preview * {
+                                        color: #000 !important;
+                                    }
+                                    .doc2-preview ins,
+                                    .doc2-preview .fx-ins {
+                                        color: #065f46 !important;
+                                    }
+                                    .doc2-preview del,
+                                    .doc2-preview .fx-del {
+                                        color: #991b1b !important;
+                                    }
+                                `}</style>
                             </div>
                         )}
                     </div>
@@ -704,10 +734,30 @@ const AILegalDoc = () => {
                                     // Handle JSON response
                                     const data = await response.json();
                                     
+                                    // Check if this is a comparison operation
+                                    const isComparison = data?.meta?.operationType === 'compare' || 
+                                                        data?.meta?.intent === 'compare' ||
+                                                        (lowerPrompt.includes('compare') && selected.length >= 2) ||
+                                                        data?.analysis !== undefined;
+                                    
+                                    // Store comparison result if available
+                                    if (isComparison && data?.analysis) {
+                                        setComparisonResult({
+                                            analysis: data.analysis,
+                                            files: data?.files || []
+                                        });
+                                    }
+                                    
                                     // Extract the appropriate text to display in chat
-                                    // Priority: revised_text (modified content) > output_text > final_answer > fallback message
+                                    // Priority for comparisons: analysis > output_text > revised_text > final_answer > fallback message
                                     let assistantText = '';
-                                    if (data?.revised_text) {
+                                    if (isComparison) {
+                                        // For comparisons, prioritize analysis field, fallback to output_text
+                                        assistantText = data?.analysis || data?.output_text || '';
+                                        if (!assistantText) {
+                                            assistantText = data?.message || 'Comparison completed. Please review the results.';
+                                        }
+                                    } else if (data?.revised_text) {
                                         // For modifications, use final_answer as the chat message, not the full revised text
                                         assistantText = data?.ai_final_answer || data?.final_answer || data?.message || 'Document has been modified. Review the changes in the tracked changes panel.';
                                     } else if (data?.output_text) {
@@ -1205,11 +1255,18 @@ const AILegalDoc = () => {
                                     font-family: "Times New Roman", Georgia, serif;
                                     font-size: 16px;
                                     line-height: 1.8;
-                                    color: #111;
+                                    color: #000 !important;
                                     white-space: normal;
+                                }
+                                .tracked-changes-container * {
+                                    color: #000 !important;
                                 }
                                 .tracked-changes-container .fx-para {
                                     margin: 12px 0 16px 0;
+                                    color: #000 !important;
+                                }
+                                .tracked-changes-container .fx-para * {
+                                    color: #000 !important;
                                 }
                                 .tracked-changes-container ins,
                                 .tracked-changes-container .fx-ins {
@@ -1228,6 +1285,11 @@ const AILegalDoc = () => {
                                     text-decoration-thickness: 2px !important;
                                     background: transparent !important;
                                     font-weight: inherit !important;
+                                }
+                                .tracked-changes-container p,
+                                .tracked-changes-container div,
+                                .tracked-changes-container span:not(ins):not(.fx-ins):not(del):not(.fx-del) {
+                                    color: #000 !important;
                                 }
                             `}</style>
                         </div>
@@ -1324,20 +1386,76 @@ const AILegalDoc = () => {
                             
                             const handleDownloadFinal = async () => {
                                 try {
-                                    // Get the full revised text - prefer from trackedChangesByFile if available for completeness
-                                    let revisedTextToUse = trackRevised;
-                                    if (selectedFileForChanges !== null && trackedChangesByFile[selectedFileForChanges]) {
-                                        const fileChanges = trackedChangesByFile[selectedFileForChanges];
-                                        if (fileChanges.revised && fileChanges.revised.length > (revisedTextToUse?.length || 0)) {
-                                            // Use the longer version to ensure we have all content
-                                            revisedTextToUse = fileChanges.revised;
-                                        } else if (fileChanges.revised) {
-                                            revisedTextToUse = fileChanges.revised;
+                                    // Build final text based on accepted/rejected changes
+                                    // Start with original text and apply only accepted changes
+                                    let finalText = '';
+                                    const originalText = trackOriginal || '';
+                                    
+                                    if (trackParts && trackParts.length > 0 && individualChanges.length > 0) {
+                                        // Reconstruct text from trackParts, respecting accept/reject states
+                                        const partsToInclude = [];
+                                        
+                                        trackParts.forEach((part, index) => {
+                                            if (part.type === 'same') {
+                                                // Always include unchanged text
+                                                partsToInclude.push(part);
+                                            } else {
+                                                // Find which change this part belongs to
+                                                const change = individualChanges.find(ch => 
+                                                    index >= ch.startIndex && index <= ch.endIndex
+                                                );
+                                                
+                                                if (change) {
+                                                    const changeState = changeStates[change.id] || null;
+                                                    
+                                                    if (changeState === 'accepted') {
+                                                        // Include accepted changes
+                                                        if (part.type === 'added') {
+                                                            partsToInclude.push(part);
+                                                        }
+                                                        // For 'removed' parts in accepted changes, don't include (they're being removed)
+                                                    } else if (changeState === 'rejected') {
+                                                        // For rejected changes, revert to original
+                                                        if (part.type === 'removed') {
+                                                            // Rejected deletion means keep original (add back)
+                                                            partsToInclude.push({ ...part, type: 'same', text: part.text });
+                                                        }
+                                                        // For 'added' parts in rejected changes, don't include (reject the addition)
+                                                    } else {
+                                                        // No state set - default to accepted for backwards compatibility
+                                                        if (part.type === 'added') {
+                                                            partsToInclude.push(part);
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Part not in any tracked change - include it
+                                                    partsToInclude.push(part);
+                                                }
+                                            }
+                                        });
+                                        
+                                        // Reconstruct text from parts
+                                        finalText = partsToInclude
+                                            .map(p => p.text)
+                                            .join(' ')
+                                            .replace(/\s+/g, ' ')
+                                            .trim();
+                                    } else {
+                                        // Fallback: use revised text if no parts available
+                                        let revisedTextToUse = trackRevised;
+                                        if (selectedFileForChanges !== null && trackedChangesByFile[selectedFileForChanges]) {
+                                            const fileChanges = trackedChangesByFile[selectedFileForChanges];
+                                            if (fileChanges.revised && fileChanges.revised.length > (revisedTextToUse?.length || 0)) {
+                                                revisedTextToUse = fileChanges.revised;
+                                            } else if (fileChanges.revised) {
+                                                revisedTextToUse = fileChanges.revised;
+                                            }
                                         }
+                                        finalText = revisedTextToUse || '';
                                     }
                                     
-                                    if (!revisedTextToUse || revisedTextToUse.trim().length === 0) {
-                                        toast.error('No revised text available');
+                                    if (!finalText || finalText.trim().length === 0) {
+                                        toast.error('No text available for download');
                                         return;
                                     }
                                     
@@ -1357,7 +1475,7 @@ const AILegalDoc = () => {
                                         // Use the new endpoint that preserves original DOCX structure
                                         const form = new FormData();
                                         form.append('original_docx', originalFile);
-                                        form.append('revised_text', revisedTextToUse || '');
+                                        form.append('revised_text', finalText || '');
                                         
                                         const response = await fetch(`${API_URL}/api/v1/ai-legal-doc/export-docx-final`, {
                                             method: 'POST',
@@ -1405,7 +1523,7 @@ const AILegalDoc = () => {
                                                 'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                                             },
                                             body: JSON.stringify({
-                                                text: revisedTextToUse || trackRevised,
+                                                text: finalText || trackRevised,
                                                 html: htmlContent || undefined,
                                                 filename: fileName
                                             })

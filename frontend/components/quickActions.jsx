@@ -781,7 +781,7 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
     { name: 'Internal Chat', icon: MessageSquare, route: '', color: 'bg-blue-200', action: openInternalChatModal },
     { name: 'Team', icon: Users, route: '/dashboard/team', color: 'bg-emerald-200' },
     { name: 'TemplateDocs', icon: FileText, route: '/dashboard/template-documents', color: 'bg-indigo-200' },
-    { name: 'CompareDocs', icon: GitCompare, route: '/document-comparison', color: 'bg-violet-200' },
+    { name: 'CompareDocs', icon: GitCompare, route: '/ai-legal-doc', color: 'bg-violet-200' },
     { name: 'Flowchart', icon: GitBranch, route: '/dashboard/flowchart', color: 'bg-cyan-200' },
     { name: 'Phone', icon: Phone, route: '/dashboard/phone', color: 'bg-teal-200' },
     { name: 'InviteBiller', icon: DollarSign, route: '/dashboard/invite-biller', color: 'bg-green-200' },

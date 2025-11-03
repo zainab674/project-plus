@@ -1,14 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { X, Calendar, User, AlertCircle, CheckCircle, Clock, Target } from 'lucide-react';
+import { X, Calendar, User, AlertCircle, CheckCircle, Clock, Target, ExternalLink } from 'lucide-react';
 import { formatDate } from '@/utils/formatDate';
+import { useRouter } from 'next/navigation';
 
 const PhaseTasksModal = ({ 
     isOpen, 
     onClose, 
     phaseName, 
     tasks = [], 
-    onTaskClick 
+    onTaskClick,
+    projectId
 }) => {
+    const router = useRouter();
     const [searchTerm, setSearchTerm] = useState('');
 
     // Filter tasks based on search term
@@ -69,6 +72,13 @@ const PhaseTasksModal = ({
         return new Date(task.last_date) < new Date();
     };
 
+    const handleNavigateToCase = () => {
+        if (projectId) {
+            router.push(`/dashboard/project/${projectId}`);
+            onClose(); // Close modal when navigating
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -85,12 +95,23 @@ const PhaseTasksModal = ({
                             <p className="text-sm text-gray-600">{tasks.length} task{tasks.length !== 1 ? 's' : ''}</p>
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-2xl"
-                    >
-                        <X className="w-6 h-6" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {projectId && (
+                            <button
+                                onClick={handleNavigateToCase}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                                Navigate to Case
+                            </button>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="text-gray-400 hover:text-gray-600 text-2xl"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Search Bar */}

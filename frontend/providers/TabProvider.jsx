@@ -29,6 +29,7 @@ const routeTitles = {
   '/dashboard/project': 'Project',
   '/dashboard/notes': 'Notes',
   '/dashboard/timer': 'Timer',
+  '/ai-legal-doc': 'AI Legal Doc',
 };
 
 // Get title from route
@@ -66,7 +67,7 @@ export const TabProvider = ({ children }) => {
 
   // Initialize with current route as first tab
   useEffect(() => {
-    if (tabs.length === 0 && pathname && pathname.startsWith('/dashboard')) {
+    if (tabs.length === 0 && pathname && (pathname.startsWith('/dashboard') || pathname.startsWith('/ai-legal-doc'))) {
       const initialTab = {
         id: `tab-${tabIdCounter.current++}`,
         path: pathname,
@@ -80,8 +81,8 @@ export const TabProvider = ({ children }) => {
   
   // Sync active tab with pathname changes and auto-create tabs for new routes
   useEffect(() => {
-    if (!pathname || !pathname.startsWith('/dashboard')) {
-      return; // Only handle dashboard routes
+    if (!pathname || (!pathname.startsWith('/dashboard') && !pathname.startsWith('/ai-legal-doc'))) {
+      return; // Only handle dashboard and ai-legal-doc routes
     }
 
     // Skip if pathname hasn't actually changed

@@ -50,7 +50,7 @@ export const QuickActionsContent = ({
     } else if (action.name === 'TemplateDocs') {
       router.push('/dashboard/template-documents');
     } else if (action.name === 'CompareDocs') {
-      router.push('/document-comparison');
+      router.push('/ai-legal-doc');
     } else if (action.name === 'Flowchart') {
       router.push('/dashboard/flowchart');
     } else if (action.name === 'Phone') {

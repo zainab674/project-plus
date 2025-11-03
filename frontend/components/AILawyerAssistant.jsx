@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import caseCreationAIService from '@/lib/services/caseCreationAIService';
-import geminiService from '@/lib/services/geminiService';
+import openaiService from '@/lib/services/geminiService';
 import CreateCaseModal from './cases/createCaseModal';
 import { useUser } from '@/providers/UserProvider';
 
@@ -422,15 +422,15 @@ const AILawyerAssistant = () => {
         }
     };
 
-    // Use Gemini to understand user intent
+    // Use OpenAI to understand user intent
     const understandUserIntent = async (userMessage, conversationHistory) => {
         try {
-            const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+            const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
             if (!apiKey) {
-                throw new Error('Gemini API key not configured');
+                throw new Error('OpenAI API key not configured');
             }
 
-            const prompt = `You are an AI legal assistant that helps users with legal case management. 
+            const systemPrompt = `You are an AI legal assistant that helps users with legal case management. 
 
 Analyze the user's message and determine their intent. Return a JSON response with the following structure:
 
@@ -447,51 +447,54 @@ Analyze the user's message and determine their intent. Return a JSON response wi
     "suggestions": ["array of helpful suggestions for next steps"]
 }
 
-CONVERSATION HISTORY:
-${conversationHistory.map(msg => `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`).join('\n')}
-
-USER MESSAGE: "${userMessage}"
-
 IMPORTANT: Be intelligent about context. If someone says "I want to start a new case", that's "case_creation". If they say "show me my cases", that's "list_cases". If they mention creating a case, managing cases, or starting legal proceedings, route to case_creation.
 
 Return only valid JSON:`;
 
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+            const userPrompt = `CONVERSATION HISTORY:
+${conversationHistory.map(msg => `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`).join('\n')}
+
+USER MESSAGE: "${userMessage}"`;
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }]
+                    model: 'gpt-4',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userPrompt }
+                    ],
+                    temperature: 0.3,
+                    max_tokens: 1024
                 })
             });
 
             if (!response.ok) {
-                throw new Error(`Gemini API request failed: ${response.status}`);
+                throw new Error(`OpenAI API request failed: ${response.status}`);
             }
 
             const data = await response.json();
-            const geminiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const openaiResponse = data.choices?.[0]?.message?.content || '';
 
-            const jsonMatch = geminiResponse.match(/\{[\s\S]*\}/);
+            const jsonMatch = openaiResponse.match(/\{[\s\S]*\}/);
             if (!jsonMatch) {
-                throw new Error('Invalid response format from Gemini');
+                throw new Error('Invalid response format from OpenAI');
             }
 
             const intentData = JSON.parse(jsonMatch[0]);
 
             return intentData;
         } catch (error) {
-            console.error('Error understanding user intent with Gemini:', error);
+            console.error('Error understanding user intent with OpenAI:', error);
             return {
                 intent: 'general_help',
                 confidence: 0.5,
                 extracted_info: {},
-                reasoning: 'Fallback due to Gemini error',
+                reasoning: 'Fallback due to OpenAI error',
                 suggestions: ['Try rephrasing your request', 'Use text input instead']
             };
         }

@@ -75,10 +75,9 @@ This document describes all environment variables used by the project-plus backe
 - `LIVEKIT_API_SECRET`: LiveKit API secret
 
 ## AI/ML Services (Optional)
-- `OPENAI_API_KEY`: OpenAI API key for AI responses
+- `OPENAI_API_KEY`: OpenAI API key for AI responses, document comparison, and all AI features
 - `DEEPGRAM_API_KEY`: Deepgram API key for speech-to-text
 - `CARTESIA_API_KEY`: Cartesia API key for text-to-speech
-- `GEMINI_API_KEY`: Google Gemini API key for document comparison and AI features
 
 ## API Endpoints
 
@@ -173,7 +172,6 @@ REDIS_URL=redis://localhost:6379
 # AI Services (Optional)
 OPENAI_API_KEY=your_openai_api_key
 DEEPGRAM_API_KEY=your_deepgram_api_key
-GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ## Troubleshooting

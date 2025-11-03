@@ -636,16 +636,27 @@ export const updateProject = catchAsyncError(async (req, res, next) => {
 
     const userId = req.user.user_id;
 
-    // Step 1: Validate ownership
+    // Step 1: Validate ownership or team membership
     const project = await prisma.project.findUnique({
         where: { project_id: parseInt(id) },
+        include: {
+            Members: {
+                where: {
+                    user_id: userId
+                }
+            }
+        }
     });
 
     if (!project) {
         return next(new ErrorHandler("Project not found", 404));
     }
 
-    if (project.created_by !== userId) {
+    // Check if user is the project creator or a team member assigned to the project
+    const isProjectOwner = project.created_by === userId;
+    const isTeamMember = project.Members && project.Members.length > 0;
+
+    if (!isProjectOwner && !isTeamMember) {
         return next(new ErrorHandler("You are not authorized to update this project", 403));
     }
 
@@ -655,7 +666,6 @@ export const updateProject = catchAsyncError(async (req, res, next) => {
         data: {
             name,
             description,
-            created_by: userId,
             opposing,
             client_name,
             client_address,
@@ -666,8 +676,8 @@ export const updateProject = catchAsyncError(async (req, res, next) => {
         },
     });
 
-    // Step 3: Update Project Members
-    if (Array.isArray(selectedTeamMembers)) {
+    // Step 3: Update Project Members (only project owners can modify team members)
+    if (Array.isArray(selectedTeamMembers) && isProjectOwner) {
         // Remove existing non-admin project members
         await prisma.projectMember.deleteMany({
             where: {
