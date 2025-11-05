@@ -21,6 +21,7 @@ export const useModalState = () => {
   const [isSendMailModalOpen, setIsSendMailModalOpen] = useState(false);
   const [isEnhancedChatModalOpen, setIsEnhancedChatModalOpen] = useState(false);
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false);
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
 
   // Modal handlers
   const openCasesModal = useCallback(() => setIsCaseModalOpen(true), []);
@@ -83,6 +84,9 @@ export const useModalState = () => {
   const openTimerModal = useCallback(() => setIsTimerModalOpen(true), []);
   const closeTimerModal = useCallback(() => setIsTimerModalOpen(false), []);
 
+  const openNotesModal = useCallback(() => setIsNotesModalOpen(true), []);
+  const closeNotesModal = useCallback(() => setIsNotesModalOpen(false), []);
+
   return {
     // States
     isCaseModalOpen,
@@ -103,6 +107,7 @@ export const useModalState = () => {
     isSendMailModalOpen,
     isEnhancedChatModalOpen,
     isTimerModalOpen,
+    isNotesModalOpen,
     
     // Handlers
     openCasesModal,
@@ -141,5 +146,7 @@ export const useModalState = () => {
     closeEnhancedChatModal,
     openTimerModal,
     closeTimerModal,
+    openNotesModal,
+    closeNotesModal,
   };
 };

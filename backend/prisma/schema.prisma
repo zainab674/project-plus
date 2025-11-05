@@ -594,6 +594,7 @@ model Task {
   Time                 TaskTime[]
   billingLineItems     BillingLineItem[]
   privateConversations PrivateConversation[] @relation("TaskPrivateConversations")
+  Comments             Comment[]
 
   // Add indexes for better performance
   @@index([project_id])
@@ -742,6 +743,7 @@ model Invitation {
   id              Int        @id @default(autoincrement())
   token           String     @unique
   project_id      Int?
+  task_id         Int?
   expires_at      DateTime
   role            Roles
   legalRole       LegalRole?
@@ -829,14 +831,17 @@ model TaskProgress {
 model Comment {
   comment_id String   @id @default(uuid())
   project_id Int?
+  task_id    Int?
   user_id    Int
   content    String   @db.Text
   created_at DateTime @default(now())
   project    Project? @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+  task       Task?    @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
   user       User     @relation("UserComments", fields: [user_id], references: [user_id], onDelete: Cascade)
 
   // Add indexes for better performance
   @@index([project_id])
+  @@index([task_id])
   @@index([user_id])
   @@index([created_at])
 }

@@ -25,6 +25,8 @@ import {
     createDocumentRequestEmail,
     getTimeEfficiencyData,
     checkMeetingEmails,
+    addTaskNote,
+    getTaskNotes,
 } from "../controllers/taskController.js";
 import { authMiddleware } from '../middlewares/authMiddleware.js'
 import singleUpload from "../middlewares/multerMiddleware.js";
@@ -99,6 +101,12 @@ router
 
 router
     .route("/comment/:task_id").get(authMiddleware, getComments);
+
+router
+    .route("/note").post(authMiddleware, addTaskNote);
+
+router
+    .route("/note/:task_id").get(authMiddleware, getTaskNotes);
 
 router
     .route("/progress/get-progress/:task_id").get(authMiddleware, getProgress);

@@ -1,6 +1,22 @@
 import express from "express";
 import { authMiddleware } from '../middlewares/authMiddleware.js'
-import { getChatsUser, getConversationID, getConversations, getConversationUsers, getProjectChatMessages, getPrivateChatConversationID, getPrivateChatConversations, testMessageSaving } from "../controllers/chatController.js";
+import singleUpload from '../middlewares/multerMiddleware.js';
+import { 
+  getChatsUser, 
+  getConversationID, 
+  getConversations, 
+  getConversationUsers, 
+  getProjectChatMessages, 
+  getPrivateChatConversationID, 
+  getPrivateChatConversations, 
+  testMessageSaving,
+  createCustomGroup,
+  getCustomGroups,
+  getCustomGroupMessages,
+  sendCustomGroupMessage,
+  addGroupMembers,
+  removeGroupMember
+} from "../controllers/chatController.js";
 
 
 const router = express.Router();
@@ -15,5 +31,13 @@ router.route('/private/get-conversations/:conversation_id').get(authMiddleware, 
 
 // Test route
 router.route('/test-save-message').post(authMiddleware, testMessageSaving);
+
+// Custom Group Chat routes
+router.route('/groups/create').post(authMiddleware, createCustomGroup);
+router.route('/groups').get(authMiddleware, getCustomGroups);
+router.route('/groups/:group_id/messages').get(authMiddleware, getCustomGroupMessages);
+router.route('/groups/:group_id/messages').post(authMiddleware, singleUpload, sendCustomGroupMessage);
+router.route('/groups/:group_id/members').post(authMiddleware, addGroupMembers);
+router.route('/groups/:group_id/members/:user_id').delete(authMiddleware, removeGroupMember);
 
 export default router;

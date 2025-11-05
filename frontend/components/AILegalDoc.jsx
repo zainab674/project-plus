@@ -539,11 +539,18 @@ const AILegalDoc = () => {
     };
 
     // Group trackParts into individual changes (consecutive added/removed parts grouped together)
+    // Split large changes into smaller chunks for better review granularity
+    // Use more aggressive splitting for additions since they're often longer blocks
     const groupIntoIndividualChanges = (parts) => {
         if (!parts || parts.length === 0) return [];
         
         const changes = [];
         let currentChange = null;
+        // More aggressive limits: smaller chunks for better granularity
+        const MAX_CHANGE_LENGTH = 80; // Maximum characters per grouped change before splitting
+        const MAX_PARTS_PER_CHANGE = 3; // Maximum number of consecutive parts to group (reduced for more granularity)
+        // For additions, be even more aggressive since they're often long blocks
+        const MAX_ADDITION_LENGTH = 60; // Smaller limit specifically for additions
         
         parts.forEach((part, index) => {
             if (part.type === 'same') {
@@ -569,10 +576,32 @@ const AILegalDoc = () => {
                         parts: [part]
                     };
                 } else {
-                    // Add to current change
-                    currentChange.text += ' ' + part.text;
-                    currentChange.endIndex = index;
-                    currentChange.parts.push(part);
+                    // Use different limits for additions vs removals
+                    const maxLength = part.type === 'added' ? MAX_ADDITION_LENGTH : MAX_CHANGE_LENGTH;
+                    const wouldExceedLength = (currentChange.text + ' ' + part.text).length > maxLength;
+                    const wouldExceedPartCount = (currentChange.parts.length + 1) > MAX_PARTS_PER_CHANGE;
+                    
+                    // Minimum length before splitting (smaller for additions)
+                    const minLengthBeforeSplit = part.type === 'added' ? 20 : 30;
+                    
+                    // If current change is already large or would exceed limit, start a new change
+                    if ((wouldExceedLength && currentChange.text.length > minLengthBeforeSplit) || wouldExceedPartCount) {
+                        // Close current change and start new one
+                        changes.push(currentChange);
+                        currentChange = {
+                            id: `change-${index}`,
+                            type: part.type,
+                            text: part.text,
+                            startIndex: index,
+                            endIndex: index,
+                            parts: [part]
+                        };
+                    } else {
+                        // Add to current change
+                        currentChange.text += ' ' + part.text;
+                        currentChange.endIndex = index;
+                        currentChange.parts.push(part);
+                    }
                 }
             }
         });
@@ -1354,6 +1383,8 @@ const AILegalDoc = () => {
                         {/* Changes Review Panel - shown when tracked changes are visible */}
                         {trackedChangesHtml && (() => {
                             const totalChanges = individualChanges.length;
+                            const addedChanges = individualChanges.filter(c => c.type === 'added');
+                            const removedChanges = individualChanges.filter(c => c.type === 'removed');
                             
                             // Check if all changes are accepted
                             const allAccepted = individualChanges.length > 0 && individualChanges.every(change => changeStates[change.id] === 'accepted');
@@ -1566,6 +1597,11 @@ const AILegalDoc = () => {
                                         <div className="flex items-center justify-between mb-2">
                                             <div className="text-sm font-semibold text-gray-900">
                                                 Made {totalChanges} change{totalChanges !== 1 ? 's' : ''}
+                                                {(addedChanges.length > 0 || removedChanges.length > 0) && (
+                                                    <span className="text-xs text-gray-500 font-normal ml-2">
+                                                        ({addedChanges.length} added, {removedChanges.length} removed)
+                                                    </span>
+                                                )}
                                             </div>
                                             {allAccepted && (
                                                 <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
@@ -1623,10 +1659,11 @@ const AILegalDoc = () => {
                                                     const isAccepted = changeState === 'accepted';
                                                     const isRejected = changeState === 'rejected';
                                                     
-                                                    // Generate a description for the change
+                                                    // Always show full text for additions, truncate description for removals
+                                                    const previewLength = 80;
                                                     const changeDescription = change.type === 'added' 
-                                                        ? `Added: "${change.text.length > 50 ? change.text.substring(0, 50) + '...' : change.text}"`
-                                                        : `Removed: "${change.text.length > 50 ? change.text.substring(0, 50) + '...' : change.text}"`;
+                                                        ? `Added: "${change.text.length > previewLength ? change.text.substring(0, previewLength) + '...' : change.text}"`
+                                                        : `Removed: "${change.text.length > previewLength ? change.text.substring(0, previewLength) + '...' : change.text}"`;
                                                     
                                                     return (
                                                         <div 
@@ -1637,16 +1674,24 @@ const AILegalDoc = () => {
                                                                 'bg-white border-gray-200'
                                                             }`}
                                                         >
-                                                            <div className="text-xs text-gray-600 mb-2">
-                                                                {changeDescription}
+                                                            <div className="text-xs text-gray-600 mb-2 font-medium">
+                                                                {change.type === 'added' ? '✓ Added' : '✗ Removed'}
+                                                                {change.parts && change.parts.length > 1 && (
+                                                                    <span className="text-gray-400 ml-1">({change.parts.length} parts)</span>
+                                                                )}
                                                             </div>
-                                                            {change.text.length > 50 && (
-                                                                <div className={`text-xs mb-2 px-2 py-1 rounded ${
-                                                                    change.type === 'added' 
-                                                                        ? 'bg-green-100 text-green-800' 
-                                                                        : 'bg-red-100 text-red-800'
-                                                                }`}>
-                                                                    {change.text}
+                                                            {/* Always show full text in a scrollable box */}
+                                                            <div className={`text-xs mb-2 px-2 py-2 rounded max-h-32 overflow-y-auto ${
+                                                                change.type === 'added' 
+                                                                    ? 'bg-green-100 text-green-800 border border-green-200' 
+                                                                    : 'bg-red-100 text-red-800 border border-red-200'
+                                                            }`}>
+                                                                <pre className="whitespace-pre-wrap font-sans text-xs">{change.text || '(empty)'}</pre>
+                                                            </div>
+                                                            {/* Show preview in description if text is very long */}
+                                                            {change.text.length > previewLength && (
+                                                                <div className="text-xs text-gray-500 mb-2 italic">
+                                                                    Preview: {changeDescription}
                                                                 </div>
                                                             )}
                                                             <div className="flex gap-2 mt-2">

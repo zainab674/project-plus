@@ -47,7 +47,12 @@ export const UserProvider = ({children}) => {
     },[]);
 
     const loadUserWithProjects = useCallback(async () => {
-        if (hasFullUserData) return user; // Return cached data if already loaded
+        // Check if we have full data AND projects exist (not empty)
+        const hasProjects = user?.Projects && Array.isArray(user.Projects) && user.Projects.length > 0;
+        
+        if (hasFullUserData && hasProjects) {
+            return user; // Return cached data if already loaded and has projects
+        }
         
         setIsLoading(true);
         try {

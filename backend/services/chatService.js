@@ -79,10 +79,16 @@ export const handleMessage = async (data, redis, io) => {
         } else {
             // If Redis is not available, emit directly to all team members
             if (data.is_group_chat && data.project_id) {
-                // Emit to all connected users (in a real app, you'd filter by project members)
+                // Project group chat - emit to all connected users (in a real app, you'd filter by project members)
                 io.emit(ON_MESSAGE, broadcastData);
 
                 // Send real-time notification for group message
+                chatNotificationService.notifyGroupMessage(broadcastData);
+            } else if (data.is_group_chat && data.conversation_id && !data.project_id) {
+                // Custom group chat - broadcast to all users (they'll filter by conversation_id on frontend)
+                io.emit(ON_MESSAGE, broadcastData);
+
+                // Send real-time notification for custom group message
                 chatNotificationService.notifyGroupMessage(broadcastData);
             } else if (data.reciever_id) {
                 // Individual message
@@ -116,6 +122,10 @@ export const handleMessage = async (data, redis, io) => {
             redis.publish(REDIS_CHANNEL, JSON.stringify(redisPublishData));
         } else {
             if (data.is_group_chat && data.project_id) {
+                // Project group chat
+                io.emit(ON_MESSAGE, data);
+            } else if (data.is_group_chat && data.conversation_id && !data.project_id) {
+                // Custom group chat
                 io.emit(ON_MESSAGE, data);
             } else if (data.reciever_id) {
                 const receiverSocketId = userSocketMap.get(data.reciever_id.toString());
@@ -381,10 +391,16 @@ export const initRedisSubcriber = (redis, io) => {
 
 
                 if (parseMessage.is_group_chat && parseMessage.project_id) {
-                    // Group chat message - broadcast to all connected users
+                    // Project group chat message - broadcast to all connected users
                     io.emit(ON_MESSAGE, parseMessage);
 
                     // Send notification for group message
+                    chatNotificationService.notifyGroupMessage(parseMessage);
+                } else if (parseMessage.is_group_chat && parseMessage.conversation_id && !parseMessage.project_id) {
+                    // Custom group chat message - broadcast to all users (they'll filter by conversation_id on frontend)
+                    io.emit(ON_MESSAGE, parseMessage);
+
+                    // Send notification for custom group message
                     chatNotificationService.notifyGroupMessage(parseMessage);
                 } else if (reciever_id) {
                     // Individual message

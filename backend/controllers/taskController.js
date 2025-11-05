@@ -675,6 +675,75 @@ export const getComments = catchAsyncError(async (req, res, next) => {
     });
 });
 
+// Add task note (comment specifically for tasks)
+export const addTaskNote = catchAsyncError(async (req, res, next) => {
+    let { task_id, content } = req.body;
+    const user_id = req.user.user_id;
+    
+    if (!task_id) return next(new ErrorHandler(401, "Task Id is required."));
+    if (!content) return next(new ErrorHandler(401, "Content is required."));
+
+    // Verify task exists
+    const task = await prisma.task.findUnique({
+        where: {
+            task_id: parseInt(task_id)
+        }
+    });
+
+    if (!task) {
+        return next(new ErrorHandler(404, "Task not found."));
+    }
+
+    await prisma.comment.create({
+        data: {
+            task_id: parseInt(task_id),
+            project_id: task.project_id, // Also store project_id for easier querying
+            user_id: user_id,
+            content: content
+        }
+    });
+
+    res.status(200).json({
+        success: true,
+        message: 'Task note added successfully',
+    });
+});
+
+// Get task notes (comments specifically for tasks)
+export const getTaskNotes = catchAsyncError(async (req, res, next) => {
+    let { task_id } = req.params;
+    const user_id = req.user.user_id;
+    
+    if (!task_id) return next(new ErrorHandler(401, "Task Id is required."));
+
+    const notes = await prisma.comment.findMany({
+        where: {
+            task_id: parseInt(task_id)
+            // task_id is not null means it's a task note
+        },
+        select: {
+            content: true,
+            comment_id: true,
+            created_at: true,
+            user: {
+                select: {
+                    user_id: true,
+                    name: true,
+                    email: true
+                }
+            }
+        },
+        orderBy: {
+            created_at: 'desc'
+        }
+    });
+
+    res.status(200).json({
+        success: true,
+        notes
+    });
+});
+
 export const addEmail = catchAsyncError(async (req, res, next) => {
     let { task_id, subject, content } = req.body;
     const user_id = req.user.user_id;

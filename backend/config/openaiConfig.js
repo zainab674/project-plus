@@ -51,23 +51,34 @@ export function getModelConfig(model = null) {
   const selectedModel = model || openaiConfig.defaultModel;
   
   // Model-specific configurations
+  // Note: maxTokens here represents the context window size, not completion token limit
+  // Most OpenAI models have a 4096 completion token limit regardless of context size
   const modelConfigs = {
     'gpt-4': {
-      maxTokens: 8192,
+      maxTokens: 8192, // Context window
+      maxCompletionTokens: 4096, // Completion token limit
       charLimit: 32000, // Rough estimate
     },
     'gpt-4-turbo': {
-      maxTokens: 128000,
+      maxTokens: 128000, // Context window
+      maxCompletionTokens: 4096, // Completion token limit (most models cap at 4096)
+      charLimit: 500000,
+    },
+    'gpt-4o': {
+      maxTokens: 128000, // Context window
+      maxCompletionTokens: 4096, // Completion token limit
       charLimit: 500000,
     },
     'gpt-3.5-turbo': {
       maxTokens: 4096,
+      maxCompletionTokens: 4096,
       charLimit: 16000,
     },
   };
   
   return modelConfigs[selectedModel] || {
     maxTokens: openaiConfig.defaultMaxTokens,
+    maxCompletionTokens: 4096, // Default completion limit
     charLimit: openaiConfig.defaultCharLimit,
   };
 }

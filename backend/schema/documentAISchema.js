@@ -113,6 +113,86 @@ export const DocumentAISchema = {
   },
 
   /**
+   * Repair truncated JSON by closing unclosed strings and objects
+   * @param {string} truncatedJSON - Truncated JSON string
+   * @returns {Object} Repaired JSON object
+   */
+  repairTruncatedJSON(truncatedJSON) {
+    try {
+      let repaired = truncatedJSON.trim();
+      
+      // Count unclosed braces
+      let openBraces = (repaired.match(/\{/g) || []).length;
+      let closeBraces = (repaired.match(/\}/g) || []).length;
+      const missingBraces = openBraces - closeBraces;
+      
+      // Check if we're in the middle of a string
+      const lastQuoteIndex = repaired.lastIndexOf('"');
+      const lastBackslashIndex = repaired.lastIndexOf('\\');
+      const isInString = lastQuoteIndex > 0 && 
+                        (lastBackslashIndex === -1 || lastBackslashIndex < lastQuoteIndex - 1) &&
+                        (repaired.substring(lastQuoteIndex + 1).match(/[^\\]"/) === null);
+      
+      // If in a string, close it
+      if (isInString && repaired[repaired.length - 1] !== '"') {
+        // Find the last unclosed quote
+        let quoteCount = 0;
+        let escaped = false;
+        for (let i = 0; i < repaired.length; i++) {
+          if (!escaped && repaired[i] === '"') {
+            quoteCount++;
+          }
+          escaped = !escaped && repaired[i] === '\\';
+        }
+        // If odd number of quotes, we're in a string - close it
+        if (quoteCount % 2 === 1) {
+          repaired += '"';
+        }
+      }
+      
+      // Close any unclosed objects/arrays
+      if (missingBraces > 0) {
+        // Try to intelligently close based on context
+        // If we're in the middle of an "output" field, just close the string and object
+        if (repaired.includes('"output"') && repaired.includes(':')) {
+          // Find the output value start
+          const outputMatch = repaired.match(/"output"\s*:\s*"/);
+          if (outputMatch) {
+            const outputStart = outputMatch.index + outputMatch[0].length;
+            // Close the string and object
+            repaired = repaired.substring(0, outputStart) + '...[truncated]"';
+            for (let i = 0; i < missingBraces; i++) {
+              repaired += '}';
+            }
+          }
+        } else {
+          // Just close braces
+          for (let i = 0; i < missingBraces; i++) {
+            repaired += '}';
+          }
+        }
+      }
+      
+      // Try to parse the repaired JSON
+      const parsed = JSON.parse(repaired);
+      
+      // If output field was truncated, mark it
+      if (parsed.docs) {
+        for (const [filename, docInfo] of Object.entries(parsed.docs)) {
+          if (docInfo.output && docInfo.output.endsWith('...[truncated]')) {
+            console.warn(`Document output for "${filename}" was truncated due to token limit`);
+          }
+        }
+      }
+      
+      return parsed;
+    } catch (repairError) {
+      console.error('Failed to repair truncated JSON:', repairError);
+      throw new Error(`JSON response was truncated and could not be repaired. Response preview: ${truncatedJSON.substring(0, 300)}`);
+    }
+  },
+
+  /**
    * Validate complete AI response
    * @param {any} response - Response object to validate
    * @returns {{valid: boolean, errors: string[]}} Validation result
@@ -203,43 +283,48 @@ export const DocumentAISchema = {
             throw new Error('Failed to parse JSON from code block: no valid JSON found');
           }
         }
-      } else {
-        // Try to find any JSON object in the response (look for balanced braces)
-        let braceCount = 0;
-        let startIndex = -1;
-        let endIndex = -1;
-        
-        for (let i = 0; i < trimmed.length; i++) {
-          if (trimmed[i] === '{') {
-            if (startIndex === -1) startIndex = i;
-            braceCount++;
-          } else if (trimmed[i] === '}') {
-            braceCount--;
-            if (braceCount === 0 && startIndex !== -1) {
-              endIndex = i;
-              break;
+        } else {
+          // Try to find any JSON object in the response (look for balanced braces)
+          let braceCount = 0;
+          let startIndex = -1;
+          let endIndex = -1;
+          
+          for (let i = 0; i < trimmed.length; i++) {
+            if (trimmed[i] === '{') {
+              if (startIndex === -1) startIndex = i;
+              braceCount++;
+            } else if (trimmed[i] === '}') {
+              braceCount--;
+              if (braceCount === 0 && startIndex !== -1) {
+                endIndex = i;
+                break;
+              }
             }
           }
-        }
-        
-        if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-          const jsonCandidate = trimmed.substring(startIndex, endIndex + 1);
-          try {
-            parsed = JSON.parse(jsonCandidate);
-          } catch (parseError) {
-            // Log the problematic JSON for debugging
-            console.error('Failed to parse extracted JSON:', {
-              snippet: jsonCandidate.substring(0, 200),
-              error: parseError.message
-            });
-            throw new Error(`Failed to extract valid JSON from response: ${parseError.message}. Response preview: ${trimmed.substring(0, 300)}`);
+          
+          if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+            const jsonCandidate = trimmed.substring(startIndex, endIndex + 1);
+            try {
+              parsed = JSON.parse(jsonCandidate);
+            } catch (parseError) {
+              // Log the problematic JSON for debugging
+              console.error('Failed to parse extracted JSON:', {
+                snippet: jsonCandidate.substring(0, 200),
+                error: parseError.message
+              });
+              throw new Error(`Failed to extract valid JSON from response: ${parseError.message}. Response preview: ${trimmed.substring(0, 300)}`);
+            }
+          } else if (startIndex !== -1 && endIndex === -1) {
+            // JSON appears to be truncated (starts with { but no closing brace found)
+            // Try to repair truncated JSON by closing unclosed strings and objects
+            console.warn('JSON appears to be truncated. Attempting to repair...');
+            parsed = this.repairTruncatedJSON(trimmed.substring(startIndex));
+          } else {
+            // Log what we received for debugging
+            console.error('No JSON found in response. Response preview:', trimmed.substring(0, 500));
+            throw new Error(`No JSON found in response. Response preview: ${trimmed.substring(0, 200)}`);
           }
-        } else {
-          // Log what we received for debugging
-          console.error('No JSON found in response. Response preview:', trimmed.substring(0, 500));
-          throw new Error(`No JSON found in response. Response preview: ${trimmed.substring(0, 200)}`);
         }
-      }
     }
     
     // Validate the parsed response

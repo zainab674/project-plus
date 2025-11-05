@@ -1,7 +1,7 @@
 
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarIcon, ChartNoAxesColumnIncreasing, ChevronDownIcon, FileIcon, Menu, TypeOutline, User2, UserCircle, Users, UsersIcon, X, Layers, Upload, Paperclip, FileText } from 'lucide-react'
+import { CalendarIcon, ChartNoAxesColumnIncreasing, ChevronDownIcon, FileIcon, Menu, TypeOutline, User2, UserCircle, Users, UsersIcon, X, Layers, Upload, Paperclip, FileText, UserPlus, Mail } from 'lucide-react'
 import { Button } from "@/components/Button"
 import {
     Select,
@@ -22,6 +22,8 @@ import InternalDocumentSelector from '../InternalDocumentSelector'
 import { useUser } from '@/providers/UserProvider'
 import { Textarea } from '../ui/textarea'
 import { usePhaseFolders } from '@/hooks/usePhaseFolders'
+import { invitePeopleRequest, sendViaMailRequest } from '@/lib/http/project'
+import { generateInvitation } from '@/utils/createInvitation'
 const JoditEditor = dynamic(
     () => import('jodit-react'),
     { ssr: false }
@@ -35,7 +37,9 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [selectedInternalDoc, setSelectedInternalDoc] = useState(null);
     const [showInternalDocSelector, setShowInternalDocSelector] = useState(false);
-    const { loadUser } = useUser()
+    const [showInviteEmail, setShowInviteEmail] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState('');
+    const { loadUser, user } = useUser()
     const [formdata, setFormdata] = useState({
         project_id: project?.project_id,
         name: "New Task",
@@ -156,9 +160,52 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
           
 
             const res = await createTaskRequest(formData);
+            const taskId = res?.data?.task?.task_id;
+            
+            // If email is provided, send invitation after task is created
+            if (inviteEmail && taskId) {
+                try {
+                    // Generate invitation link with task_id and project_id
+                    const inviteRes = await invitePeopleRequest({
+                        role: 'TEAM',
+                        projectId: project.project_id,
+                        taskId: taskId,
+                        invited_email: inviteEmail
+                    });
+                    
+                    // Generate invitation message
+                    const invitationMessage = generateInvitation(
+                        inviteRes.data.link,
+                        project.name,
+                        user?.name || 'Project Admin',
+                        'Project Admin',
+                        'TEAM',
+                        "False",
+                        'Team Member'
+                    );
+                    
+                    // Send invitation via email
+                    await sendViaMailRequest({
+                        invitation: invitationMessage,
+                        mail: inviteEmail,
+                        projectId: project.project_id
+                    });
+                    
+                    toast.success('Task created and invitation sent successfully!');
+                } catch (inviteError) {
+                    // Task was created but invitation failed
+                    console.error('Invitation error:', inviteError);
+                    toast.warning('Task created successfully, but invitation failed. You can invite manually later.');
+                }
+            } else {
+                toast.success(res?.data?.message);
+            }
+            
             setSelectedMember([]);
             setSelectedFile(null);
             setSelectedInternalDoc(null);
+            setInviteEmail('');
+            setShowInviteEmail(false);
             setFormdata({
                 project_id: project?.project_id,
                 name: "New Task",
@@ -170,7 +217,6 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
                 status: "TO_DO",
                 phase: hasPhases ? project.phases[0] : ""
             });
-            toast.success(res?.data?.message);
 
             onClose();
         } catch (error) {
@@ -178,7 +224,7 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
         } finally {
             setIsLoading(false)
         }
-    }, [selectedMember, formdata, project, hasPhases, selectedFile]);
+    }, [selectedMember, formdata, project, hasPhases, selectedFile, selectedInternalDoc, inviteEmail, user]);
 
     const config = useMemo(() => ({
         placeholder: "Add description",
@@ -339,6 +385,53 @@ const CreateTask = ({ project, onClose, prefillData = {} }) => {
                         animation={2}
                         maxCount={3}
                     />
+                </div>
+
+                {/* Invite Member Section */}
+                <div className="grid grid-cols-[auto,1fr] gap-5 items-center">
+                    <div className="flex items-center gap-2 w-[6rem]">
+                        <UserPlus className="h-5 w-5 text-black" />
+                        <span className="text-black text-sm font-medium">Invite</span>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        {!showInviteEmail ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setShowInviteEmail(true)}
+                                className="w-auto border-primary text-black hover:bg-gray-50"
+                            >
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Invite Team Member
+                            </Button>
+                        ) : (
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="email"
+                                    placeholder="Enter email to invite team member"
+                                    value={inviteEmail}
+                                    onChange={(e) => setInviteEmail(e.target.value)}
+                                    className="flex-1 focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary text-black"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowInviteEmail(false);
+                                        setInviteEmail('');
+                                    }}
+                                    className="border-red-300 text-red-600 hover:bg-red-50"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                        {showInviteEmail && (
+                            <p className="text-xs text-gray-500">
+                                The invited member will be added to team, project, and this task automatically.
+                            </p>
+                        )}
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-[auto,1fr] gap-5 items-center">

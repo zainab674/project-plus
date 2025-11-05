@@ -37,6 +37,7 @@ import Timer from './Timer'
 import BigDialog from './Dialogs/BigDialog'
 import AddWorkDescription from './AddWorkDescription'
 import TaskComments from './TaskComments'
+import TaskNotes from './TaskNotes'
 import UpdateTask from './Dialogs/UpdateTask'
 import moment from 'moment'
 import { getMediaByTaskIdRequest } from '@/lib/http/media'
@@ -768,6 +769,7 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
     const [taskTemplates, setTaskTemplates] = useState(null)
     const [loadingTemplates, setLoadingTemplates] = useState(false)
     const [stopTimeOpen, setStopTimeOpen] = useState(null)
+    const [notesModalOpen, setNotesModalOpen] = useState(false)
     
     const { activeTimer, startTimer, stopTimer, loadingStart, loadingStop } = useTimer()
 
@@ -922,6 +924,15 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                             </div>
 
                             <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setNotesModalOpen(true)}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition-colors"
+                                    title="View task notes"
+                                >
+                                    <MessageSquare className="w-3 h-3" />
+                                    Notes
+                                </button>
+
                                 <button
                                     onClick={handleEditClick}
                                     className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
@@ -1120,6 +1131,14 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                     description="Add a description for the work completed"
                 />
             </BigDialog>
+
+            {/* Task Notes Modal */}
+            <TaskNotes
+                open={notesModalOpen}
+                onClose={() => setNotesModalOpen(false)}
+                task_id={task?.task_id}
+                task={task}
+            />
         </>
     )
 }

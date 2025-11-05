@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarIcon, ChartNoAxesColumnIncreasing, ChevronDownIcon, FileIcon, Menu, TypeOutline, User2, UserCircle, Users, UsersIcon, X, Layers, Plus, Upload, Paperclip, FileText } from 'lucide-react'
+import { CalendarIcon, ChartNoAxesColumnIncreasing, ChevronDownIcon, FileIcon, Menu, TypeOutline, User2, UserCircle, Users, UsersIcon, X, Layers, Plus, Upload, Paperclip, FileText, UserPlus } from 'lucide-react'
 import { Button } from "@/components/Button"
 import {
     Select,
@@ -24,6 +24,8 @@ import InternalDocumentSelector from './InternalDocumentSelector'
 import { usePhaseFolders } from '@/hooks/usePhaseFolders'
 import { useRouter } from 'next/navigation'
 import { useDashboardFilter } from '@/providers/DashboardFilterProvider'
+import { invitePeopleRequest, sendViaMailRequest } from '@/lib/http/project'
+import { generateInvitation } from '@/utils/createInvitation'
 
 const AddTaskPage = () => {
     const router = useRouter();
@@ -33,6 +35,8 @@ const AddTaskPage = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [selectedInternalDoc, setSelectedInternalDoc] = useState(null);
     const [showInternalDocSelector, setShowInternalDocSelector] = useState(false);
+    const [showInviteEmail, setShowInviteEmail] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState('');
     const { user, loadUserWithProjects, hasFullUserData } = useUser();
     const [selectedProject, setSelectedProject] = useState('');
     const [fullUserData, setFullUserData] = useState(null);
@@ -55,7 +59,11 @@ const AddTaskPage = () => {
 
     // Load full user data when component mounts or when user changes
     useEffect(() => {
-        if (user && !user.Projects && !hasFullUserData) {
+        // Check if user exists and projects are missing or empty
+        const hasNoProjects = !user?.Projects || (Array.isArray(user.Projects) && user.Projects.length === 0);
+        
+        // Load projects if they're missing, even if hasFullUserData is true (might have been set incorrectly)
+        if (user && hasNoProjects) {
             setProjectsLoading(true);
             loadUserWithProjects().then(fullUser => {
                 setFullUserData(fullUser);
@@ -65,7 +73,7 @@ const AddTaskPage = () => {
                 setProjectsLoading(false);
                 toast.error('Failed to load projects');
             });
-        } else if (user && user.Projects) {
+        } else if (user && user.Projects && user.Projects.length > 0) {
             setFullUserData(user);
         }
     }, [user, loadUserWithProjects, hasFullUserData]);
@@ -209,9 +217,52 @@ const AddTaskPage = () => {
            
 
             const res = await createTaskRequest(formData);
+            const taskId = res?.data?.task?.task_id || res?.data?.task_id;
+            
+            // If email is provided, send invitation after task is created
+            if (inviteEmail && taskId && currentProject) {
+                try {
+                    // Generate invitation link with task_id and project_id
+                    const inviteRes = await invitePeopleRequest({
+                        role: 'TEAM',
+                        projectId: currentProject.project_id,
+                        taskId: taskId,
+                        invited_email: inviteEmail
+                    });
+                    
+                    // Generate invitation message
+                    const invitationMessage = generateInvitation(
+                        inviteRes.data.link,
+                        currentProject.name,
+                        user?.name || 'Project Admin',
+                        'Project Admin',
+                        'TEAM',
+                        "False",
+                        'Team Member'
+                    );
+                    
+                    // Send invitation via email
+                    await sendViaMailRequest({
+                        invitation: invitationMessage,
+                        mail: inviteEmail,
+                        projectId: currentProject.project_id
+                    });
+                    
+                    toast.success('Task created and invitation sent successfully!');
+                } catch (inviteError) {
+                    // Task was created but invitation failed
+                    console.error('Invitation error:', inviteError);
+                    toast.warning('Task created successfully, but invitation failed. You can invite manually later.');
+                }
+            } else {
+                toast.success(res?.data?.message || 'Task created successfully');
+            }
+            
             setSelectedMember([]);
             setSelectedFile(null);
             setSelectedInternalDoc(null);
+            setInviteEmail('');
+            setShowInviteEmail(false);
             setFormdata({
                 project_id: '',
                 name: "New Task",
@@ -224,7 +275,6 @@ const AddTaskPage = () => {
                 phase: ""
             });
             setSelectedProject('');
-            toast.success(res?.data?.message || 'Task created successfully');
             router.push('/dashboard');
         } catch (error) {
             console.error('AddTaskPage - Error creating task:', error);
@@ -242,7 +292,7 @@ const AddTaskPage = () => {
         } finally {
             setIsLoading(false)
         }
-    }, [selectedMember, formdata, selectedProject, currentProject, selectedFile, router]);
+    }, [selectedMember, formdata, selectedProject, currentProject, selectedFile, selectedInternalDoc, inviteEmail, user, router]);
 
     return (
         <div className="flex h-screen bg-gray-50">
@@ -441,6 +491,54 @@ const AddTaskPage = () => {
                                         maxCount={3}
                                         disabled={!selectedProject}
                                     />
+                                </div>
+
+                                {/* Invite Member Section */}
+                                <div className="grid grid-cols-[auto,1fr] gap-5 items-center">
+                                    <div className="flex items-center gap-2 w-[6rem]">
+                                        <UserPlus className="h-5 w-5 text-black" />
+                                        <span className="text-black text-sm font-medium">Invite</span>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        {!showInviteEmail ? (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => setShowInviteEmail(true)}
+                                                className="w-auto border-primary text-black hover:bg-gray-50"
+                                                disabled={!selectedProject}
+                                            >
+                                                <UserPlus className="h-4 w-4 mr-2" />
+                                                Invite Team Member
+                                            </Button>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    type="email"
+                                                    placeholder="Enter email to invite team member"
+                                                    value={inviteEmail}
+                                                    onChange={(e) => setInviteEmail(e.target.value)}
+                                                    className="flex-1 focus-visible:ring-0 focus-visible:ring-transparent bg-white border-primary text-black"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setShowInviteEmail(false);
+                                                        setInviteEmail('');
+                                                    }}
+                                                    className="border-red-300 text-red-600 hover:bg-red-50"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {showInviteEmail && (
+                                            <p className="text-xs text-gray-500">
+                                                The invited member will be added to team, project, and this task automatically.
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Status */}

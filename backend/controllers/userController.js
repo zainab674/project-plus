@@ -1285,6 +1285,30 @@ export const getUserWithProjects = catchAsyncError(async (req, res, next) => {
         return next(new ErrorHandler('User not found', 404));
     }
 
+    // Combine all projects: owned, collaboration, and client projects
+    const allProjects = [...(user.Projects || [])];
+    
+    // Add collaboration projects (projects where user is a member)
+    if (user.Collaboration && Array.isArray(user.Collaboration)) {
+        user.Collaboration.forEach(collab => {
+            if (collab.project && !allProjects.find(p => p.project_id === collab.project.project_id)) {
+                allProjects.push(collab.project);
+            }
+        });
+    }
+    
+    // Add client projects (projects where user is a client)
+    if (user.Services && Array.isArray(user.Services)) {
+        user.Services.forEach(service => {
+            if (service.project && !allProjects.find(p => p.project_id === service.project.project_id)) {
+                allProjects.push(service.project);
+            }
+        });
+    }
+
+    // Replace Projects array with combined array
+    user.Projects = allProjects;
+
     res.status(200).json({
         success: true,
         user: user

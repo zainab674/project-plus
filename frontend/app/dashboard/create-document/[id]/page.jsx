@@ -989,6 +989,14 @@ const DocumentManager = () => {
               <span>{showHelp ? 'Hide Help' : 'Show Help'}</span>
             </button>
             <button
+              onClick={() => router.push('/dashboard/template-documents')}
+              className="flex items-center space-x-2 bg-green-300 text-green-800 px-6 py-3 rounded-lg hover:bg-green-400 transition-colors text-base font-medium"
+              title="Send to client"
+            >
+              <Send className="w-5 h-5" />
+              <span>Send to Client</span>
+            </button>
+            <button
               onClick={() => createFolder(null)}
               className="flex items-center space-x-2 bg-sky-300 text-sky-800 px-6 py-3 rounded-lg hover:bg-sky-400 transition-colors text-base font-medium"
             >

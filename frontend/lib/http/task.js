@@ -12,6 +12,8 @@ export const addTaskTranscribtionRequest = async (formdata) => api.post(`/task/t
 });
 export const addTaskCommentsRequest = async (formdata) => api.post(`/task/comment`, formdata);
 export const getTaskCommentsRequest = async (task_id) => api.get(`/task/comment/${task_id}`);
+export const addTaskNoteRequest = async (formdata) => api.post(`/task/note`, formdata);
+export const getTaskNotesRequest = async (task_id) => api.get(`/task/note/${task_id}`);
 export const sendTaskEmailRequest = async (formdata) => api.post(`/task/email`, formdata, {
   headers: {
     'Content-Type': 'multipart/form-data',

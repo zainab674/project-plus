@@ -44,11 +44,11 @@ export const QuickActionsContent = ({
     } else if (action.name === 'Mail') {
       modalFunctions.openEnhancedMailModal();
     } else if (action.name === 'Chat') {
-      router.push('/dashboard/chat');
+      modalFunctions.openEnhancedChatModal();
     } else if (action.name === 'Team') {
       router.push('/dashboard/team');
     } else if (action.name === 'TemplateDocs') {
-      router.push('/dashboard/template-documents');
+      router.push('/dashboard/create-document/1');
     } else if (action.name === 'CompareDocs') {
       router.push('/ai-legal-doc');
     } else if (action.name === 'Flowchart') {

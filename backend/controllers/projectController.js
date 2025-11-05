@@ -775,7 +775,7 @@ export const deleteProject = catchAsyncError(async (req, res, next) => {
 
 
 export const generateInvitationLink = catchAsyncError(async (req, res, next) => {
-    const { role, legalRole, customLegalRole, projectId, invited_email } = req.body;
+    const { role, legalRole, customLegalRole, projectId, taskId, invited_email } = req.body;
     const user_id = req.user.user_id;
 
     // Validate role
@@ -799,7 +799,7 @@ export const generateInvitationLink = catchAsyncError(async (req, res, next) => 
 
     const token = crypto.randomBytes(32).toString('hex');
 
-    // Store the token with the project_id and legal role information
+    // Store the token with the project_id, task_id and legal role information
     await prisma.invitation.create({
         data: {
             token,
@@ -808,6 +808,7 @@ export const generateInvitationLink = catchAsyncError(async (req, res, next) => 
             user_id: user_id,
             leader_id: user_id, // The user sending the invitation is the leader
             project_id: projectId ? parseInt(projectId) : null,
+            task_id: taskId ? parseInt(taskId) : null,
             legalRole: legalRole || null,
             customLegalRole: customLegalRole || null,
             invited_email: invited_email || null
@@ -900,6 +901,26 @@ export const addMemberThroughInvitation = catchAsyncError(async (req, res, next)
                         role: invitation.role,
                         legalRole: invitation.legalRole,
                         customLegalRole: invitation.customLegalRole
+                    }
+                });
+            }
+        }
+
+        // Add user to task if task_id is provided
+        if (invitation.task_id) {
+            // Check if user is already a task member
+            const existingTaskMember = await prisma.taskMember.findFirst({
+                where: {
+                    task_id: invitation.task_id,
+                    user_id: user_id
+                }
+            });
+
+            if (!existingTaskMember) {
+                await prisma.taskMember.create({
+                    data: {
+                        task_id: invitation.task_id,
+                        user_id: user_id
                     }
                 });
             }
@@ -1126,6 +1147,26 @@ export const addMemberThroughInvitationPublic = catchAsyncError(async (req, res,
                         role: invitation.role,
                         legalRole: invitation.legalRole,
                         customLegalRole: invitation.customLegalRole
+                    }
+                });
+            }
+        }
+
+        // Add user to task if task_id is provided
+        if (invitation.task_id) {
+            // Check if user is already a task member
+            const existingTaskMember = await prisma.taskMember.findFirst({
+                where: {
+                    task_id: invitation.task_id,
+                    user_id: user_id
+                }
+            });
+
+            if (!existingTaskMember) {
+                await prisma.taskMember.create({
+                    data: {
+                        task_id: invitation.task_id,
+                        user_id: user_id
                     }
                 });
             }

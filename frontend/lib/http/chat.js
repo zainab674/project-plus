@@ -63,4 +63,33 @@ export const getProjectGroupChatInfo = async (projectId) => {
     return await api.get(`/project/${projectId}/chat/info`);
 };
 
+// Custom Group Chat API functions
+export const createCustomGroup = async (data) => {
+    return await api.post(`/chat/groups/create`, data);
+};
+
+export const getCustomGroups = async () => {
+    return await api.get(`/chat/groups`);
+};
+
+export const getCustomGroupMessages = async (groupId) => {
+    return await api.get(`/chat/groups/${groupId}/messages`);
+};
+
+export const sendCustomGroupMessage = async (groupId, messageData) => {
+    return await api.post(`/chat/groups/${groupId}/messages`, messageData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        }
+    });
+};
+
+export const addGroupMembers = async (groupId, data) => {
+    return await api.post(`/chat/groups/${groupId}/members`, data);
+};
+
+export const removeGroupMember = async (groupId, userId) => {
+    return await api.delete(`/chat/groups/${groupId}/members/${userId}`);
+};
+
 
