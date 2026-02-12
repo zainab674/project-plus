@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, startTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 const TabContext = createContext({
@@ -18,6 +18,8 @@ const routeTitles = {
   '/dashboard/chat': 'Chat',
   '/dashboard/meeting': 'Meetings',
   '/dashboard/timeline': 'Timeline',
+  '/dashboard/time-tracking-analytics': 'Time Tracking Analytics',
+  '/dashboard/case-workflow': 'Case Workflow',
   '/dashboard/flowchart': 'Flowchart',
   '/dashboard/tasks': 'Tasks',
   '/dashboard/cases': 'Cases',
@@ -92,6 +94,9 @@ export const TabProvider = ({ children }) => {
 
     // Don't auto-create tabs if we're still initializing (tabs is empty)
     // The initialization effect will handle the first tab
+    let tabToActivate = null;
+    let newTabToCreate = null;
+
     setTabs(prevTabs => {
       if (prevTabs.length === 0) {
         return prevTabs; // Let initialization effect handle it
@@ -102,23 +107,33 @@ export const TabProvider = ({ children }) => {
       
       if (matchingTab) {
         // Tab exists, just activate it
-        setActiveTabId(matchingTab.id);
+        tabToActivate = matchingTab.id;
         previousPathnameRef.current = pathname;
         return prevTabs;
       }
 
       // New route - create a new tab automatically
       // This handles cases where router.push is called directly without useTabNavigation
-      const newTab = {
+      newTabToCreate = {
         id: `tab-${tabIdCounter.current++}`,
         path: pathname,
         title: getTitleFromRoute(pathname),
       };
 
-      setActiveTabId(newTab.id);
       previousPathnameRef.current = pathname;
-      return [...prevTabs, newTab];
+      return [...prevTabs, newTabToCreate];
     });
+
+    // Update active tab outside of setTabs callback
+    if (tabToActivate) {
+      startTransition(() => {
+        setActiveTabId(tabToActivate);
+      });
+    } else if (newTabToCreate) {
+      startTransition(() => {
+        setActiveTabId(newTabToCreate.id);
+      });
+    }
   }, [pathname]);
 
   const openTab = useCallback((path, title = null) => {
@@ -128,31 +143,46 @@ export const TabProvider = ({ children }) => {
       return;
     }
 
+    let tabToActivate = null;
+    let newTabToCreate = null;
+
     setTabs(prevTabs => {
       // Check if tab with this path already exists
       const existingTab = prevTabs.find(tab => tab.path === path);
       if (existingTab) {
         // Tab exists, just activate it
-        setActiveTabId(existingTab.id);
-        router.push(path);
+        tabToActivate = existingTab.id;
         return prevTabs;
       }
 
       // Create new tab
-      const newTab = {
+      newTabToCreate = {
         id: `tab-${tabIdCounter.current++}`,
         path: path,
         title: title || getTitleFromRoute(path),
       };
 
-      const updatedTabs = [...prevTabs, newTab];
-      setActiveTabId(newTab.id);
-      router.push(path);
-      return updatedTabs;
+      return [...prevTabs, newTabToCreate];
     });
+
+    // Update state and navigate outside of setTabs callback
+    if (tabToActivate) {
+      startTransition(() => {
+        setActiveTabId(tabToActivate);
+        router.push(path);
+      });
+    } else if (newTabToCreate) {
+      startTransition(() => {
+        setActiveTabId(newTabToCreate.id);
+        router.push(path);
+      });
+    }
   }, [router]);
 
   const closeTab = useCallback((tabId) => {
+    let pathToNavigate = null;
+    let newActiveId = null;
+
     setTabs(prevTabs => {
       if (prevTabs.length <= 1) {
         // Don't close the last tab
@@ -174,20 +204,30 @@ export const TabProvider = ({ children }) => {
         // If no tabs left (shouldn't happen due to check above), but just in case
         if (updatedTabs.length > 0) {
           const newActiveTab = updatedTabs[newActiveIndex];
-          setActiveTabId(newActiveTab.id);
-          router.push(newActiveTab.path);
+          newActiveId = newActiveTab.id;
+          pathToNavigate = newActiveTab.path;
         }
       }
 
       return updatedTabs;
     });
+
+    // Navigate after state update
+    if (newActiveId && pathToNavigate) {
+      setActiveTabId(newActiveId);
+      startTransition(() => {
+        router.push(pathToNavigate);
+      });
+    }
   }, [activeTabId, router]);
 
   const setActiveTab = useCallback((tabId) => {
     const tab = tabs.find(t => t.id === tabId);
     if (tab) {
       setActiveTabId(tabId);
-      router.push(tab.path);
+      startTransition(() => {
+        router.push(tab.path);
+      });
     }
   }, [tabs, router]);
 

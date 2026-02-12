@@ -1,13 +1,14 @@
 "use client"
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, AlertCircle, Search, Filter, Grid, List, Table as TableIcon } from 'lucide-react';
-import { getAllProjectRequest } from '@/lib/http/project';
+import { Plus, AlertCircle, Search, Filter, Grid, List, Table as TableIcon, Trash2 } from 'lucide-react';
+import { getAllProjectRequest, deleteProjectRequest } from '@/lib/http/project';
 import CreateCaseModal from './createCaseModal';
 import Loader from '../Loader';
 import { Button } from '../Button';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { toast } from 'react-toastify';
 import {
     Table,
     TableBody,
@@ -24,6 +25,8 @@ const CaseManagementSystem = ({ onCaseClick }) => {
     const [showNewCaseForm, setShowNewCaseForm] = useState(false);
     const [viewMode, setViewMode] = useState('grid'); // grid, list, or table
     const [searchTerm, setSearchTerm] = useState('');
+    const [deletingProjectId, setDeletingProjectId] = useState(null);
+    const [deleteConfirmProject, setDeleteConfirmProject] = useState(null);
     const { user, loadUser } = useUser();
     const router = useRouter();
 
@@ -77,6 +80,23 @@ const CaseManagementSystem = ({ onCaseClick }) => {
         project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.client_name.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const handleDeleteCase = async (projectId, projectName) => {
+        if (window.confirm(`Are you sure you want to delete "${projectName}"? This action cannot be undone and will permanently remove the case and all associated data.`)) {
+            setDeletingProjectId(projectId);
+            try {
+                await deleteProjectRequest(projectId);
+                toast.success('Case deleted successfully');
+                // Refresh the projects list
+                await getProjectAllProject();
+            } catch (error) {
+                toast.error(error?.response?.data?.message || 'Failed to delete case');
+            } finally {
+                setDeletingProjectId(null);
+                setDeleteConfirmProject(null);
+            }
+        }
+    };
 
     if (isLoading) {
         return (
@@ -177,6 +197,7 @@ const CaseManagementSystem = ({ onCaseClick }) => {
                                     <TableHead className="font-semibold">Priority</TableHead>
                                     <TableHead className="font-semibold">Status</TableHead>
                                     <TableHead className="font-semibold">Case ID</TableHead>
+                                    <TableHead className="font-semibold">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -217,6 +238,19 @@ const CaseManagementSystem = ({ onCaseClick }) => {
                                         <TableCell className="text-gray-500 text-sm">
                                             {project.project_id}
                                         </TableCell>
+                                        <TableCell>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteCase(project.project_id, project.name);
+                                                }}
+                                                disabled={deletingProjectId === project.project_id}
+                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                                title="Delete case"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
@@ -228,45 +262,50 @@ const CaseManagementSystem = ({ onCaseClick }) => {
                         ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
                         : 'space-y-4'}`}>
                         {filteredProjects?.map(project => (
-                            <Link
-                                href={`/dashboard/project/${project.project_id}`}
+                            <div
                                 key={project.project_id}
-                                className="block"
-                                onClick={() => {
-                                    // Close the modal if the callback is provided
-                                    if (onCaseClick) {
-                                        onCaseClick();
-                                    }
-                                }}
+                                className="relative"
                             >
-                                <div className={`bg-blue-100 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all cursor-pointer group hover:border-gray-300 ${viewMode === 'list' ? 'flex items-center p-4' : 'p-6'
-                                    }`}>
-                                    {viewMode === 'grid' ? (
-                                        <>
-                                            <div className="flex items-start justify-between mb-4">
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className="font-semibold text-gray-900 text-lg mb-1 group-hover:text-blue-600 truncate">
-                                                        {project.name}
-                                                    </h3>
-                                                    <p className="text-sm text-gray-600">
-                                                        {project.client_name}
-                                                        {project.priority}
-                                                    </p>
+                                <Link
+                                    href={`/dashboard/project/${project.project_id}`}
+                                    className="block"
+                                    onClick={() => {
+                                        // Close the modal if the callback is provided
+                                        if (onCaseClick) {
+                                            onCaseClick();
+                                        }
+                                    }}
+                                >
+                                    <div className={`bg-blue-100 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all cursor-pointer group hover:border-gray-300 ${viewMode === 'list' ? 'flex items-center p-4' : 'p-6'
+                                        }`}>
+                                        {viewMode === 'grid' ? (
+                                            <>
+                                                <div className="flex items-start justify-between mb-4">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="font-semibold text-gray-900 text-lg mb-1 group-hover:text-blue-600 truncate">
+                                                            {project.name}
+                                                        </h3>
+                                                        <p className="text-sm text-gray-600">
+                                                            {project.client_name}
+                                                            {project.priority}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {project.priority === 'High' && (
+                                                            <p className="text-sm text-red-600">
+                                                                {project.priority}
+                                                            </p>
+                                                        )}
+                                                        {project.priority === 'Medium' && (
+                                                            <p className="text-sm text-green-600">
+                                                                {project.priority}
+                                                            </p>)}
+                                                        {project.priority === 'Low' && (
+                                                            <p className="text-sm text-yellow-600">
+                                                                {project.priority}
+                                                            </p>)}
+                                                    </div>
                                                 </div>
-                                                {project.priority === 'High' && (
-                                                    <p className="text-sm text-red-600">
-                                                        {project.priority}
-                                                    </p>
-                                                )}
-                                                {project.priority === 'Medium' && (
-                                                    <p className="text-sm text-green-600">
-                                                        {project.priority}
-                                                    </p>)}
-                                                {project.priority === 'Low' && (
-                                                    <p className="text-sm text-yellow-600">
-                                                        {project.priority}
-                                                    </p>)}
-                                            </div>
 
                                             {project.status && (
                                                 <div className="mb-4">
@@ -280,39 +319,57 @@ const CaseManagementSystem = ({ onCaseClick }) => {
                                                 </div>
                                             )}
 
-                                            <div className="text-xs text-gray-500">
-                                                Case ID: {project.project_id}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-3">
-                                                    <h3 className="font-semibold text-gray-900 group-hover:text-blue-600">
-                                                        {project.name}
-                                                    </h3>
-                                                    {project.priority === 'High' && (
-                                                        <AlertCircle className="h-4 w-4 text-red-500" />
-                                                    )}
-                                                    {project.status && (
-                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                                                            ${project.status === 'Active' ? 'bg-green-100 text-green-800' :
-                                                                project.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                                    project.status === 'Completed' ? 'bg-blue-100 text-blue-800' :
-                                                                        'bg-gray-100 text-gray-800'}`}>
-                                                            {project.status}
-                                                        </span>
-                                                    )}
+                                                <div className="text-xs text-gray-500">
+                                                    Case ID: {project.project_id}
                                                 </div>
-                                                <p className="text-sm text-gray-600 mt-1">{project.client_name}</p>
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                ID: {project.project_id}
-                                            </div>
-                                        </>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-3">
+                                                        <h3 className="font-semibold text-gray-900 group-hover:text-blue-600">
+                                                            {project.name}
+                                                        </h3>
+                                                        {project.priority === 'High' && (
+                                                            <AlertCircle className="h-4 w-4 text-red-500" />
+                                                        )}
+                                                        {project.status && (
+                                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                                                                ${project.status === 'Active' ? 'bg-green-100 text-green-800' :
+                                                                    project.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                                        project.status === 'Completed' ? 'bg-blue-100 text-blue-800' :
+                                                                            'bg-gray-100 text-gray-800'}`}>
+                                                                {project.status}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 mt-1">{project.client_name}</p>
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    ID: {project.project_id}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </Link>
+                                {/* Delete Button - Positioned absolutely to not interfere with link */}
+                                <button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteCase(project.project_id, project.name);
+                                    }}
+                                    disabled={deletingProjectId === project.project_id}
+                                    className={`absolute top-2 right-2 p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-md z-10 ${viewMode === 'list' ? 'top-4 right-4' : ''} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    title="Delete case"
+                                >
+                                    {deletingProjectId === project.project_id ? (
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                        <Trash2 className="w-4 h-4" />
                                     )}
-                                </div>
-                            </Link>
+                                </button>
+                            </div>
                         ))}
                     </div>
                 )}

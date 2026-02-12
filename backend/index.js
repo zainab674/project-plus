@@ -193,9 +193,18 @@ httpserver.listen(PORT, async () => {
     try {
         const ngrokUrl = await ngrokService.startTunnel(PORT);
         if (ngrokUrl) {
+            console.log('================================================================');
+            console.log(`🚀 Server running on port ${PORT}`);
+            console.log(`🔗 Ngrok tunnel active: ${ngrokUrl}`);
+            console.log('================================================================');
+            console.log('⚠️  IMPORTANT: Update your Twilio Phone Number Voice Webhook URL to:');
+            console.log(`👉 ${ngrokUrl}/api/v1/twilio/incoming-call`);
+            console.log('================================================================');
         } else {
+            console.warn('⚠️  Ngrok tunnel failed to start. Incoming calls may not work locally.');
         }
     } catch (error) {
+        console.error('Error starting ngrok:', error);
     }
 });
 

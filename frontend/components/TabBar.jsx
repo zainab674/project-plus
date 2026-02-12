@@ -228,26 +228,30 @@ import { useTab } from '@/providers/TabProvider';
 
 // Route to color mapping based on quick action buttons
 const routeToColor = {
-  '/dashboard': 'bg-slate-200',
-  '/dashboard/home': 'bg-slate-200',
-  '/dashboard/cases': 'bg-purple-500',
-  '/dashboard/tasks': 'bg-blue-500',
-  '/dashboard/tasks/add': 'bg-blue-500',
-  '/dashboard/timer': 'bg-green-500',
-  '/dashboard/timeline': 'bg-orange-500',
-  '/dashboard/meeting': 'bg-pink-500',
-  '/dashboard/meeting/create': 'bg-pink-500',
-  '/dashboard/meeting/create-client': 'bg-pink-500',
-  '/dashboard/chat': 'bg-yellow-500',
-  '/dashboard/notes': 'bg-emerald-500',
-  '/dashboard/team': 'bg-emerald-500',
-  '/dashboard/template-documents': 'bg-indigo-500',
-  '/dashboard/flowchart': 'bg-cyan-500',
-  '/dashboard/phone': 'bg-teal-500',
-  '/dashboard/invite-biller': 'bg-lime-500',
-  '/dashboard/case-assignment': 'bg-violet-500',
-  '/dashboard/ai-assistant': 'bg-green-600',
-  '/ai-legal-doc': 'bg-violet-500',
+  '/dashboard': 'bg-gray-300',
+  '/dashboard/home': 'bg-gray-300',
+  '/dashboard/cases': 'bg-purple-200',
+  '/dashboard/tasks': 'bg-blue-200',
+  '/dashboard/tasks/add': 'bg-blue-200',
+  '/dashboard/timer': 'bg-orange-200',
+  '/dashboard/timeline': 'bg-neutral-500',
+  '/dashboard/time-tracking-analytics': 'bg-cyan-400',
+  '/dashboard/case-workflow': 'bg-indigo-200',
+  '/dashboard/meeting': 'bg-pink-200',
+  '/dashboard/meeting/create': 'bg-pink-200',
+  '/dashboard/meeting/create-client': 'bg-pink-200',
+  '/dashboard/chat': 'bg-yellow-200',
+  '/dashboard/private-chat': 'bg-yellow-200',
+  '/dashboard/notes': 'bg-emerald-200',
+  '/dashboard/team': 'bg-teal-200',
+  '/dashboard/template-documents': 'bg-fuchsia-200',
+  '/dashboard/create-document/1': 'bg-fuchsia-200',
+  '/dashboard/flowchart': 'bg-rose-400',
+  '/dashboard/phone': 'bg-sky-400',
+  '/dashboard/invite-biller': 'bg-lime-400',
+  '/dashboard/case-assignment': 'bg-stone-200',
+  '/dashboard/ai-assistant': 'bg-green-500',
+  '/ai-legal-doc': 'bg-violet-200',
 };
 
 // Get color for a route path
@@ -258,20 +262,30 @@ const getRouteColor = (path) => {
   }
   
   // Check pattern matches
+  // Project chat routes should be green (lime-400)
+  if (path.startsWith('/dashboard/project/') && path.endsWith('/chat')) {
+    return 'bg-lime-400';
+  }
+  
+  // Other project routes use purple
   if (path.startsWith('/dashboard/project/')) {
-    return 'bg-purple-500';
+    return 'bg-purple-200';
   }
   
   if (path.startsWith('/dashboard/cases/')) {
-    return 'bg-purple-500';
+    return 'bg-purple-200';
   }
   
   if (path.startsWith('/ai-legal-doc')) {
-    return 'bg-violet-500';
+    return 'bg-violet-200';
+  }
+  
+  if (path.startsWith('/dashboard/create-document/')) {
+    return 'bg-fuchsia-200';
   }
   
   // Default color
-  return 'bg-slate-300';
+  return 'bg-gray-300';
 };
 
 export default function TabBar() {

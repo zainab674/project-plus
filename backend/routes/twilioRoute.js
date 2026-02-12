@@ -1,7 +1,7 @@
 import express from 'express';
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import { rateLimit } from '../middlewares/rateLimitMiddleware.js';
-import { createToken, handleVoiceWebhook, handleRecordingStatus, handleCallStatus, getNgrokInfo, getAvailableNumbers } from '../controllers/twilioController.js';
+import { createToken, handleVoiceWebhook, handleIncomingCallWebhook, handleRecordingStatus, handleCallStatus, getNgrokInfo, getAvailableNumbers } from '../controllers/twilioController.js';
 
 const router = express.Router();
 
@@ -13,7 +13,8 @@ router.route('/token').post(
 );
 
 // TwiML webhook endpoints (no auth required - called by Twilio)
-router.route('/voice-webhook').post(handleVoiceWebhook);
+router.route('/voice-webhook').post(handleVoiceWebhook); // For outgoing calls
+router.route('/incoming-call').post(handleIncomingCallWebhook); // For incoming calls - dials Device
 router.route('/recording-status').post(handleRecordingStatus);
 router.route('/call-status').post(handleCallStatus);
 

@@ -27,8 +27,11 @@ import {
     getGroupChatMessages,
     createGroupChatMessage,
     getProjectGroupChatInfo,
+    markGroupChatMessagesAsRead,
+    getUnreadGroupChatMessages,
     deleteFolder,
-    deleteFile
+    deleteFile,
+    deleteTDocument
 } from '../controllers/projectController.js';
 import singleUpload, { multipleUpload } from "../middlewares/multerMiddleware.js";
 const router = express.Router();
@@ -56,8 +59,8 @@ router.route('/send-via-mail').post(authMiddleware, sendInvitationViaMail);
 router.route('/folder').post(authMiddleware, createFolder);
 router.route('/folder/:folder_id').delete(authMiddleware, deleteFolder);
 router.route('/file').post(authMiddleware, singleUpload, fileUpload)
-router.route('/file/:file_id').delete(authMiddleware, deleteFile);
 router.route('/file/update').put(authMiddleware, singleUpload, updateFileUpload);
+router.route('/file/:file_id').delete(authMiddleware, deleteFile);
 router.route('/tree').get(authMiddleware, getFolderTreeByTemplateDocument);
 router.route('/tree/:project_id').get(authMiddleware, getFolderTreeByTemplateDocument);
 router.route('/check-phase-folders/:project_id').get(authMiddleware, checkPhaseHasFolders);
@@ -69,10 +72,13 @@ router.route('/members/:project_member_id').delete(authMiddleware, removeMemberF
 router.route('/:project_id/members').get(authMiddleware, getProjectMembers);
 
 router.route('/update-t-document-status/:id').put(authMiddleware, updateTDocumentStatus);
+router.route('/t-document/:id').delete(authMiddleware, deleteTDocument);
 
 // Group Chat Routes
+router.route('/chat/unread').get(authMiddleware, getUnreadGroupChatMessages);
 router.route('/:project_id/chat/info').get(authMiddleware, getProjectGroupChatInfo);
 router.route('/:project_id/chat/:task_id/messages').get(authMiddleware, getGroupChatMessages);
 router.route('/:project_id/chat/:task_id/messages').post(authMiddleware, singleUpload, createGroupChatMessage);
+router.route('/:project_id/chat/:task_id/mark-as-read').post(authMiddleware, markGroupChatMessagesAsRead);
 
 export default router;

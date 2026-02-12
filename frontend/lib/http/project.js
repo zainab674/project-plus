@@ -38,11 +38,7 @@ export const createFileRequest = async (formdata) => api.post(`/project/file`, f
     }
 });
 export const deleteFileRequest = async (file_id) => api.delete(`/project/file/${file_id}`);
-export const updateFileRequest = async (formdata) => api.put(`/project/file/update`, formdata, {
-    headers: {
-        'Content-Type': 'application/form-data'
-    }
-});
+export const updateFileRequest = async (formdata) => api.put(`/project/file/update`, formdata);
 export const getFilesRequest = async (params = {}) => {
     const { id, phase } = params;
     
@@ -84,5 +80,8 @@ export const sendToClientRequest = async (formdata) => api.post(`/project/send-c
 });
 
 export const updateLawyerSendedDocumentRequest = async (id, formdata) => api.put(`/project/update-t-document-status/${id}`, formdata);
+export const deleteTDocumentRequest = async (id) => api.delete(`/project/t-document/${id}`);
+
+export const getProjectMembersRequest = async (project_id) => api.get(`/project/${project_id}/members`);
 
 

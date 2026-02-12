@@ -52,6 +52,8 @@ model User {
   Emails                      Email[]               @relation("UserEmails")
   Comments                    Comment[]             @relation("UserComments")
   Progress                    TaskProgress[]        @relation("UserProgress")
+  TaskUpdates                 TaskUpdate[]          @relation("UserTaskUpdates")
+  TaskUpdateReads             TaskUpdateRead[]      @relation("UserTaskUpdateReads")
   Conversation                Participant[]         @relation("UserParticipants")
   Meetings                    Meeting[]             @relation("UserMeetings")
   MeetingParticipants         MeetingParticipant[]  @relation("UserMeetingParticipants")
@@ -74,6 +76,7 @@ model User {
   actedReviews                Review[]              @relation("ActedBy")
   // Chat relations
   Messages                    Message[]             @relation("UserMessages")
+  MessageReads                MessageRead[]         @relation("UserMessageReads")
   // Private chat relations
   User1PrivateConversations   PrivateConversation[] @relation("User1PrivateConversations")
   User2PrivateConversations   PrivateConversation[] @relation("User2PrivateConversations")
@@ -92,6 +95,10 @@ model User {
 
   // Case template relations
   caseTemplates CaseTemplate[] @relation("UserCaseTemplates")
+
+  // Document relations
+  tDocuments TDocuments[] @relation("UserTDocuments")
+  reviewedTDocuments TDocuments[] @relation("TDocumentsReviewer")
 
   // Add indexes for better performance
   @@index([email])
@@ -136,6 +143,8 @@ model Project {
   Media           Media[]
   Time            TaskTime[]
   Comments        Comment[]
+  Notifications   Notification[]
+  // Messages        Message[]       @relation("ProjectMessages") // Will be added after cleanup
   priority        String?
   filingDate      DateTime         @default(now())
   phases          String[]
@@ -144,10 +153,10 @@ model Project {
   billingConfig   BillingConfig?
   invoices        Invoice[]        @relation("ProjectInvoices")
   caseAssignments CaseAssignment[] @relation("ProjectCaseAssignments")
-  
+
   // Case template relation
-  template_id     String?
-  caseTemplate    CaseTemplate?     @relation("ProjectCaseTemplates", fields: [template_id], references: [template_id])
+  template_id  String?
+  caseTemplate CaseTemplate? @relation("ProjectCaseTemplates", fields: [template_id], references: [template_id])
 
   // Add indexes for better performance
   @@index([created_by])
@@ -157,16 +166,21 @@ model Project {
 }
 
 model TDocuments {
-  t_document_id String         @id @default(uuid())
-  user_id       Int
-  file_url      String?
-  created_at    DateTime       @default(now())
-  size          Int?
-  mimeType      String?
-  filename      String?
-  description   String?
-  key           String?
-  status        DocumentStatus @default(PENDING)
+  t_document_id    String         @id @default(uuid())
+  user_id          Int
+  file_url         String?
+  created_at       DateTime       @default(now())
+  size             Int?
+  mimeType         String?
+  filename         String?
+  description      String?
+  key              String?
+  status           DocumentStatus @default(DRAFT)
+  reviewed_by      Int?
+  reviewed_at      DateTime?
+  rejection_reason String?
+  user             User           @relation("UserTDocuments", fields: [user_id], references: [user_id], onDelete: Cascade)
+  reviewer         User?          @relation("TDocumentsReviewer", fields: [reviewed_by], references: [user_id], onDelete: SetNull)
 }
 
 model TemplateDocument {
@@ -191,11 +205,11 @@ model Folder {
   folder_id String @id @default(uuid())
   name      String
 
-  parent_id  String?
-  parent     Folder?   @relation("Subfolders", fields: [parent_id], references: [folder_id])
-  subfolders Folder[]  @relation("Subfolders")
-  file_type  FileTypes @default(FOLDER)
-  phase_name String?   // Store the phase name for filtering
+  parent_id    String?
+  parent       Folder?   @relation("Subfolders", fields: [parent_id], references: [folder_id])
+  subfolders   Folder[]  @relation("Subfolders")
+  file_type    FileTypes @default(FOLDER)
+  phase_name   String? // Store the phase name for filtering
   project_name String? // Store the project/case name for grouping
 
   template_document_id String
@@ -266,7 +280,9 @@ model ProjectClient {
 }
 
 enum DocumentStatus {
+  DRAFT
   PENDING
+  SENT_TO_LAWYER
   APPROVED
   REJECTED
 }
@@ -595,6 +611,7 @@ model Task {
   billingLineItems     BillingLineItem[]
   privateConversations PrivateConversation[] @relation("TaskPrivateConversations")
   Comments             Comment[]
+  Updates              TaskUpdate[]          @relation("TaskUpdates")
 
   // Add indexes for better performance
   @@index([project_id])
@@ -670,19 +687,44 @@ model TaskMember {
 }
 
 model Notification {
-  notification_id Int      @id @default(autoincrement())
+  notification_id Int                   @id @default(autoincrement())
   user_id         Int
-  message         String   @db.Text
-  is_read         Boolean  @default(false)
-  created_at      DateTime @default(now())
+  project_id      Int?
+  entity_type     String?
+  entity_id       String?
+  event_type      NotificationEventType
+  message         String                @db.Text
+  metadata        Json?
+  is_read         Boolean               @default(false)
+  created_at      DateTime              @default(now())
+  read_at         DateTime?
 
-  user User @relation("UserNotifications", fields: [user_id], references: [user_id], onDelete: Cascade)
+  user    User     @relation("UserNotifications", fields: [user_id], references: [user_id], onDelete: Cascade)
+  project Project? @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+
+  @@index([user_id, is_read])
+  @@index([user_id, created_at])
+}
+
+enum NotificationEventType {
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_DELETED
+  TASK_COMMENT
+  CASE_COMMENT
+  CASE_NOTE
+  TIME_ENTRY
+  EMAIL
+  MEETING
+  DOCUMENT
+  GENERAL
 }
 
 model Media {
   media_id   String   @id @default(uuid())
   project_id Int
   task_id    Int?
+  update_id  String?
   user_id    Int
   file_url   String
   created_at DateTime @default(now())
@@ -691,9 +733,12 @@ model Media {
   filename   String?
   key        String?
 
-  user    User    @relation("UserMedia", fields: [user_id], references: [user_id], onDelete: Cascade)
-  task    Task?   @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
-  project Project @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+  user    User        @relation("UserMedia", fields: [user_id], references: [user_id], onDelete: Cascade)
+  task    Task?       @relation(fields: [task_id], references: [task_id], onDelete: Cascade)
+  project Project     @relation(fields: [project_id], references: [project_id], onDelete: Cascade)
+  update  TaskUpdate? @relation(fields: [update_id], references: [update_id], onDelete: Cascade)
+
+  @@index([update_id])
 }
 
 // Add this enum (near your other enums)
@@ -846,6 +891,38 @@ model Comment {
   @@index([created_at])
 }
 
+model TaskUpdate {
+  update_id  String   @id @default(uuid())
+  task_id    Int
+  user_id    Int
+  content    String   @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  task  Task             @relation("TaskUpdates", fields: [task_id], references: [task_id], onDelete: Cascade)
+  user  User             @relation("UserTaskUpdates", fields: [user_id], references: [user_id], onDelete: Cascade)
+  Media Media[]
+  Reads TaskUpdateRead[]
+
+  // Add indexes for better performance
+  @@index([task_id])
+  @@index([user_id])
+  @@index([created_at])
+}
+
+model TaskUpdateRead {
+  id        Int      @id @default(autoincrement())
+  update_id String
+  user_id   Int
+  read_at   DateTime @default(now())
+
+  update TaskUpdate @relation(fields: [update_id], references: [update_id], onDelete: Cascade)
+  user   User       @relation("UserTaskUpdateReads", fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([update_id, user_id])
+  @@index([user_id])
+}
+
 enum MeetingStatus {
   PENDING
   SCHEDULED
@@ -959,15 +1036,38 @@ model Message {
   attachment_name      String? // Original filename
   attachment_size      Int? // File size in bytes
   attachment_mime_type String? // MIME type of the file
+  recipient_ids        Json? // Array of user IDs who should receive this message (null = all project members)
 
   // Relations
-  sender User @relation("UserMessages", fields: [sender_id], references: [user_id], onDelete: Cascade)
+  sender User          @relation("UserMessages", fields: [sender_id], references: [user_id], onDelete: Cascade)
+  // Note: project relation will be added after cleanup - see cleanup_orphaned_messages.sql
+  // project Project? @relation("ProjectMessages", fields: [project_id], references: [project_id], onDelete: Cascade)
+  reads  MessageRead[]
 
   // Add indexes for better performance
   @@index([conversation_id])
   @@index([sender_id])
   @@index([createdAt])
   @@index([content_type])
+  @@index([is_group_chat])
+  @@index([project_id])
+}
+
+// Message Read Tracking for Group Chat
+model MessageRead {
+  message_read_id String   @id @default(uuid())
+  message_id      String
+  user_id         Int
+  read_at         DateTime @default(now())
+
+  // Relations
+  message Message @relation(fields: [message_id], references: [message_id], onDelete: Cascade)
+  user    User    @relation("UserMessageReads", fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([message_id, user_id])
+  @@index([message_id])
+  @@index([user_id])
+  @@index([read_at])
 }
 
 // Private Chat System - Completely separate from project chat
@@ -996,6 +1096,8 @@ model PrivateMessage {
   content                 String
   content_type            ContentType @default(PLAIN_TEXT)
   created_at              DateTime    @default(now())
+  is_read                 Boolean     @default(false)
+  read_at                 DateTime?
   attachment_url          String?
   attachment_name         String?
   attachment_size         Int?
@@ -1005,6 +1107,9 @@ model PrivateMessage {
   conversation PrivateConversation @relation(fields: [private_conversation_id], references: [private_conversation_id], onDelete: Cascade)
   sender       User                @relation("UserPrivateMessages", fields: [sender_id], references: [user_id], onDelete: Cascade)
   receiver     User                @relation("UserPrivateMessageReceivers", fields: [receiver_id], references: [user_id], onDelete: Cascade)
+
+  @@index([is_read])
+  @@index([receiver_id, is_read])
 }
 
 // Monthly Expenses Model
@@ -1040,6 +1145,7 @@ model Call {
   error_message String? // Error details if call failed
   description   String?    @db.Text // Call description/notes
   transcript    String?    @db.Text // Call transcript from Deepgram
+  is_checked    Boolean    @default(false) // Track if missed call has been checked
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
 
@@ -1052,6 +1158,7 @@ model Call {
   @@index([start_time])
   @@index([status])
   @@index([call_type])
+  @@index([is_checked])
 }
 
 // Contact Model
@@ -1089,24 +1196,24 @@ enum CallType {
 model CaseTemplate {
   template_id        String   @id @default(uuid())
   name               String   @db.VarChar(255)
-  description         String?  @db.Text
-  category            String   @db.VarChar(100) // Real Estate, Personal Injury, etc.
-  default_priority    String   @default("Medium") // High, Medium, Low
-  estimated_duration  String?  @db.VarChar(50) // e.g., "6-12 months"
-  phases_count        Int      @default(0)
-  documents_count     Int      @default(0)
-  usage_count         Int      @default(0)
-  is_active           Boolean  @default(true)
-  created_by          Int
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
+  description        String?  @db.Text
+  category           String   @db.VarChar(100) // Real Estate, Personal Injury, etc.
+  default_priority   String   @default("Medium") // High, Medium, Low
+  estimated_duration String?  @db.VarChar(50) // e.g., "6-12 months"
+  phases_count       Int      @default(0)
+  documents_count    Int      @default(0)
+  usage_count        Int      @default(0)
+  is_active          Boolean  @default(true)
+  created_by         Int
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
 
   // Relations
-  creator User              @relation("UserCaseTemplates", fields: [created_by], references: [user_id], onDelete: Cascade)
-  phases  CaseTemplatePhase[]
-  folders CaseTemplateFolder[]
-  files   CaseTemplateFile[]
-  projects Project[]        @relation("ProjectCaseTemplates")
+  creator  User                 @relation("UserCaseTemplates", fields: [created_by], references: [user_id], onDelete: Cascade)
+  phases   CaseTemplatePhase[]
+  folders  CaseTemplateFolder[]
+  files    CaseTemplateFile[]
+  projects Project[]            @relation("ProjectCaseTemplates")
 
   @@index([created_by])
   @@index([category])
@@ -1115,17 +1222,17 @@ model CaseTemplate {
 }
 
 model CaseTemplatePhase {
-  phase_id     String   @id @default(uuid())
-  template_id  String
-  name         String   @db.VarChar(255)
-  description  String?  @db.Text
-  order        Int      // Phase order in the workflow
-  estimated_days Int?   // Estimated days for this phase
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  phase_id       String   @id @default(uuid())
+  template_id    String
+  name           String   @db.VarChar(255)
+  description    String?  @db.Text
+  order          Int // Phase order in the workflow
+  estimated_days Int? // Estimated days for this phase
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
 
   // Relations
-  template CaseTemplate        @relation(fields: [template_id], references: [template_id], onDelete: Cascade)
+  template CaseTemplate         @relation(fields: [template_id], references: [template_id], onDelete: Cascade)
   folders  CaseTemplateFolder[]
 
   @@index([template_id])
@@ -1133,22 +1240,22 @@ model CaseTemplatePhase {
 }
 
 model CaseTemplateFolder {
-  folder_id    String   @id @default(uuid())
-  template_id  String
-  phase_id     String?  // Link to phase
-  name         String   @db.VarChar(255)
-  description  String?  @db.Text
-  parent_id    String?  // For nested folders
-  order        Int      @default(0) // Display order
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  folder_id   String   @id @default(uuid())
+  template_id String
+  phase_id    String? // Link to phase
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  parent_id   String? // For nested folders
+  order       Int      @default(0) // Display order
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 
   // Relations
-  template  CaseTemplate        @relation(fields: [template_id], references: [template_id], onDelete: Cascade)
-  phase     CaseTemplatePhase?  @relation(fields: [phase_id], references: [phase_id], onDelete: SetNull)
-  parent    CaseTemplateFolder? @relation("Subfolders", fields: [parent_id], references: [folder_id])
+  template   CaseTemplate         @relation(fields: [template_id], references: [template_id], onDelete: Cascade)
+  phase      CaseTemplatePhase?   @relation(fields: [phase_id], references: [phase_id], onDelete: SetNull)
+  parent     CaseTemplateFolder?  @relation("Subfolders", fields: [parent_id], references: [folder_id])
   subfolders CaseTemplateFolder[] @relation("Subfolders")
-  files     CaseTemplateFile[]
+  files      CaseTemplateFile[]
 
   @@index([template_id])
   @@index([phase_id])
@@ -1162,9 +1269,9 @@ model CaseTemplateFile {
   folder_id   String?
   name        String   @db.VarChar(255)
   description String?  @db.Text
-  file_url    String?  // URL to the template file
-  file_size   Int?     // File size in bytes
-  mime_type   String?  // MIME type
+  file_url    String? // URL to the template file
+  file_size   Int? // File size in bytes
+  mime_type   String? // MIME type
   order       Int      @default(0) // Display order
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt

@@ -524,7 +524,15 @@ const FlowchartModal = ({
                                                             <div className="flex items-center justify-between mb-2">
                                                                 <h5 className="font-medium text-gray-800 text-sm">Comment by {comment.user?.name || 'Unknown user'}</h5>
                                                                 <span className="text-xs text-gray-500">
-                                                                    {comment.created_at ? new Date(comment.created_at).toLocaleDateString() : 'Unknown date'}
+                                                                    {comment.created_at 
+                                                                      ? new Date(comment.created_at).toLocaleString('en-US', { 
+                                                                          month: 'short', 
+                                                                          day: 'numeric', 
+                                                                          year: 'numeric', 
+                                                                          hour: '2-digit', 
+                                                                          minute: '2-digit' 
+                                                                        })
+                                                                      : 'Date not available'}
                                                                 </span>
                                                             </div>
                                                             <p className="text-sm text-gray-600">{comment.content || 'No content'}</p>

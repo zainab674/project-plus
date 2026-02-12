@@ -1,6 +1,8 @@
 import { prisma } from '../prisma/index.js';
 import catchAsyncError from '../middlewares/catchAsyncError.js';
 import { uploadToCloud } from '../services/mediaService.js';
+import { NOTIFICATION_EVENT_TYPES } from '../constants/notificationTypeConstant.js';
+import { getTaskInvolvedUserIds, notifyProjectMembers } from '../services/notificationService.js';
 
 // Create a new note/comment
 export const createNote = catchAsyncError(async (req, res, next) => {
@@ -46,6 +48,42 @@ export const createNote = catchAsyncError(async (req, res, next) => {
         }
       }
     });
+
+    try {
+      const includeUserIds = [];
+      let taskName = null;
+      const parsedTaskId = task_id ? parseInt(task_id) : null;
+      if (parsedTaskId) {
+        const [taskUserIds, task] = await Promise.all([
+          getTaskInvolvedUserIds({ taskId: parsedTaskId }),
+          prisma.task.findUnique({
+            where: { task_id: parsedTaskId },
+            select: { name: true },
+          }),
+        ]);
+        includeUserIds.push(...taskUserIds);
+        taskName = task?.name || null;
+      }
+
+      await notifyProjectMembers({
+        projectId: parseInt(project_id),
+        actorId: user_id,
+        eventType: task_id ? NOTIFICATION_EVENT_TYPES.TASK_COMMENT : NOTIFICATION_EVENT_TYPES.CASE_NOTE,
+        message: parsedTaskId && taskName
+          ? `${req.user?.name || 'A teammate'} left a note on task "${taskName}"`
+          : `${req.user?.name || 'A teammate'} added a project note`,
+        entityType: 'COMMENT',
+        entityId: String(note.comment_id),
+        metadata: {
+          commentId: note.comment_id,
+          projectId: parseInt(project_id),
+          taskId: parsedTaskId,
+          contentPreview: content.trim().slice(0, 140),
+        },
+        includeUserIds,
+      });
+    } catch (notificationError) {
+    }
 
     res.status(201).json({
       success: true,

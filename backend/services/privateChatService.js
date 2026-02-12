@@ -31,7 +31,11 @@ export const handlePrivateMessage = async (data, redisPub, io) => {
         sender_id: parseInt(data.sender_id),
         receiver_id: parseInt(data.receiver_id),
         content: data.content,
-        content_type: data.content_type || 'PLAIN_TEXT'
+        content_type: data.content_type || 'PLAIN_TEXT',
+        attachment_url: data.attachment_url || null,
+        attachment_name: data.attachment_name || null,
+        attachment_size: data.attachment_size ? parseInt(data.attachment_size) : null,
+        attachment_mime_type: data.attachment_mime_type || null
       },
       include: {
         sender: {
@@ -62,12 +66,18 @@ export const handlePrivateMessage = async (data, redisPub, io) => {
       content_type: savedMessage.content_type,
       created_at: savedMessage.created_at,
       createdAt: savedMessage.created_at, // Frontend expects createdAt
+      is_read: savedMessage.is_read || false,
+      read_at: savedMessage.read_at || null,
       sender: savedMessage.sender,
       receiver: savedMessage.receiver,
       // Preserve original data
       sender_name: data.sender_name,
       task_name: data.task_name,
-      task_id: data.task_id
+      task_id: data.task_id,
+      attachment_url: data.attachment_url || null,
+      attachment_name: data.attachment_name || null,
+      attachment_size: data.attachment_size || null,
+      attachment_mime_type: data.attachment_mime_type || null
     };
 
     // Publish to Redis for other server instances

@@ -8,7 +8,9 @@ import {
     updateCallDescription,
     getCallStats,
     deleteCall,
-    getCallBySid
+    getCallBySid,
+    getUncheckedMissedCalls,
+    markMissedCallsAsChecked
 } from '../controllers/callController.js';
 
 const router = express.Router();
@@ -40,5 +42,13 @@ router.route('/:call_id')
 // Call description update
 router.route('/:call_id/description')
     .patch(updateCallDescription);
+
+// Unchecked missed calls
+router.route('/missed/unchecked')
+    .get(getUncheckedMissedCalls);
+
+// Mark missed calls as checked
+router.route('/missed/mark-checked')
+    .post(markMissedCallsAsChecked);
 
 export default router;

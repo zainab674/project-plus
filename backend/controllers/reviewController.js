@@ -4,6 +4,8 @@ import { validateRequestBody } from '../utils/validateRequestBody.js';
 import { CreateReviewRequestBodySchema, UpdateReviewRequestBodySchema } from '../schema/reviewSchema.js';
 import { prisma } from "../prisma/index.js";
 import { uploadToCloud } from '../services/mediaService.js';
+import { createNotification } from '../services/notificationService.js';
+import { NOTIFICATION_EVENT_TYPES } from '../constants/notificationTypeConstant.js';
 
 // Create a new review submission
 export const createReview = catchAsyncError(async (req, res, next) => {
@@ -483,8 +485,202 @@ export const getAllReviews = catchAsyncError(async (req, res, next) => {
             currentPage: parseInt(page),
             totalPages: Math.ceil(total / parseInt(limit)),
             totalItems: total,
-            itemsPerPage: parseInt(limit)
         }
     });
 });
+export const getPendingDocuments = catchAsyncError(async (req, res, next) => {
+    const user = req.user;
 
+    // Get documents sent to lawyer
+    const documents = await prisma.tDocuments.findMany({
+        where: {
+            status: 'SENT_TO_LAWYER'
+        },
+        orderBy: {
+            created_at: 'desc'
+        },
+        include: {
+            user: {
+                select: {
+                    user_id: true,
+                    name: true,
+                    email: true
+                }
+            },
+            reviewer: {
+                select: {
+                    name: true,
+                    email: true
+                }
+            }
+        }
+    });
+
+    res.status(200).json({
+        success: true,
+        documents,
+        count: documents.length
+    });
+});
+
+// Get user's submitted documents
+export const getMySubmissions = catchAsyncError(async (req, res, next) => {
+    const userId = req.user.user_id;
+
+    const documents = await prisma.tDocuments.findMany({
+        where: {
+            user_id: userId
+        },
+        orderBy: {
+            created_at: 'desc'
+        },
+        include: {
+            reviewer: {
+                select: {
+                    name: true,
+                    email: true
+                }
+            },
+            user: {
+                select: {
+                    name: true,
+                    email: true
+                }
+            }
+        }
+    });
+
+    res.status(200).json({
+        success: true,
+        documents,
+        count: documents.length
+    });
+});
+
+// Accept document (lawyer approves)
+export const acceptDocument = catchAsyncError(async (req, res, next) => {
+    const { id } = req.params;
+    const reviewer_id = req.user.user_id;
+
+    const tdocument = await prisma.tDocuments.findUnique({
+        where: { t_document_id: String(id) }
+    });
+
+    if (!tdocument) {
+        return next(new ErrorHandler("Document not found", 404));
+    }
+
+    const updatedDocument = await prisma.tDocuments.update({
+        where: { t_document_id: String(id) },
+        data: {
+            status: 'APPROVED',
+            reviewed_by: reviewer_id,
+            reviewed_at: new Date(),
+            rejection_reason: null // Clear any previous rejection reason
+        }
+    });
+
+    // Notify the user
+    await createNotification({
+        userId: tdocument.user_id,
+        eventType: NOTIFICATION_EVENT_TYPES.DOCUMENT,
+        message: `Your document "${tdocument.filename}" has been approved by ${req.user.name}.`,
+        entityType: 'TDocuments',
+        entityId: tdocument.t_document_id
+    });
+
+    res.status(200).json({
+        success: true,
+        message: 'Document approved successfully',
+        document: updatedDocument
+    });
+});
+
+// Reject document (lawyer rejects with reason)
+export const rejectDocument = catchAsyncError(async (req, res, next) => {
+    const { id } = req.params;
+    const { rejection_reason } = req.body;
+    const reviewer_id = req.user.user_id;
+
+    if (!rejection_reason) {
+        return next(new ErrorHandler("Rejection reason is required", 400));
+    }
+
+    const tdocument = await prisma.tDocuments.findUnique({
+        where: { t_document_id: String(id) }
+    });
+
+    if (!tdocument) {
+        return next(new ErrorHandler("Document not found", 404));
+    }
+
+    const updatedDocument = await prisma.tDocuments.update({
+        where: { t_document_id: String(id) },
+        data: {
+            status: 'REJECTED',
+            reviewed_by: reviewer_id,
+            reviewed_at: new Date(),
+            rejection_reason
+        }
+    });
+
+    // Notify the user
+    await createNotification({
+        userId: tdocument.user_id,
+        eventType: NOTIFICATION_EVENT_TYPES.DOCUMENT,
+        message: `Your document "${tdocument.filename}" has been rejected. Reason: ${rejection_reason}`,
+        entityType: 'TDocuments',
+        entityId: tdocument.t_document_id
+    });
+
+    res.status(200).json({
+        success: true,
+        message: 'Document rejected',
+        document: updatedDocument
+    });
+});
+
+// Resubmit document (user resubmits after making changes)
+export const resubmitDocument = catchAsyncError(async (req, res, next) => {
+    const { id } = req.params;
+
+    const tdocument = await prisma.tDocuments.findUnique({
+        where: { t_document_id: String(id) },
+        include: {
+            user: true // Include user to get leader_id
+        }
+    });
+
+    if (!tdocument) {
+        return next(new ErrorHandler("Document not found", 404));
+    }
+
+    const updatedDocument = await prisma.tDocuments.update({
+        where: { t_document_id: String(id) },
+        data: {
+            status: 'SENT_TO_LAWYER',
+            reviewed_by: null,
+            reviewed_at: null,
+            rejection_reason: null
+        }
+    });
+
+    // Notify the lawyer (user's leader)
+    const lawyerId = tdocument.user.leader_id;
+
+    if (lawyerId) {
+        await createNotification({
+            userId: lawyerId,
+            eventType: NOTIFICATION_EVENT_TYPES.DOCUMENT,
+            message: `Document "${tdocument.filename}" has been resubmitted for review by ${req.user.name}.`,
+            entityType: 'TDocuments',
+            entityId: tdocument.t_document_id
+        });
+    }
+
+    res.status(200).json({
+        success: true,
+        message: 'Document resubmitted successfully',
+        document: updatedDocument
+    });
+});

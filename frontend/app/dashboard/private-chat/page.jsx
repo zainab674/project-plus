@@ -3,7 +3,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useUser } from '@/providers/UserProvider';
 import { toast } from 'sonner';
-import { getOrCreatePrivateConversationRequest, createCustomGroup, getCustomGroups, getCustomGroupMessages, sendCustomGroupMessage } from '@/lib/http/chat';
+import { useSearchParams } from 'next/navigation';
+import { getOrCreatePrivateConversationRequest, createCustomGroup, getCustomGroups, getCustomGroupMessages, sendCustomGroupMessage, markPrivateMessagesAsReadRequest } from '@/lib/http/chat';
 import useChatHook from '@/hooks/useChatHook';
 import { Send, ArrowLeft, Paperclip, MessageCircle, Users, Building, User, X, FileText, UserPlus, Plus } from 'lucide-react';
 import moment from 'moment';
@@ -14,10 +15,14 @@ import { useProjectState } from '@/hooks/useProjectState';
 export default function PrivateChatPage() {
   const { user, loadUserWithProjects } = useUser();
   const projectState = useProjectState(user, loadUserWithProjects || (() => Promise.resolve()));
+  const searchParams = useSearchParams();
 
   // Enhanced chat state
   const [selectedChatType, setSelectedChatType] = useState('');
   const [selectedChatRecipient, setSelectedChatRecipient] = useState(null);
+  
+  // Multi-recipient state (send to multiple without creating group)
+  const [selectedMultiRecipients, setSelectedMultiRecipients] = useState([]);
   
   // Custom Groups state
   const [customGroups, setCustomGroups] = useState([]);
@@ -87,6 +92,13 @@ export default function PrivateChatPage() {
         if (conversation_id) {
           setChatConversationId(conversation_id);
           setChatMessages(conversation.messages || []);
+          
+          // Mark messages as read when conversation is loaded
+          try {
+            await markPrivateMessagesAsReadRequest(conversation_id);
+          } catch (error) {
+            console.error('Error marking messages as read:', error);
+          }
         }
       } catch (error) {
         console.error('Error loading conversation:', error);
@@ -237,7 +249,8 @@ export default function PrivateChatPage() {
                   message_id: data.message_id || msg.message_id,
                   private_message_id: data.private_message_id || msg.private_message_id,
                   temp_message_id: undefined,
-                  createdAt: data.createdAt || data.created_at || msg.createdAt
+                  createdAt: data.createdAt || data.created_at || msg.createdAt,
+                  is_read: data.is_read || false
                 };
               }
               return msg;
@@ -299,6 +312,13 @@ export default function PrivateChatPage() {
           console.log('✅ Adding new message to chat:', data.content);
           return [...prev, data];
         });
+        
+        // Mark messages as read when new message is received and user is viewing the conversation
+        if (currentConversationId && parseInt(data.receiver_id) === user?.user_id) {
+          markPrivateMessagesAsReadRequest(currentConversationId).catch(err => {
+            console.error('Error marking messages as read:', err);
+          });
+        }
       }
     };
     
@@ -571,6 +591,7 @@ export default function PrivateChatPage() {
   const handleBackToSelection = useCallback(() => {
     setSelectedChatRecipient(null);
     setSelectedGroup(null);
+    setSelectedMultiRecipients([]);
     setChatMessages([]);
     setChatConversationId('');
     setChatMessageValue('');
@@ -595,6 +616,35 @@ export default function PrivateChatPage() {
   useEffect(() => {
     loadCustomGroups();
   }, [loadCustomGroups]);
+
+  // Handle URL parameter to open specific user chat
+  // This runs after getAllTeamMembers, getAllClients, and getAllProviders are defined
+  useEffect(() => {
+    const userIdParam = searchParams.get('user_id');
+    if (userIdParam && user && user.Projects) {
+      const userId = parseInt(userIdParam);
+      
+      // Find the user in team members, clients, or providers
+      const allTeamMembers = getAllTeamMembers();
+      const allClients = getAllClients();
+      const allProviders = getAllProviders();
+      
+      const allUsers = [...allTeamMembers, ...allClients, ...allProviders];
+      const targetUser = allUsers.find(u => u.id === userId);
+      
+      if (targetUser && !selectedChatRecipient) {
+        setSelectedChatRecipient(targetUser);
+        // Set appropriate chat type based on user type
+        if (targetUser.type === 'team') {
+          setSelectedChatType('team');
+        } else if (targetUser.type === 'client') {
+          setSelectedChatType('client');
+        } else if (targetUser.type === 'provider') {
+          setSelectedChatType('provider');
+        }
+      }
+    }
+  }, [searchParams, user, getAllTeamMembers, getAllClients, getAllProviders, selectedChatRecipient]);
 
   // Handle group selection
   const handleGroupSelect = useCallback(async (group) => {
@@ -654,6 +704,18 @@ export default function PrivateChatPage() {
     });
   }, []);
 
+  // Toggle user selection for multi-recipient
+  const toggleMultiRecipient = useCallback((user) => {
+    setSelectedMultiRecipients(prev => {
+      const isSelected = prev.some(u => u.id === user.id);
+      if (isSelected) {
+        return prev.filter(u => u.id !== user.id);
+      } else {
+        return [...prev, user];
+      }
+    });
+  }, []);
+
   // Handle sending group message
   const handleGroupMessageSend = useCallback(async () => {
     if ((!chatMessageValue.trim() && !chatSelectedFile) || !selectedGroup || !chatConversationId || chatSending) return;
@@ -686,6 +748,83 @@ export default function PrivateChatPage() {
       setChatSending(false);
     }
   }, [chatMessageValue, chatSelectedFile, selectedGroup, chatConversationId, chatSending]);
+
+  // Handle sending multi-recipient message (send to multiple people without creating group)
+  const handleMultiRecipientSend = useCallback(async () => {
+    if ((!chatMessageValue.trim() && !chatSelectedFile && !chatSelectedInternalDoc) || selectedMultiRecipients.length === 0 || chatSending) return;
+    
+    setChatSending(true);
+    let successCount = 0;
+    let failCount = 0;
+    
+    try {
+      const messageContent = chatMessageValue.trim();
+      const fileToUpload = chatSelectedFile;
+      const internalDocToUpload = chatSelectedInternalDoc;
+      
+      // Send message to each recipient individually
+      const sendPromises = selectedMultiRecipients.map(async (recipient) => {
+        try {
+          // Get or create conversation for each recipient
+          const res = await getOrCreatePrivateConversationRequest({ 
+            user_id: recipient.id 
+          });
+          const conversation = res.data.conversation;
+          const conversation_id = conversation.private_conversation_id;
+          
+          if (!conversation_id) {
+            throw new Error(`No conversation ID for ${recipient.name}`);
+          }
+          
+          const data = {
+            private_conversation_id: conversation_id,
+            sender_id: user.user_id,
+            receiver_id: recipient.id,
+            content: messageContent,
+            content_type: "PLAIN_TEXT",
+            sender_name: user?.name,
+            attachment_url: (fileToUpload || internalDocToUpload) ? 'uploading...' : null,
+            attachment_name: fileToUpload?.name || internalDocToUpload?.name,
+            attachment_size: fileToUpload?.size || internalDocToUpload?.size,
+            attachment_mime_type: fileToUpload?.type || 'application/pdf'
+          };
+          
+          // Send via socket
+          await sendChatMessage(data);
+          successCount++;
+        } catch (error) {
+          console.error(`Error sending message to ${recipient.name}:`, error);
+          failCount++;
+        }
+      });
+      
+      await Promise.all(sendPromises);
+      
+      // Clear message and files
+      setChatMessageValue('');
+      setChatSelectedFile(null);
+      setChatSelectedInternalDoc(null);
+      
+      // Clear file input
+      const fileInput = document.getElementById('chat-file-upload');
+      if (fileInput) {
+        fileInput.value = '';
+      }
+      
+      // Show success message
+      if (successCount > 0) {
+        toast.success(`Message sent to ${successCount} recipient(s)`);
+      }
+      if (failCount > 0) {
+        toast.error(`Failed to send to ${failCount} recipient(s)`);
+      }
+    } catch (error) {
+      console.error('Error sending multi-recipient message:', error);
+      toast.error('Failed to send some messages');
+    } finally {
+      setChatSending(false);
+    }
+  }, [chatMessageValue, selectedMultiRecipients, user, sendChatMessage, chatSending, chatSelectedFile, chatSelectedInternalDoc]);
 
   return (
     <div className="fixed inset-0 flex bg-gray-50 overflow-hidden" style={{ top: '9rem', bottom: '0' }}>
@@ -779,12 +918,35 @@ export default function PrivateChatPage() {
                 </div>
               </button>
 
+              {/* Multi-Recipient Option - Send to multiple without creating group */}
+              <button
+                onClick={() => {
+                  setSelectedChatType('multi-recipient');
+                  setSelectedChatRecipient(null);
+                  setSelectedGroup(null);
+                  setSelectedMultiRecipients([]);
+                }}
+                className={`w-full p-3 rounded-lg border-2 transition-all ${selectedChatType === 'multi-recipient'
+                  ? 'border-orange-500 bg-orange-50 text-orange-700'
+                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+              >
+                <div className="flex items-center gap-3">
+                  <MessageCircle className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-medium">Multi-Recipient</div>
+                    <div className="text-sm text-gray-500">Send to multiple people</div>
+                  </div>
+                </div>
+              </button>
+
               {/* Custom Groups Option */}
               <button
                 onClick={() => {
                   setSelectedChatType('groups');
                   setSelectedChatRecipient(null);
                   setSelectedGroup(null);
+                  setSelectedMultiRecipients([]);
                 }}
                 className={`w-full p-3 rounded-lg border-2 transition-all ${selectedChatType === 'groups'
                   ? 'border-purple-500 bg-purple-50 text-purple-700'
@@ -1045,12 +1207,150 @@ export default function PrivateChatPage() {
               </div>
             </div>
           )}
+
+          {/* Multi-Recipient Selection */}
+          {selectedChatType === 'multi-recipient' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-700">Select Recipients</h3>
+                {selectedMultiRecipients.length > 0 && (
+                  <button
+                    onClick={() => setSelectedMultiRecipients([])}
+                    className="text-xs text-orange-600 hover:text-orange-700"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              {selectedMultiRecipients.length > 0 && (
+                <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="text-xs font-medium text-orange-700 mb-2">
+                    {selectedMultiRecipients.length} recipient(s) selected
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedMultiRecipients.map((recipient) => (
+                      <div
+                        key={recipient.id}
+                        className="flex items-center gap-1 px-2 py-1 bg-orange-100 rounded-full text-xs text-orange-700"
+                      >
+                        <span>{recipient.name}</span>
+                        <button
+                          onClick={() => toggleMultiRecipient(recipient)}
+                          className="ml-1 hover:text-orange-900"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-2">
+                <div>
+                  <h4 className="text-xs font-medium text-gray-600 mb-2">Team Members</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {getAllTeamMembers().map((member) => (
+                      <button
+                        key={member.id}
+                        onClick={() => toggleMultiRecipient(member)}
+                        className={`w-full p-2 rounded-lg text-left transition-all ${
+                          selectedMultiRecipients.some(u => u.id === member.id)
+                            ? 'bg-orange-100 border-2 border-orange-500'
+                            : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                            selectedMultiRecipients.some(u => u.id === member.id) ? 'bg-orange-500' : 'bg-gray-300'
+                          }`}>
+                            {selectedMultiRecipients.some(u => u.id === member.id) && (
+                              <X className="w-4 h-4 text-white" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium text-sm">{member.name}</div>
+                            <div className="text-xs text-gray-500">{member.email}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-xs font-medium text-gray-600 mb-2">Clients</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {getAllClients().map((client) => (
+                      <button
+                        key={client.id}
+                        onClick={() => toggleMultiRecipient(client)}
+                        className={`w-full p-2 rounded-lg text-left transition-all ${
+                          selectedMultiRecipients.some(u => u.id === client.id)
+                            ? 'bg-orange-100 border-2 border-orange-500'
+                            : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                            selectedMultiRecipients.some(u => u.id === client.id) ? 'bg-orange-500' : 'bg-gray-300'
+                          }`}>
+                            {selectedMultiRecipients.some(u => u.id === client.id) && (
+                              <X className="w-4 h-4 text-white" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium text-sm">{client.name}</div>
+                            <div className="text-xs text-gray-500">{client.email}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-xs font-medium text-gray-600 mb-2">Providers</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {getAllProviders().map((provider) => (
+                      <button
+                        key={provider.id}
+                        onClick={() => toggleMultiRecipient(provider)}
+                        className={`w-full p-2 rounded-lg text-left transition-all ${
+                          selectedMultiRecipients.some(u => u.id === provider.id)
+                            ? 'bg-orange-100 border-2 border-orange-500'
+                            : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                            selectedMultiRecipients.some(u => u.id === provider.id) ? 'bg-orange-500' : 'bg-gray-300'
+                          }`}>
+                            {selectedMultiRecipients.some(u => u.id === provider.id) && (
+                              <X className="w-4 h-4 text-white" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium text-sm">{provider.name}</div>
+                            <div className="text-xs text-gray-500">{provider.email}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {getAllTeamMembers().length === 0 && getAllClients().length === 0 && getAllProviders().length === 0 && (
+                <div className="text-center py-4 text-gray-500">
+                  <Users className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                  <p>No recipients available</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main Content Area */}
       <div className="flex-1 bg-gray-50 flex flex-col min-w-0 overflow-hidden">
-        {(selectedChatRecipient || selectedGroup || chatMessages.length > 0) ? (
+        {(selectedChatRecipient || selectedGroup || selectedMultiRecipients.length > 0 || chatMessages.length > 0) ? (
           <>
             {/* Chat Header */}
             <div className="bg-white p-4 border-b border-gray-200 flex justify-between items-center flex-shrink-0 z-[60] sticky top-[5rem] shadow-sm">
@@ -1069,6 +1369,16 @@ export default function PrivateChatPage() {
                     <div>
                       <p className="font-medium text-gray-900">{selectedGroup.name}</p>
                       <p className="text-sm text-gray-600">{selectedGroup.participants?.length || 0} member(s)</p>
+                    </div>
+                  </>
+                ) : selectedMultiRecipients.length > 0 ? (
+                  <>
+                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                      <MessageCircle className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">Multi-Recipient Message</p>
+                      <p className="text-sm text-gray-600">{selectedMultiRecipients.length} recipient(s) selected</p>
                     </div>
                   </>
                 ) : selectedChatRecipient ? (
@@ -1095,6 +1405,26 @@ export default function PrivateChatPage() {
             
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 min-h-0" ref={chatContainerRef} style={{ overflowAnchor: 'none' }}>
+              {selectedMultiRecipients.length > 0 && chatMessages.length === 0 && (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <MessageCircle className="w-16 h-16 text-orange-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">Send to {selectedMultiRecipients.length} recipient(s)</h3>
+                    <p className="text-gray-500 mb-4">Type your message below and it will be sent to all selected recipients</p>
+                    <div className="flex flex-wrap gap-2 justify-center max-w-md">
+                      {selectedMultiRecipients.map((recipient) => (
+                        <div
+                          key={recipient.id}
+                          className="px-3 py-1 bg-orange-100 rounded-full text-sm text-orange-700"
+                        >
+                          {recipient.name}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {chatLoading && (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-gray-500">Loading conversation...</div>
@@ -1103,6 +1433,7 @@ export default function PrivateChatPage() {
               
               {!chatLoading && chatMessages.length > 0 && chatMessages.map((message, index) => {
                 const isFromCurrentUser = parseInt(message.sender_id) === user?.user_id;
+                const isRead = message.is_read || false;
                 return (
                   <div key={message.private_message_id || message.message_id || message.temp_message_id || index} className={`flex ${isFromCurrentUser ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[70%] rounded-lg px-4 py-2 ${
@@ -1127,9 +1458,17 @@ export default function PrivateChatPage() {
                       {message.attachment_url === 'uploading...' && (
                         <p className="text-xs italic mt-1">Uploading attachment...</p>
                       )}
-                      <p className={`text-xs mt-1 ${isFromCurrentUser ? 'text-white/70' : 'text-gray-500'}`}>
-                        {moment(message.createdAt || message.created_at).format("LT")}
-                      </p>
+                      <div className={`flex items-center gap-1 mt-1 ${isFromCurrentUser ? 'text-white/70' : 'text-gray-500'}`}>
+                        <p className="text-xs">
+                          {moment(message.createdAt || message.created_at).format("LT")}
+                        </p>
+                        {/* Show read status for messages sent by current user */}
+                        {isFromCurrentUser && !selectedGroup && (
+                          <span className="text-xs" title={isRead ? 'Read' : 'Sent'}>
+                            {isRead ? '✓✓' : '✓'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1153,10 +1492,16 @@ export default function PrivateChatPage() {
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      selectedGroup ? handleGroupMessageSend() : handleChatSend();
+                      if (selectedMultiRecipients.length > 0) {
+                        handleMultiRecipientSend();
+                      } else if (selectedGroup) {
+                        handleGroupMessageSend();
+                      } else {
+                        handleChatSend();
+                      }
                     }
                   }}
-                  disabled={chatSending || !chatConversationId}
+                  disabled={chatSending || (selectedChatRecipient && !chatConversationId)}
                 />
                 
                 {/* File Upload Button */}
@@ -1178,8 +1523,21 @@ export default function PrivateChatPage() {
                 </button>
                 
                 <button
-                  onClick={selectedGroup ? handleGroupMessageSend : handleChatSend}
-                  disabled={chatSending || (!chatMessageValue.trim() && !chatSelectedFile && !chatSelectedInternalDoc) || !chatConversationId}
+                  onClick={() => {
+                    if (selectedMultiRecipients.length > 0) {
+                      handleMultiRecipientSend();
+                    } else if (selectedGroup) {
+                      handleGroupMessageSend();
+                    } else {
+                      handleChatSend();
+                    }
+                  }}
+                  disabled={
+                    chatSending || 
+                    (!chatMessageValue.trim() && !chatSelectedFile && !chatSelectedInternalDoc) || 
+                    (selectedChatRecipient && !chatConversationId) ||
+                    (selectedMultiRecipients.length === 0 && !selectedChatRecipient && !selectedGroup)
+                  }
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <Send className="w-4 h-4" />

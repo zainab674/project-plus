@@ -11,6 +11,11 @@ import { bytesToMB } from '../processors/bytesToMbProcessor.js';
 import dayjs from 'dayjs';
 import { dmmfToRuntimeDataModel } from '@prisma/client/runtime/library';
 import { sendMail } from '../processors/sendMailProcessor.js';
+import { NOTIFICATION_EVENT_TYPES } from '../constants/notificationTypeConstant.js';
+import {
+    notifyProjectMembers,
+    getTaskInvolvedUserIds,
+} from '../services/notificationService.js';
 
 async function getTaskDetailsByDate(taskId) {
     // Optimized: Use a single query with includes instead of multiple separate queries
@@ -229,6 +234,34 @@ export const createTask = catchAsyncError(async (req, res, next) => {
         }
     }
 
+    try {
+        const includedUserIds = new Set();
+        if (Array.isArray(otherMember)) {
+            otherMember.filter(Boolean).forEach((id) => includedUserIds.add(id));
+        }
+        if (assigned_to) {
+            includedUserIds.add(assigned_to);
+        }
+
+        await notifyProjectMembers({
+            projectId: project_id,
+            actorId: user_id,
+            eventType: NOTIFICATION_EVENT_TYPES.TASK_CREATED,
+            message: `${req.user?.name || 'A teammate'} created a new task: "${name}"`,
+            entityType: 'TASK',
+            entityId: String(task.task_id),
+            metadata: {
+                taskId: task.task_id,
+                projectId: project_id,
+                status,
+                priority,
+                phase,
+            },
+            includeUserIds: Array.from(includedUserIds),
+        });
+    } catch (notificationError) {
+    }
+
     res.status(201).json({
         success: true,
         task,
@@ -240,9 +273,19 @@ export const createTask = catchAsyncError(async (req, res, next) => {
 export const getTaskById = catchAsyncError(async (req, res, next) => {
     const task_id = req.params.task_id;
 
+    // Validate task_id parameter
+    if (!task_id) {
+        return next(new ErrorHandler("Task ID is required", 400));
+    }
+
+    const parsedTaskId = parseInt(task_id);
+    if (isNaN(parsedTaskId)) {
+        return next(new ErrorHandler("Invalid Task ID", 400));
+    }
+
     const task = await prisma.task.findUnique({
         where: {
-            task_id: parseInt(task_id)
+            task_id: parsedTaskId
         },
         include: {
             assignees: {
@@ -341,7 +384,7 @@ export const getTaskById = catchAsyncError(async (req, res, next) => {
         }
     });
 
-    const progress = await getTaskDetailsByDate(parseInt(task_id));
+    const progress = await getTaskDetailsByDate(parsedTaskId);
 
     res.status(200).json({
         success: true,
@@ -436,6 +479,32 @@ export const updateTask = catchAsyncError(async (req, res, next) => {
         });
     }
 
+    const updatedFields = Object.keys(updateData);
+
+    if (updatedFields.length > 0) {
+        try {
+            const includeUserIds = await getTaskInvolvedUserIds({ taskId: updatedTask.task_id });
+
+            await notifyProjectMembers({
+                projectId: updatedTask.project_id,
+                actorId: user_id,
+                eventType: NOTIFICATION_EVENT_TYPES.TASK_UPDATED,
+                message: `${req.user?.name || 'A teammate'} updated the task "${updatedTask.name}"`,
+                entityType: 'TASK',
+                entityId: String(updatedTask.task_id),
+                metadata: {
+                    taskId: updatedTask.task_id,
+                    projectId: updatedTask.project_id,
+                    updatedFields,
+                    status: updateData.status || updatedTask.status,
+                    priority: updateData.priority || updatedTask.priority,
+                },
+                includeUserIds,
+            });
+        } catch (notificationError) {
+        }
+    }
+
     res.status(200).json({
         success: true,
         task: updatedTask,
@@ -465,6 +534,8 @@ export const deleteTask = catchAsyncError(async (req, res, next) => {
     }
 
     // Use a transaction with increased timeout to handle all operations
+    const recipientsBeforeDelete = await getTaskInvolvedUserIds({ taskId: task.task_id });
+
     await prisma.$transaction(async (tx) => {
         // Delete all related records in parallel where possible to speed up the process
 
@@ -543,6 +614,23 @@ export const deleteTask = catchAsyncError(async (req, res, next) => {
         success: true,
         message: "Task deleted successfully",
     });
+
+    try {
+        await notifyProjectMembers({
+            projectId: task.project_id,
+            actorId: user_id,
+            eventType: NOTIFICATION_EVENT_TYPES.TASK_DELETED,
+            message: `${req.user?.name || 'A teammate'} deleted the task "${task.name}"`,
+            entityType: 'TASK',
+            entityId: String(task.task_id),
+            metadata: {
+                taskId: task.task_id,
+                projectId: task.project_id,
+            },
+            includeUserIds: recipientsBeforeDelete,
+        });
+    } catch (notificationError) {
+    }
 });
 
 export const addMembersToTask = catchAsyncError(async (req, res, next) => {
@@ -623,13 +711,30 @@ export const addComments = catchAsyncError(async (req, res, next) => {
 
     if (!content) return next(new ErrorHandler(401, "Content is required."));
 
-    await prisma.comment.create({
+    const comment = await prisma.comment.create({
         data: {
             project_id: parseInt(project_id),
             user_id: user_id,
             content: content
         }
     })
+
+    try {
+        await notifyProjectMembers({
+            projectId: parseInt(project_id),
+            actorId: user_id,
+            eventType: NOTIFICATION_EVENT_TYPES.CASE_COMMENT,
+            message: `${req.user?.name || 'A teammate'} added a new case comment`,
+            entityType: 'COMMENT',
+            entityId: String(comment.comment_id),
+            metadata: {
+                commentId: comment.comment_id,
+                projectId: parseInt(project_id),
+                contentPreview: content.slice(0, 140),
+            },
+        });
+    } catch (notificationError) {
+    }
 
     // await prisma.taskProgress.create({
     //     data: {
@@ -694,7 +799,7 @@ export const addTaskNote = catchAsyncError(async (req, res, next) => {
         return next(new ErrorHandler(404, "Task not found."));
     }
 
-    await prisma.comment.create({
+    const note = await prisma.comment.create({
         data: {
             task_id: parseInt(task_id),
             project_id: task.project_id, // Also store project_id for easier querying
@@ -702,6 +807,27 @@ export const addTaskNote = catchAsyncError(async (req, res, next) => {
             content: content
         }
     });
+
+    try {
+        const includeUserIds = await getTaskInvolvedUserIds({ taskId: parseInt(task_id) });
+
+        await notifyProjectMembers({
+            projectId: task.project_id,
+            actorId: user_id,
+            eventType: NOTIFICATION_EVENT_TYPES.TASK_COMMENT,
+            message: `${req.user?.name || 'A teammate'} commented on task "${task.name}"`,
+            entityType: 'COMMENT',
+            entityId: String(note.comment_id),
+            metadata: {
+                commentId: note.comment_id,
+                taskId: task.task_id,
+                projectId: task.project_id,
+                contentPreview: content.slice(0, 140),
+            },
+            includeUserIds,
+        });
+    } catch (notificationError) {
+    }
 
     res.status(200).json({
         success: true,
@@ -756,10 +882,11 @@ export const addEmail = catchAsyncError(async (req, res, next) => {
     let project_id = null;
     let data = [];
     let emailsToSend = [];
+    let task = null;
 
     // If task_id is provided and not "no-task", validate and process it
     if (task_id && task_id !== 'no-task' && task_id !== 'undefined' && task_id !== 'null' && task_id.trim() !== '') {
-        const task = await prisma.task.findUnique({
+        task = await prisma.task.findUnique({
             where: {
                 task_id: parseInt(task_id)
             },
@@ -898,6 +1025,29 @@ export const addEmail = catchAsyncError(async (req, res, next) => {
         }
     }
 
+    if (task) {
+        try {
+            const includeUserIds = await getTaskInvolvedUserIds({ taskId: task.task_id });
+
+            await notifyProjectMembers({
+                projectId: task.project_id,
+                actorId: user_id,
+                eventType: NOTIFICATION_EVENT_TYPES.EMAIL,
+                message: `${req.user?.name || 'A teammate'} sent an email about task "${task.name}"`,
+                entityType: 'EMAIL',
+                entityId: null,
+                metadata: {
+                    taskId: task.task_id,
+                    projectId: task.project_id,
+                    subject,
+                    recipients: emailsToSend.map((email) => email.to),
+                },
+                includeUserIds,
+            });
+        } catch (notificationError) {
+        }
+    }
+
     res.status(200).json({
         success: true,
         message: 'Email sent successfully.',
@@ -909,11 +1059,12 @@ export const addMailClient = catchAsyncError(async (req, res, next) => {
     let { client_id, task_id, subject, content } = req.body;
     const user_id = req.user.user_id;
     const file = req.file;
+    let task = null;
     
     // Make task_id optional - only require it if it's provided and valid
     if (task_id && task_id !== 'no-task' && task_id !== 'undefined' && task_id !== 'null' && task_id.trim() !== '') {
         // Validate task if task_id is provided
-        const task = await prisma.task.findUnique({
+        task = await prisma.task.findUnique({
             where: {
                 task_id: parseInt(task_id)
             },
@@ -969,7 +1120,7 @@ export const addMailClient = catchAsyncError(async (req, res, next) => {
 
     // If task_id is provided, get task and project info
     if (task_id && task_id !== 'no-task' && task_id !== 'undefined' && task_id !== 'null' && task_id.trim() !== '') {
-        const task = await prisma.task.findUnique({
+        task = await prisma.task.findUnique({
             where: {
                 task_id: parseInt(task_id)
             },
@@ -1089,6 +1240,35 @@ export const addMailClient = catchAsyncError(async (req, res, next) => {
                 type: "MAIL"
             }
         });
+    }
+
+    if (task) {
+        try {
+            const includeUserIds = await getTaskInvolvedUserIds({ taskId: task.task_id });
+            if (client_id) {
+                const parsedClientId = parseInt(client_id);
+                if (!Number.isNaN(parsedClientId)) {
+                    includeUserIds.push(parsedClientId);
+                }
+            }
+
+            await notifyProjectMembers({
+                projectId: task.project_id,
+                actorId: user_id,
+                eventType: NOTIFICATION_EVENT_TYPES.EMAIL,
+                message: `${req.user?.name || 'A teammate'} emailed ${client?.name || 'a client'} about task "${task.name}"`,
+                entityType: 'EMAIL',
+                entityId: null,
+                metadata: {
+                    taskId: task.task_id,
+                    projectId: task.project_id,
+                    subject,
+                    clientId: client ? client.user_id : null,
+                },
+                includeUserIds,
+            });
+        } catch (notificationError) {
+        }
     }
 
     res.status(200).json({
@@ -1232,13 +1412,18 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
     const project_id = req.query.project_id ? parseInt(req.query.project_id) : null;
     const user_id = req.user.user_id;
 
-    // Parse date properly
-    sdate = sdate ? dayjs(sdate, "DD-MM-YYYY", true) : dayjs();
-    edate = edate ? dayjs(edate, "DD-MM-YYYY", true) : dayjs();
-
-    // Define the start and end of the day
-    const startOfDay = sdate.startOf("day").utc().toDate(); // Convert to UTC
-    const endOfDay = edate.endOf("day").utc().toDate(); // Convert to UTC
+    // Parse date properly - if dates are not provided, don't filter by date (get all activities)
+    const hasDateFilter = sdate || edate;
+    let startOfDay = null;
+    let endOfDay = null;
+    
+    if (hasDateFilter) {
+        sdate = sdate ? dayjs(sdate, "DD-MM-YYYY", true) : dayjs();
+        edate = edate ? dayjs(edate, "DD-MM-YYYY", true) : dayjs();
+        // Define the start and end of the day
+        startOfDay = sdate.startOf("day").utc().toDate(); // Convert to UTC
+        endOfDay = edate.endOf("day").utc().toDate(); // Convert to UTC
+    }
 
     // Get user's projects since they're not included in basic auth middleware
     const userProjects = await prisma.projectMember.findMany({
@@ -1257,16 +1442,22 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             success: true,
             progress: [],
             times: [],
-            documents: []
+            documents: [],
+            caseComments: [],
+            taskComments: [],
+            reviews: []
         });
     }
 
-    const where = {
-        created_at: {
+    // Build where clause - only add date filter if dates were provided
+    const where = {};
+    
+    if (hasDateFilter && startOfDay && endOfDay) {
+        where.created_at = {
             gte: startOfDay,
             lte: endOfDay
-        }
-    };
+        };
+    }
 
     if (type) {
         where["type"] = type
@@ -1284,9 +1475,7 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             Clients: {
                 select: {
                     Documents: {
-                        where: {
-                            ...where
-                        },
+                        where: Object.keys(where).length > 0 ? where : undefined,
 
                     }
                 }
@@ -1307,9 +1496,7 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             Tasks: {
                 select: {
                     Progress: {
-                        where: {
-                            ...where
-                        },
+                        where: Object.keys(where).length > 0 ? where : undefined,
                         select: {
                             message: true,
                             created_at: true,
@@ -1359,12 +1546,12 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
             name: true,
             description: true,
             Time: {
-                where: {
+                where: hasDateFilter && startOfDay && endOfDay ? {
                     created_at: {
                         gte: startOfDay,
                         lte: endOfDay
                     }
-                },
+                } : undefined,
                 select: {
                     created_at: true,
                     end: true,
@@ -1389,11 +1576,138 @@ export const getAllTaskProgress = catchAsyncError(async (req, res, next) => {
         }
     });
 
+    // Fetch case-level comments (project comments without task_id)
+    let caseComments = await prisma.project.findMany({
+        where: {
+            project_id: {
+                in: project_id ? [project_id] : projectIds
+            }
+        },
+        select: {
+            project_id: true,
+            name: true,
+            Comments: {
+                where: {
+                    ...(hasDateFilter && startOfDay && endOfDay ? {
+                        created_at: {
+                            gte: startOfDay,
+                            lte: endOfDay
+                        }
+                    } : {}),
+                    task_id: null // Only case-level comments
+                },
+                select: {
+                    comment_id: true,
+                    content: true,
+                    created_at: true,
+                    user: {
+                        select: {
+                            name: true,
+                            email: true
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Fetch task-level comments
+    let taskComments = await prisma.project.findMany({
+        where: {
+            project_id: {
+                in: project_id ? [project_id] : projectIds
+            }
+        },
+        select: {
+            project_id: true,
+            name: true,
+            Tasks: {
+                select: {
+                    task_id: true,
+                    name: true,
+                    Comments: {
+                        where: hasDateFilter && startOfDay && endOfDay ? {
+                            created_at: {
+                                gte: startOfDay,
+                                lte: endOfDay
+                            }
+                        } : undefined,
+                        select: {
+                            comment_id: true,
+                            content: true,
+                            created_at: true,
+                            user: {
+                                select: {
+                                    name: true,
+                                    email: true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Fetch reviews
+    let reviews = await prisma.project.findMany({
+        where: {
+            project_id: {
+                in: project_id ? [project_id] : projectIds
+            }
+        },
+        select: {
+            project_id: true,
+            name: true,
+            Tasks: {
+                select: {
+                    task_id: true,
+                    name: true,
+                    inReview: {
+                        where: hasDateFilter && startOfDay && endOfDay ? {
+                            created_at: {
+                                gte: startOfDay,
+                                lte: endOfDay
+                            }
+                        } : undefined,
+                        select: {
+                            review_id: true,
+                            submissionDesc: true,
+                            file_url: true,
+                            filename: true,
+                            action: true,
+                            rejectedReason: true,
+                            created_at: true,
+                            submitted_by: {
+                                select: {
+                                    name: true,
+                                    email: true
+                                }
+                            },
+                            acted_by: {
+                                select: {
+                                    name: true,
+                                    email: true
+                                }
+                            }
+                        },
+                        orderBy: {
+                            created_at: 'desc'
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     res.status(200).json({
         success: true,
         progress,
         times,
-        documents
+        documents,
+        caseComments,
+        taskComments,
+        reviews
     });
 });
 
@@ -1593,6 +1907,27 @@ export const createTime = catchAsyncError(async (req, res, next) => {
         }
     });
 
+    try {
+        const includeUserIds = await getTaskInvolvedUserIds({ taskId: task.task_id });
+
+        await notifyProjectMembers({
+            projectId: task.project_id,
+            actorId: user_id,
+            eventType: NOTIFICATION_EVENT_TYPES.TIME_ENTRY,
+            message: `${req.user?.name || 'A teammate'} started a timer on task "${task.name}"`,
+            entityType: 'TIME_ENTRY',
+            entityId: String(taskTime.time_id),
+            metadata: {
+                taskId: task.task_id,
+                projectId: task.project_id,
+                status: 'PROCESSING',
+                startedAt: taskTime.start,
+            },
+            includeUserIds,
+        });
+    } catch (notificationError) {
+    }
+
     res.status(200).json({
         success: true,
         message: "Time start successfully",
@@ -1628,6 +1963,35 @@ export const stopTime = catchAsyncError(async (req, res, next) => {
             work_description: description
         }
     });
+
+    try {
+        const task = await prisma.task.findUnique({
+            where: { task_id: existingTaskTime.task_id },
+            select: { name: true, project_id: true, task_id: true },
+        });
+
+        if (task) {
+            const includeUserIds = await getTaskInvolvedUserIds({ taskId: task.task_id });
+
+            await notifyProjectMembers({
+                projectId: task.project_id,
+                actorId: req.user?.user_id,
+                eventType: NOTIFICATION_EVENT_TYPES.TIME_ENTRY,
+                message: `${req.user?.name || 'A teammate'} logged time on task "${task.name}"`,
+                entityType: 'TIME_ENTRY',
+                entityId: String(time_id),
+                metadata: {
+                    taskId: task.task_id,
+                    projectId: task.project_id,
+                    status: 'ENDED',
+                    endedAt: new Date().toISOString(),
+                    description: description || null,
+                },
+                includeUserIds,
+            });
+        }
+    } catch (notificationError) {
+    }
 
     res.status(200).json({
         success: true,
@@ -2227,4 +2591,512 @@ export const manualEmailPoll = catchAsyncError(async (req, res, next) => {
     } catch (error) {
         return next(new ErrorHandler("Failed to poll emails", 500));
     }
+});
+
+// Create a task update
+export const createTaskUpdate = catchAsyncError(async (req, res, next) => {
+    const { task_id, content } = req.body;
+    const user_id = req.user.user_id;
+    const files = req.files; // For multiple file uploads
+
+    if (!task_id) {
+        return next(new ErrorHandler("Task ID is required", 400));
+    }
+
+    if (!content || !content.trim()) {
+        return next(new ErrorHandler("Update content is required", 400));
+    }
+
+    // Verify task exists and user has access
+    const task = await prisma.task.findUnique({
+        where: { task_id: parseInt(task_id) },
+        include: {
+            project: {
+                include: {
+                    Members: true
+                }
+            }
+        }
+    });
+
+    if (!task) {
+        return next(new ErrorHandler("Task not found", 404));
+    }
+
+    // Check if user is a member of the project
+    const isProjectMember = task.project.Members.some(
+        (member) => member.user_id === user_id
+    );
+
+    if (!isProjectMember) {
+        return next(new ErrorHandler("You are not authorized to create updates for this task", 403));
+    }
+
+    // Create the update
+    const taskUpdate = await prisma.taskUpdate.create({
+        data: {
+            task_id: parseInt(task_id),
+            user_id: user_id,
+            content: content.trim()
+        },
+        include: {
+            user: {
+                select: {
+                    user_id: true,
+                    name: true,
+                    email: true
+                }
+            },
+            task: {
+                select: {
+                    task_id: true,
+                    name: true,
+                    project_id: true
+                }
+            }
+        }
+    });
+
+    // Mark the update as read for the author so it never shows as unread to them
+    try {
+        await prisma.taskUpdateRead.create({
+            data: {
+                update_id: taskUpdate.update_id,
+                user_id
+            }
+        });
+    } catch (readReceiptError) {
+        console.error('Error creating task update read receipt:', readReceiptError);
+    }
+
+    // Handle file uploads if any
+    const uploadedMedia = [];
+    if (files) {
+        const fileArray = files.files || files.file || (Array.isArray(files) ? files : [files]);
+        const filesToProcess = Array.isArray(fileArray) ? fileArray : [fileArray];
+
+        for (const file of filesToProcess) {
+            if (file) {
+                try {
+                    const cloudRes = await uploadToCloud(file);
+                    
+                    const media = await prisma.media.create({
+                        data: {
+                            task_id: parseInt(task_id),
+                            project_id: task.project_id,
+                            update_id: taskUpdate.update_id,
+                            file_url: cloudRes.url,
+                            key: cloudRes.key,
+                            user_id: user_id,
+                            filename: file.originalname,
+                            mimeType: file.mimetype,
+                            size: file.buffer ? file.buffer.length : file.size
+                        }
+                    });
+
+                    uploadedMedia.push(media);
+                } catch (uploadError) {
+                    console.error('Error uploading file:', uploadError);
+                    // Continue with other files even if one fails
+                }
+            }
+        }
+    }
+
+    // Create task progress entry
+    await prisma.taskProgress.create({
+        data: {
+            message: `User created an update for task "${task.name}"`,
+            user_id: user_id,
+            task_id: parseInt(task_id),
+            type: "OTHER"
+        }
+    });
+
+    // Notify providers about the update
+    try {
+        const includeUserIds = await getTaskInvolvedUserIds({ taskId: parseInt(task_id) });
+        
+        // Filter to only notify providers
+        const validProviderIds = [];
+        for (const userId of includeUserIds) {
+            const user = await prisma.user.findUnique({
+                where: { user_id: userId },
+                select: { Role: true }
+            });
+            if (user?.Role === 'PROVIDER') {
+                validProviderIds.push(userId);
+            }
+        }
+
+        if (validProviderIds.length > 0) {
+            await notifyProjectMembers({
+                projectId: task.project_id,
+                actorId: user_id,
+                eventType: NOTIFICATION_EVENT_TYPES.TASK_UPDATED,
+                message: `${req.user?.name || 'A teammate'} posted an update on task "${task.name}"`,
+                entityType: 'TASK_UPDATE',
+                entityId: String(taskUpdate.update_id),
+                metadata: {
+                    taskId: parseInt(task_id),
+                    projectId: task.project_id,
+                    updateId: taskUpdate.update_id
+                },
+                includeUserIds: validProviderIds,
+            });
+        }
+    } catch (notificationError) {
+        console.error('Error sending notifications:', notificationError);
+        // Don't fail the request if notification fails
+    }
+
+    // Fetch the update with media
+    const updateWithMedia = await prisma.taskUpdate.findUnique({
+        where: { update_id: taskUpdate.update_id },
+        include: {
+            user: {
+                select: {
+                    user_id: true,
+                    name: true,
+                    email: true
+                }
+            },
+            task: {
+                select: {
+                    task_id: true,
+                    name: true,
+                    project_id: true
+                }
+            },
+            Media: {
+                orderBy: {
+                    created_at: 'asc'
+                }
+            }
+        }
+    });
+
+    const responseUpdate = {
+        ...updateWithMedia,
+        is_read: true,
+        read_at: new Date().toISOString()
+    };
+
+    res.status(201).json({
+        success: true,
+        message: "Update created successfully",
+        update: responseUpdate
+    });
+});
+
+// Get all task updates - simplified, no filters
+export const getTaskUpdates = catchAsyncError(async (req, res, next) => {
+    const user_id = req.user.user_id;
+    const project_id = req.query.project_id ? parseInt(req.query.project_id) : null;
+    const task_id = req.query.task_id ? parseInt(req.query.task_id) : null;
+    const user_id_filter = req.query.user_id ? parseInt(req.query.user_id) : null;
+    const start_date = req.query.start_date || null;
+    const end_date = req.query.end_date || null;
+    const readStatusFilter = req.query.read_status ? String(req.query.read_status).toLowerCase() : null;
+    const limit = req.query.limit ? parseInt(req.query.limit) : null;
+
+    const rawTaskIds = req.query.task_ids || req.query['task_ids[]'];
+    const taskIdsArray = Array.isArray(rawTaskIds)
+        ? rawTaskIds
+        : rawTaskIds
+            ? [rawTaskIds]
+            : [];
+    const multipleTaskIds = taskIdsArray
+        .map((value) => parseInt(value))
+        .filter((value) => !isNaN(value) && value > 0);
+
+    const rawUserIds = req.query.user_ids || req.query['user_ids[]'];
+    const userIdsArray = Array.isArray(rawUserIds)
+        ? rawUserIds
+        : rawUserIds
+            ? [rawUserIds]
+            : [];
+    const multipleUserIds = userIdsArray
+        .map((value) => parseInt(value))
+        .filter((value) => !isNaN(value) && value > 0);
+
+    // Build where clause for task updates
+    const where = {
+        task: {
+            project: {
+                Members: {
+                    some: {
+                        user_id: user_id
+                    }
+                }
+            }
+        }
+    };
+
+    // Filter by task_id if provided (takes priority over project_id)
+    if (multipleTaskIds.length > 0) {
+        where.task_id = { in: multipleTaskIds };
+    } else if (task_id) {
+        where.task_id = task_id;
+    } else if (project_id) {
+        // Filter by project_id if provided - first get task IDs for the project
+        const tasks = await prisma.task.findMany({
+            where: { project_id: project_id },
+            select: { task_id: true }
+        });
+        const taskIds = tasks.map(t => t.task_id);
+        if (taskIds.length === 0) {
+            // No tasks in this project, return empty result
+            return res.status(200).json({
+                success: true,
+                updates: [],
+                count: 0
+            });
+        }
+        where.task_id = { in: taskIds };
+    }
+
+    // Filter by user_id if provided
+    if (multipleUserIds.length > 0) {
+        where.user_id = { in: multipleUserIds };
+    } else if (user_id_filter) {
+        where.user_id = user_id_filter;
+    }
+
+    // Filter by date range if provided
+    if (start_date || end_date) {
+        where.created_at = {};
+        if (start_date) {
+            where.created_at.gte = new Date(start_date);
+        }
+        if (end_date) {
+            where.created_at.lte = new Date(end_date);
+        }
+    }
+
+    // Filter by read status if requested
+    if (readStatusFilter === 'unread') {
+        where.Reads = {
+            none: {
+                user_id
+            }
+        };
+    } else if (readStatusFilter === 'read') {
+        where.Reads = {
+            some: {
+                user_id
+            }
+        };
+    }
+
+    // Get all updates and filter by user access (must be member of the project)
+    const queryOptions = {
+        where: where,
+        include: {
+            user: {
+                select: {
+                    user_id: true,
+                    name: true,
+                    email: true
+                }
+            },
+            task: {
+                select: {
+                    task_id: true,
+                    name: true,
+                    project_id: true,
+                    project: {
+                        select: {
+                            project_id: true,
+                            name: true
+                        }
+                    }
+                }
+            },
+            Media: {
+                orderBy: {
+                    created_at: 'asc'
+                }
+            },
+            Reads: {
+                where: {
+                    user_id
+                },
+                select: {
+                    read_at: true
+                }
+            }
+        },
+        orderBy: {
+            created_at: 'desc'
+        }
+    };
+
+    if (!isNaN(limit) && limit > 0) {
+        queryOptions.take = limit;
+    }
+
+    const updates = await prisma.taskUpdate.findMany(queryOptions);
+
+    const formattedUpdates = updates.map((update) => {
+        const readReceipt = update.Reads && update.Reads.length > 0 ? update.Reads[0] : null;
+        const sanitizedTask = update.task
+            ? {
+                ...update.task,
+                project: update.task.project
+            }
+            : null;
+
+        const { Reads, ...rest } = update;
+
+        return {
+            ...rest,
+            task: sanitizedTask,
+            is_read: Boolean(readReceipt),
+            read_at: readReceipt?.read_at || null
+        };
+    });
+
+    res.status(200).json({
+        success: true,
+        updates: formattedUpdates,
+        count: formattedUpdates.length
+    });
+});
+
+// Get updates for a specific task
+export const getTaskUpdatesByTask = catchAsyncError(async (req, res, next) => {
+    const { task_id } = req.params;
+    const user_id = req.user.user_id;
+
+    if (!task_id) {
+        return next(new ErrorHandler("Task ID is required", 400));
+    }
+
+    // Verify task exists and user has access
+    const task = await prisma.task.findUnique({
+        where: { task_id: parseInt(task_id) },
+        include: {
+            project: {
+                include: {
+                    Members: {
+                        where: {
+                            user_id: user_id
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    if (!task) {
+        return next(new ErrorHandler("Task not found", 404));
+    }
+
+    if (task.project.Members.length === 0) {
+        return next(new ErrorHandler("You are not authorized to view updates for this task", 403));
+    }
+
+    const updates = await prisma.taskUpdate.findMany({
+        where: {
+            task_id: parseInt(task_id)
+        },
+        include: {
+            user: {
+                select: {
+                    user_id: true,
+                    name: true,
+                    email: true
+                }
+            },
+            Media: {
+                orderBy: {
+                    created_at: 'asc'
+                }
+            },
+            Reads: {
+                where: {
+                    user_id
+                },
+                select: {
+                    read_at: true
+                }
+            }
+        },
+        orderBy: {
+            created_at: 'desc'
+        }
+    });
+
+    const formattedUpdates = updates.map((update) => {
+        const readReceipt = update.Reads && update.Reads.length > 0 ? update.Reads[0] : null;
+        const { Reads, ...rest } = update;
+
+        return {
+            ...rest,
+            is_read: Boolean(readReceipt),
+            read_at: readReceipt?.read_at || null
+        };
+    });
+
+    res.status(200).json({
+        success: true,
+        updates: formattedUpdates,
+        count: formattedUpdates.length
+    });
+});
+
+// Mark a list of task updates as read for the current user
+export const markTaskUpdatesAsRead = catchAsyncError(async (req, res, next) => {
+    const user_id = req.user.user_id;
+    const { update_ids } = req.body;
+
+    if (!Array.isArray(update_ids) || update_ids.length === 0) {
+        return next(new ErrorHandler("At least one update_id is required", 400));
+    }
+
+    const uniqueUpdateIds = [...new Set(update_ids)]
+        .filter((value) => typeof value === 'string' && value.trim().length > 0);
+
+    if (uniqueUpdateIds.length === 0) {
+        return next(new ErrorHandler("No valid update IDs provided", 400));
+    }
+
+    const accessibleUpdates = await prisma.taskUpdate.findMany({
+        where: {
+            update_id: { in: uniqueUpdateIds },
+            task: {
+                project: {
+                    Members: {
+                        some: {
+                            user_id
+                        }
+                    }
+                }
+            }
+        },
+        select: {
+            update_id: true
+        }
+    });
+
+    if (accessibleUpdates.length === 0) {
+        return res.status(200).json({
+            success: true,
+            marked: 0
+        });
+    }
+
+    await prisma.taskUpdateRead.createMany({
+        data: accessibleUpdates.map((update) => ({
+            update_id: update.update_id,
+            user_id
+        })),
+        skipDuplicates: true
+    });
+
+    res.status(200).json({
+        success: true,
+        marked: accessibleUpdates.length
+    });
 });

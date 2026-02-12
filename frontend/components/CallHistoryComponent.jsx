@@ -22,13 +22,32 @@ const CallHistoryComponent = ({ history, makeCall, onSaveAsContact, contacts = [
 
             {
                 history && history.map((call, index) => {
-                    const phoneNumber = call.to_number || call.number;
+                    // Determine the relevant phone number based on call type
+                    let phoneNumber;
+                    if (call.call_type === 'INCOMING' || call.type === 'incoming') {
+                        phoneNumber = call.from_number || call.number;
+                    } else {
+                        phoneNumber = call.to_number || call.number;
+                    }
+
+                    // Fallback if the determined number is "Unknown" or missing
+                    if (!phoneNumber || phoneNumber === 'Unknown') {
+                        // Try the other number field if available
+                        if ((call.call_type === 'INCOMING' || call.type === 'incoming') && call.to_number && call.to_number !== 'Unknown') {
+                            phoneNumber = call.to_number;
+                        } else if (call.from_number && call.from_number !== 'Unknown') {
+                            phoneNumber = call.from_number;
+                        }
+                    }
                     const hasContactName = call.contact_name && call.contact_name !== "Unknown";
                     const isInContacts = isNumberInContacts(phoneNumber);
-                    
+
                     return (
-                        <div key={`${call.call_id || call.timestamp || Date.now()}-${phoneNumber}-${index}`} className='flex items-center justify-between w-full shadow-md rounded-md border border-gray-50 px-2'>
-                            <div 
+                        <div key={`${call.call_id || call.timestamp || Date.now()}-${phoneNumber}-${index}`} className={`flex items-center justify-between w-full shadow-md rounded-md border px-2 ${(call.status === 'NO_RESPONSE' && (call.call_type === 'INCOMING' || call.type === 'incoming'))
+                            ? 'border-orange-300 bg-orange-50'
+                            : 'border-gray-50'
+                            }`}>
+                            <div
                                 className='flex items-center gap-4 p-2 flex-1 cursor-pointer hover:bg-gray-50 rounded-md transition-colors'
                                 onClick={() => onViewDetails && onViewDetails(call)}
                             >
@@ -37,19 +56,25 @@ const CallHistoryComponent = ({ history, makeCall, onSaveAsContact, contacts = [
                                     <h2 className='opacity-80 text-lg'>{call.contact_name || call.name || phoneNumber}</h2>
                                     <h2 className='opacity-50 text-sm mt-1'>{phoneNumber}</h2>
                                     <div className='flex items-center gap-2 mt-1'>
-                                        <span className={`text-xs px-2 py-1 rounded-full ${
-                                            call.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                            call.status === 'ringing' ? 'bg-yellow-100 text-yellow-800' :
-                                            call.status === 'failed' ? 'bg-red-100 text-red-800' :
-                                            'bg-gray-100 text-gray-800'
-                                        }`}>
-                                            {call.status || 'Unknown'}
+                                        <span className={`text-xs px-2 py-1 rounded-full ${call.status === 'completed' || call.status === 'ENDED' || call.status === 'PROCESSING' ? 'bg-green-100 text-green-800' :
+                                            call.status === 'ringing' || call.status === 'RINGING' ? 'bg-yellow-100 text-yellow-800' :
+                                                call.status === 'failed' || call.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                                                    (call.status === 'NO_RESPONSE' && (call.call_type === 'INCOMING' || call.type === 'incoming')) ? 'bg-orange-100 text-orange-800 font-semibold' :
+                                                        call.status === 'NO_RESPONSE' ? 'bg-gray-100 text-gray-800' :
+                                                            'bg-gray-100 text-gray-800'
+                                            }`}>
+                                            {(call.status === 'NO_RESPONSE' && (call.call_type === 'INCOMING' || call.type === 'incoming')) ? 'Missed Call' :
+                                                call.status === 'NO_RESPONSE' ? 'No Response' :
+                                                    call.status || 'Unknown'}
                                         </span>
                                         {call.duration && (
                                             <span className='text-xs text-gray-500'>
                                                 {Math.floor(call.duration / 60)}:{(call.duration % 60).toString().padStart(2, '0')}
                                             </span>
                                         )}
+                                        <span className='text-xs text-gray-400'>
+                                            • {new Date(call.start_time || call.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
                                         {call.description && (
                                             <span className='text-xs text-blue-500 flex items-center gap-1'>
                                                 <Eye className="h-3 w-3" />
@@ -68,9 +93,9 @@ const CallHistoryComponent = ({ history, makeCall, onSaveAsContact, contacts = [
 
                             <div className="flex items-center gap-2">
                                 <Button variant="ghost" size="icon" onClick={() => makeCall(call.contact_name || call.name, phoneNumber)}>
-                                    <Phone/>
+                                    <Phone />
                                 </Button>
-                                
+
                                 {/* Only show "Save as Contact" if the number is not already in contacts and doesn't have a contact name */}
                                 {!hasContactName && !isInContacts && onSaveAsContact && (
                                     <DropdownMenu>

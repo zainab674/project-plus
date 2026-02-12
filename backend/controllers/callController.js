@@ -58,7 +58,8 @@ export const getCallHistory = catchAsyncError(async (req, res, next) => {
             call_type, 
             start_date, 
             end_date,
-            search 
+            search,
+            is_checked 
         } = req.query;
 
         if (!userId) {
@@ -81,6 +82,10 @@ export const getCallHistory = catchAsyncError(async (req, res, next) => {
 
         if (call_type) {
             where.call_type = call_type;
+        }
+
+        if (is_checked !== undefined) {
+            where.is_checked = is_checked === 'true';
         }
 
         if (start_date || end_date) {
@@ -181,6 +186,7 @@ export const updateCallStatus = catchAsyncError(async (req, res, next) => {
         if (recording_url) updateData.recording_url = recording_url;
         if (error_message) updateData.error_message = error_message;
         if (transcript) updateData.transcript = transcript;
+        if (req.body.is_checked !== undefined) updateData.is_checked = req.body.is_checked;
 
         const call = await prisma.call.update({
             where: { call_id },
@@ -366,5 +372,94 @@ export const getCallBySid = catchAsyncError(async (req, res, next) => {
 
     } catch (error) {
         return next(new ErrorHandler(`Failed to fetch call: ${error.message}`, 500));
+    }
+});
+
+// Get unchecked missed calls
+export const getUncheckedMissedCalls = catchAsyncError(async (req, res, next) => {
+    try {
+        const userId = req.user?.user_id;
+        const { limit = 50 } = req.query;
+
+        if (!userId) {
+            return next(new ErrorHandler('User authentication required', 401));
+        }
+
+        const calls = await prisma.call.findMany({
+            where: {
+                user_id: userId,
+                call_type: 'INCOMING',
+                status: 'NO_RESPONSE',
+                is_checked: false
+            },
+            orderBy: { start_time: 'desc' },
+            take: parseInt(limit)
+        });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                calls,
+                count: calls.length
+            }
+        });
+
+    } catch (error) {
+        return next(new ErrorHandler(`Failed to fetch unchecked missed calls: ${error.message}`, 500));
+    }
+});
+
+// Mark missed calls as checked
+export const markMissedCallsAsChecked = catchAsyncError(async (req, res, next) => {
+    try {
+        const userId = req.user?.user_id;
+        const { call_ids } = req.body; // Array of call IDs or 'all' to mark all
+
+        if (!userId) {
+            return next(new ErrorHandler('User authentication required', 401));
+        }
+
+        let updateCount = 0;
+
+        if (call_ids === 'all' || (Array.isArray(call_ids) && call_ids.length === 0)) {
+            // Mark all unchecked missed calls as checked
+            const result = await prisma.call.updateMany({
+                where: {
+                    user_id: userId,
+                    call_type: 'INCOMING',
+                    status: 'NO_RESPONSE',
+                    is_checked: false
+                },
+                data: {
+                    is_checked: true
+                }
+            });
+            updateCount = result.count;
+        } else if (Array.isArray(call_ids) && call_ids.length > 0) {
+            // Mark specific calls as checked
+            const result = await prisma.call.updateMany({
+                where: {
+                    call_id: { in: call_ids },
+                    user_id: userId,
+                    call_type: 'INCOMING',
+                    status: 'NO_RESPONSE'
+                },
+                data: {
+                    is_checked: true
+                }
+            });
+            updateCount = result.count;
+        } else {
+            return next(new ErrorHandler('Invalid call_ids parameter', 400));
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Marked ${updateCount} missed call(s) as checked`,
+            data: { updated_count: updateCount }
+        });
+
+    } catch (error) {
+        return next(new ErrorHandler(`Failed to mark missed calls as checked: ${error.message}`, 500));
     }
 });

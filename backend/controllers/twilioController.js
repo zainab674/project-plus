@@ -15,19 +15,37 @@ const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_A
 export const createToken = catchAsyncError(async (req, res, next) => {
     try {
         const userId = req.user?.user_id; // Get user ID from authenticated user
-        const token = await generateToken("+19862108561", userId);
+
+        let fromNumber = process.env.TWILIO_DEFAULT_FROM_NUMBER || "+19862108561";
+
+        if (userId) {
+            const userRecord = await prisma.user.findUnique({
+                where: { user_id: userId },
+                select: { phone: true }
+            });
+
+            if (userRecord?.phone) {
+                fromNumber = userRecord.phone;
+            }
+        }
+
+        if (!fromNumber) {
+            throw new Error('No outbound phone number configured. Please assign a phone number to your profile.');
+        }
+
+        const token = await generateToken(fromNumber, userId);
         res.status(200).json(token);
     } catch (error) {
         return next(new ErrorHandler(`Token generation failed: ${error.message}`, 500));
     }
 });
 
-// TwiML webhook endpoint for handling voice calls
+// TwiML webhook endpoint for handling voice calls (outgoing)
 export const handleVoiceWebhook = catchAsyncError(async (req, res, next) => {
     try {
-        
+
         const twiml = new twilio.twiml.VoiceResponse();
-        
+
         // Get the 'To' number from the call parameters
         const toNumber = req.body.To;
         const fromNumber = req.body.From;
@@ -39,22 +57,111 @@ export const handleVoiceWebhook = catchAsyncError(async (req, res, next) => {
             record: 'record-from-answer', // Record the call
             recordingStatusCallback: `${process.env.BASE_URL || 'http://localhost:3000'}/api/v1/twilio/recording-status`
         });
-        
+
         dial.number(toNumber);
-        
+
         // If no answer, play a message
         twiml.say('The call could not be completed. Please try again later.');
-        
+
         res.type('text/xml');
         res.send(twiml.toString());
-        
+
     } catch (error) {
-        
+
         // Return a basic TwiML response even if there's an error
         const twiml = new twilio.twiml.VoiceResponse();
         twiml.say('Sorry, there was an error processing your call.');
         twiml.hangup();
-        
+
+        res.type('text/xml');
+        res.send(twiml.toString());
+    }
+});
+
+// TwiML webhook endpoint for handling INCOMING calls
+// This should be set as the "Voice" webhook URL in your Twilio phone number configuration
+export const handleIncomingCallWebhook = catchAsyncError(async (req, res, next) => {
+    try {
+        const twiml = new twilio.twiml.VoiceResponse();
+
+        // Get call information
+        const fromNumber = req.body.From; // Caller's number
+        const toNumber = req.body.To; // Your Twilio number
+        const callSid = req.body.CallSid;
+
+        console.log('Incoming call webhook received:', { fromNumber, toNumber, callSid });
+        console.log('Full request body:', JSON.stringify(req.body, null, 2));
+
+        // Try to find user by phone number (the number being called)
+        // First try query param, then try database lookup
+        let userId = req.query.userId || req.body.userId;
+
+        if (!userId) {
+            // Look up user by phone number in database
+            try {
+                const user = await prisma.user.findFirst({
+                    where: {
+                        phone: toNumber
+                    },
+                    select: {
+                        user_id: true
+                    }
+                });
+
+                if (user) {
+                    userId = user.user_id;
+                    console.log(`Found user ${userId} for phone number ${toNumber}`);
+                } else {
+                    console.log(`No user found in database for phone number ${toNumber}`);
+                }
+            } catch (dbError) {
+                console.error('Error looking up user by phone:', dbError);
+            }
+        }
+
+        // If still no user ID, try to get from the default number or use a fallback
+        // For now, if no user found, we'll try to dial a default identity
+        // In production, you might want to handle this differently
+        const clientIdentity = userId ? `user_${userId}` : null;
+
+        if (!clientIdentity) {
+            console.warn('No user found for incoming call to:', toNumber);
+            // Try to dial without specific identity (won't work, but graceful failure)
+            twiml.say('Sorry, no user is available to receive this call. Please try again later.');
+            twiml.hangup();
+            res.type('text/xml');
+            res.send(twiml.toString());
+            return;
+        }
+
+        console.log('Dialing client with identity:', clientIdentity);
+
+        // Dial the Client (Device) using the identity
+        // This will trigger the "incoming" event on the Device
+        const dial = twiml.dial({
+            timeout: 30, // Wait up to 30 seconds for answer
+            record: 'record-from-answer', // Record the call
+            recordingStatusCallback: `${process.env.BASE_URL || 'http://localhost:3000'}/api/v1/twilio/recording-status`,
+            callerId: fromNumber // Show caller's number
+        });
+
+        // Dial the Client using the identity
+        dial.client(clientIdentity);
+
+        // If no answer, say a message
+        twiml.say('The person you are calling is not available. Please try again later.');
+
+        res.type('text/xml');
+        res.send(twiml.toString());
+
+    } catch (error) {
+        console.error('Error in incoming call webhook:', error);
+
+        // Return a basic TwiML response even if there's an error
+        const twiml = new twilio.twiml.VoiceResponse();
+        twiml.say('Sorry, there was an error processing your call.');
+        twiml.hangup();
+
         res.type('text/xml');
         res.send(twiml.toString());
     }
@@ -63,11 +170,11 @@ export const handleVoiceWebhook = catchAsyncError(async (req, res, next) => {
 // Recording status webhook
 export const handleRecordingStatus = catchAsyncError(async (req, res, next) => {
     try {
-        
+
         const { CallSid, RecordingStatus, RecordingUrl, RecordingDuration } = req.body;
-        
+
         if (RecordingStatus === 'completed') {
-            
+
             // Update call record in database
             const updateResult = await CallService.processWebhookData({
                 CallSid,
@@ -75,9 +182,9 @@ export const handleRecordingStatus = catchAsyncError(async (req, res, next) => {
                 RecordingUrl,
                 RecordingDuration
             });
-            
+
             if (updateResult.success) {
-                
+
                 // Start transcription process in background
                 if (RecordingUrl) {
                     transcribeCallRecording(CallSid, RecordingUrl).catch(error => {
@@ -86,9 +193,9 @@ export const handleRecordingStatus = catchAsyncError(async (req, res, next) => {
             } else {
             }
         }
-        
+
         res.status(200).send('OK');
-        
+
     } catch (error) {
         res.status(200).send('OK'); // Always return OK to Twilio
     }
@@ -97,18 +204,18 @@ export const handleRecordingStatus = catchAsyncError(async (req, res, next) => {
 // Call status webhook for real-time updates
 export const handleCallStatus = catchAsyncError(async (req, res, next) => {
     try {
-        
-        const { 
-            CallSid, 
-            CallStatus, 
+
+        const {
+            CallSid,
+            CallStatus,
             CallDuration,
             From,
             To,
             Direction
         } = req.body;
-        
+
         if (CallSid) {
-            
+
             // Update call record in database
             const updateData = {
                 CallSid,
@@ -118,16 +225,16 @@ export const handleCallStatus = catchAsyncError(async (req, res, next) => {
                 To,
                 Direction
             };
-            
+
             const updateResult = await CallService.processWebhookData(updateData);
-            
+
             if (updateResult.success) {
             } else {
             }
         }
-        
+
         res.status(200).send('OK');
-        
+
     } catch (error) {
         res.status(200).send('OK'); // Always return OK to Twilio
     }
@@ -137,14 +244,14 @@ export const handleCallStatus = catchAsyncError(async (req, res, next) => {
 export const getNgrokInfo = catchAsyncError(async (req, res, next) => {
     try {
         const webhookUrls = ngrokService.getWebhookUrls();
-        
+
         res.status(200).json({
             success: true,
             isConnected: ngrokService.isTunnelActive(),
             publicUrl: ngrokService.getUrl(),
             webhookUrls: webhookUrls,
-            message: ngrokService.isTunnelActive() 
-                ? 'ngrok tunnel is active' 
+            message: ngrokService.isTunnelActive()
+                ? 'ngrok tunnel is active'
                 : 'ngrok tunnel is not active'
         });
     } catch (error) {
@@ -155,12 +262,12 @@ export const getNgrokInfo = catchAsyncError(async (req, res, next) => {
 // Get available phone numbers from Twilio
 export const getAvailableNumbers = catchAsyncError(async (req, res, next) => {
     try {
-        const { 
-            country = 'US', 
-            areaCode, 
-            contains, 
+        const {
+            country = 'US',
+            areaCode,
+            contains,
             type = 'local',
-            limit = 20 
+            limit = 20
         } = req.query;
 
         // Get the appropriate resource based on type
@@ -216,12 +323,12 @@ export const getAvailableNumbers = catchAsyncError(async (req, res, next) => {
         });
 
     } catch (error) {
-        
+
         // Handle specific Twilio errors
         if (error.code) {
             return next(new ErrorHandler(`Twilio error ${error.code}: ${error.message}`, 400));
         }
-        
+
         return next(new ErrorHandler(`Failed to fetch available numbers: ${error.message}`, 500));
     }
 });
@@ -229,20 +336,20 @@ export const getAvailableNumbers = catchAsyncError(async (req, res, next) => {
 // Function to transcribe call recordings
 const transcribeCallRecording = async (callSid, recordingUrl) => {
     try {
-        
+
         // Extract RecordingSid from the URL
         const recordingSid = recordingUrl.split('/').pop();
-        
+
         // Download the recording using Twilio client with authentication
         const recording = await twilioClient.recordings(recordingSid).fetch();
-           
-        
+
+
         // Use Twilio's authenticated download method
         const recordingData = await twilioClient.recordings(recordingSid).fetch();
-        
+
         // Get the authenticated URL for the audio file
         const authUrl = `https://api.twilio.com${recording.uri.replace('.json', '.wav')}`;
-        
+
         // Create authenticated request using Twilio credentials
         const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
 
@@ -251,27 +358,27 @@ const transcribeCallRecording = async (callSid, recordingUrl) => {
                 'Authorization': `Basic ${auth}`
             }
         });
-        
+
         if (!response.ok) {
             throw new Error(`Failed to download recording: ${response.statusText}`);
         }
-        
+
         const audioData = await response.arrayBuffer();
-        
+
         // Transcribe the audio
         const transcript = await transcribeFile(Buffer.from(audioData));
-        
+
         if (transcript && transcript.trim()) {
-            
+
             // Update the call record with the transcript
             await prisma.call.update({
                 where: { call_sid: callSid },
                 data: { transcript: transcript.trim() }
             });
-            
+
         } else {
         }
-        
+
     } catch (error) {
         throw error;
     }

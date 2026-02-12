@@ -10,13 +10,19 @@
  * - Visual feedback for all actions
  * - No hidden right-click menus
  */
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, Suspense } from 'react'
 import { createFolderRequest, createFileRequest, getFilesRequest, sendToLawyerRequest, deleteFolderRequest, deleteFileRequest } from '@/lib/http/project'
+import { getMySubmissionsRequest } from '@/lib/http/review'
 import { toast } from 'react-toastify'
-import { useRouter } from 'next/navigation';
-import { Folder, File, Plus, Upload, Edit, Send, Trash2, ChevronRight, ChevronDown, FolderOpen, FileText, MoreVertical, Home, ArrowLeft, HelpCircle, Info, Eye, Download } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Folder, File, Plus, Upload, Edit, Send, Trash2, ChevronRight, ChevronDown, FolderOpen, FileText, MoreVertical, Home, ArrowLeft, HelpCircle, Info, Eye, Download, AlertCircle, Clock, ArrowRight, X } from 'lucide-react';
 import { useUser } from '@/providers/UserProvider';
 import { useDashboardFilter } from '@/providers/DashboardFilterProvider';
+import DocumentEditorModal from '@/components/modals/DocumentEditorModal';
+import { Badge } from '@/components/ui/badge';
+import dayjs from 'dayjs';
+import { saveDocument } from '@/lib/utils/documentUtils';
+import { downloadFile } from '@/utils/fileUtils';
 
 const DocumentManager = () => {
   const [items, setItems] = useState([]);
@@ -26,15 +32,63 @@ const DocumentManager = () => {
   const containerRef = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
   const [projectAttachments, setProjectAttachments] = useState([]);
+  const [projectTasks, setProjectTasks] = useState([]); // Store tasks grouped by project
+  const [projectPhases, setProjectPhases] = useState({}); // Store phases by project name
   const [showProjectAttachments, setShowProjectAttachments] = useState(false);
   const router = useRouter()
+  const searchParams = useSearchParams();
   const { user } = useUser();
   const { selectedCase } = useDashboardFilter();
+  const [editingDocument, setEditingDocument] = useState(null);
+  const [reviewedDocuments, setReviewedDocuments] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [highlightedMediaId, setHighlightedMediaId] = useState(null);
+  const highlightedRef = useRef(null);
+  const [seenDocumentUpdates, setSeenDocumentUpdates] = useState(new Set());
 
   useEffect(() => {
     fetchFiles();
     fetchProjectAttachments();
-  }, [selectedCase]); // Re-fetch when selected case changes
+    fetchReviewedDocuments();
+    
+    // Load seen document updates from localStorage
+    const storedSeen = localStorage.getItem('seenDocumentUpdates');
+    if (storedSeen) {
+      try {
+        const seenArray = JSON.parse(storedSeen);
+        setSeenDocumentUpdates(new Set(seenArray));
+      } catch (error) {
+        console.error('Error loading seen document updates:', error);
+      }
+    }
+    
+    // Check if we need to highlight a specific attachment
+    const highlightMediaId = searchParams.get('highlightMediaId');
+    if (highlightMediaId) {
+      setHighlightedMediaId(highlightMediaId);
+    }
+    
+    // Set up polling to check for new status updates every 30 seconds
+    const pollInterval = setInterval(() => {
+      fetchReviewedDocuments();
+    }, 30000);
+
+    return () => clearInterval(pollInterval);
+  }, [selectedCase, searchParams]); // Re-fetch when selected case changes
+
+  const fetchReviewedDocuments = async () => {
+    setLoadingReviews(true);
+    try {
+      const response = await getMySubmissionsRequest();
+      if (response.data.success) {
+        setReviewedDocuments(response.data.documents || []);
+      }
+    } catch (error) {
+      console.error('Error fetching reviewed documents:', error);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
 
   const fetchFiles = async () => {
     setIsLoading(true)
@@ -53,48 +107,107 @@ const DocumentManager = () => {
 
   const fetchProjectAttachments = async () => {
     try {
-      
-      // Use comprehensive request which includes Media
+
+      // Use comprehensive request which includes Media and Tasks
       const { getAllProjectComprehensiveRequest } = await import('@/lib/http/project');
       const response = await getAllProjectComprehensiveRequest();
-      
-      if (response.data.success && Array.isArray(response.data.projects)) {
+
+      if (response.data.success) {
+        // Merge owned projects and collaborated projects to include all projects user has access to
+        const allProjects = [
+          ...(Array.isArray(response.data.projects) ? response.data.projects : []),
+          ...(Array.isArray(response.data.collaboratedProjects) ? response.data.collaboratedProjects : [])
+        ];
+
+        // Collect all media from all projects
+        let allAttachments = [];
+        let allTasks = [];
+        let phasesByProject = {};
         
-            // Collect all media from all projects
-            let allAttachments = [];
-            response.data.projects.forEach((project, index) => {
-              
-              // Filter by selected case if one is selected
-              if (selectedCase && project.project_id !== selectedCase.project_id) {
-                return; // Skip this project if it's not the selected one
-              }
-              
-              if (project.Media && Array.isArray(project.Media)) {
-                // Get project-level attachments (task_id is null)
-                const projectMedia = project.Media
-                  .filter(media => media.task_id === null || media.task_id === undefined)
-                  .map(media => ({
-                    ...media,
-                    projectName: project.name,
-                    projectId: project.project_id,
-                    attachmentType: 'case' // project-level attachment
-                  }));
-                
-                // Get task-level attachments
-                const taskMedia = project.Media
-                  .filter(media => media.task_id !== null && media.task_id !== undefined)
-                  .map(media => ({
-                    ...media,
-                    projectName: project.name,
-                    projectId: project.project_id,
-                    attachmentType: 'task' // task-level attachment
-                  }));
-                
-                allAttachments.push(...projectMedia, ...taskMedia);
-              }
-            });
-        
+        allProjects.forEach((project, index) => {
+
+          // Filter by selected case if one is selected
+          if (selectedCase && project.project_id !== selectedCase.project_id) {
+            return; // Skip this project if it's not the selected one
+          }
+
+          // Store phases for this project
+          if (project.phases && Array.isArray(project.phases) && project.phases.length > 0) {
+            phasesByProject[project.name] = project.phases;
+          }
+
+          if (project.Media && Array.isArray(project.Media)) {
+            // Get project-level attachments (task_id is null)
+            const projectMedia = project.Media
+              .filter(media => media.task_id === null || media.task_id === undefined)
+              .map(media => ({
+                ...media,
+                projectName: project.name,
+                projectId: project.project_id,
+                attachmentType: 'case' // project-level attachment
+              }));
+
+            // Get task-level attachments
+            const taskMedia = project.Media
+              .filter(media => media.task_id !== null && media.task_id !== undefined)
+              .map(media => ({
+                ...media,
+                projectName: project.name,
+                projectId: project.project_id,
+                attachmentType: 'task' // task-level attachment
+              }));
+
+            allAttachments.push(...projectMedia, ...taskMedia);
+          }
+
+          // Collect tasks for this project
+          if (project.Tasks && Array.isArray(project.Tasks)) {
+            const projectTasks = project.Tasks.map(task => ({
+              ...task,
+              projectName: project.name,
+              projectId: project.project_id,
+              phases: project.phases || []
+            }));
+            allTasks.push(...projectTasks);
+          }
+        });
+
         setProjectAttachments(allAttachments);
+        setProjectTasks(allTasks);
+        setProjectPhases(phasesByProject);
+        
+        // After attachments are loaded, check if we need to highlight and expand
+        const highlightMediaId = searchParams.get('highlightMediaId');
+        if (highlightMediaId && allAttachments.length > 0) {
+          const targetAttachment = allAttachments.find(att => 
+            (att.media_id && String(att.media_id) === String(highlightMediaId)) ||
+            (att.id && String(att.id) === String(highlightMediaId))
+          );
+          
+          if (targetAttachment) {
+            // Expand the project folder
+            const projectKey = targetAttachment.projectName || 'Uncategorized';
+            setExpandedFolders(prev => ({
+              ...prev,
+              [projectKey]: true
+            }));
+            
+            // Scroll to the attachment after a short delay to ensure DOM is ready
+            setTimeout(() => {
+              const element = document.getElementById(`attachment-${highlightMediaId}`);
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Remove highlight after 5 seconds
+                setTimeout(() => {
+                  setHighlightedMediaId(null);
+                  // Clean up URL param
+                  const newUrl = window.location.pathname;
+                  router.replace(newUrl);
+                }, 5000);
+              }
+            }, 500);
+          }
+        }
       } else {
       }
     } catch (error) {
@@ -160,19 +273,19 @@ const DocumentManager = () => {
   const deleteItem = async (id, type, name) => {
     const itemType = type === 'folder' ? 'folder' : 'file';
     const confirmMessage = `Are you sure you want to delete "${name}"?\n\nThis action cannot be undone.`;
-    
+
     if (confirm(confirmMessage)) {
       try {
         setIsLoading(true);
-        
-        
+
+
         let response;
         if (type === 'folder') {
           response = await deleteFolderRequest(id);
         } else if (type === 'file') {
           response = await deleteFileRequest(id);
         }
-        
+
         // Only show success if we get a successful response
         if (response?.data?.success) {
           toast.success(`✅ ${itemType.charAt(0).toUpperCase() + itemType.slice(1)} deleted successfully`);
@@ -207,7 +320,7 @@ const DocumentManager = () => {
         toast.error('❌ Description is required');
         return;
       }
-      
+
       const formData = new FormData();
       formData.append("description", description);
 
@@ -232,31 +345,197 @@ const DocumentManager = () => {
   };
 
   const handleEditSend = async (file) => {
-    // This is for template documents (File table)
-    router.push(`/dashboard/edit-file/${file.file_id}?file=${file.path}`)
+    // Check if file is editable (text/html/docx)
+    const isEditable = file.mimeType?.includes('text') ||
+      file.mimeType?.includes('json') ||
+      file.mimeType?.includes('wordprocessingml') ||
+      file.name?.endsWith('.html') ||
+      file.name?.endsWith('.txt') ||
+      file.name?.endsWith('.json') ||
+      file.name?.endsWith('.docx');
+
+    if (isEditable) {
+      // Navigate to standalone editor page
+      router.push(`/dashboard/edit-document/${file.file_id}?file=${encodeURIComponent(file.path)}&filename=${encodeURIComponent(file.name)}&file_id=${file.file_id}`);
+    } else {
+      // Fallback to existing behavior (PDFTron)
+      router.push(`/dashboard/edit-file/${file.file_id}?file=${file.path}`)
+    }
   };
 
   const handleEditMediaFile = async (attachment) => {
-    // This is for Media table attachments (task/project files)
-    router.push(`/dashboard/edit-file/${attachment.media_id}?file=${encodeURIComponent(attachment.file_url)}&media_id=${attachment.media_id}&filename=${encodeURIComponent(attachment.filename)}`)
+    // Check if file is editable (text/html/docx)
+    const isEditable = attachment.mimeType?.includes('text') ||
+      attachment.mimeType?.includes('json') ||
+      attachment.mimeType?.includes('wordprocessingml') ||
+      attachment.filename?.endsWith('.html') ||
+      attachment.filename?.endsWith('.txt') ||
+      attachment.filename?.endsWith('.json') ||
+      attachment.filename?.endsWith('.docx');
+
+    if (isEditable) {
+      // Navigate to standalone editor page
+      router.push(`/dashboard/edit-document/${attachment.media_id}?file=${encodeURIComponent(attachment.file_url)}&filename=${encodeURIComponent(attachment.filename)}&media_id=${attachment.media_id}`);
+    } else {
+      // Fallback to existing behavior (PDFTron)
+      router.push(`/dashboard/edit-file/${attachment.media_id}?file=${encodeURIComponent(attachment.file_url)}&media_id=${attachment.media_id}&filename=${encodeURIComponent(attachment.filename)}`)
+    }
+  };
+
+  const handleSaveDocument = async (content) => {
+    if (!editingDocument) return;
+
+    setIsLoading(true);
+    
+    const success = await saveDocument({
+      content,
+      editingDocument,
+      onSuccess: () => {
+        setEditingDocument(null);
+        // Refresh lists to show updated document everywhere
+        fetchFiles();
+        fetchProjectAttachments();
+      },
+      onError: () => {
+        // Error handling is done in saveDocument
+      }
+    });
+
+    setIsLoading(false);
   };
 
   // User-friendly folder/file rendering with large, clear action buttons
+  const handleReviewClick = async (doc) => {
+    // Fetch the latest document data from server to ensure we have the most recent file_url
+    try {
+      const response = await getMySubmissionsRequest();
+      if (response.data.success && response.data.documents) {
+        // Find the latest version of this document
+        const latestDoc = response.data.documents.find(d => d.t_document_id === doc.t_document_id);
+        if (latestDoc) {
+          // Use the latest document data
+          doc = latestDoc;
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching latest document data:', error);
+      // Continue with the doc we have if fetch fails
+    }
+    
+    // Build query params with all necessary document info
+    const params = new URLSearchParams({
+      status: doc.status || '',
+      rejection_reason: doc.rejection_reason || ''
+    });
+    
+    // Always include t_document_id so the edit page can fetch fresh data
+    if (doc.t_document_id) {
+      params.append('t_document_id', doc.t_document_id);
+    }
+    
+    // Note: We intentionally don't pass file_url in params
+    // The edit-document page will fetch fresh data from the server
+    // This ensures the user always sees the latest version
+    
+    // Navigate to edit-document page which handles status display
+    router.push(`/dashboard/edit-document/${doc.t_document_id}?${params.toString()}`);
+  };
+
+  // Helper function to render a single attachment
+  const renderAttachment = (attachment, attachmentType, index) => {
+    const isHighlighted = highlightedMediaId && (
+      (attachment.media_id && String(attachment.media_id) === String(highlightedMediaId)) ||
+      (attachment.id && String(attachment.id) === String(highlightedMediaId))
+    );
+    const bgColor = attachmentType === 'case' ? 'purple' : 'blue';
+    const textColor = attachmentType === 'case' ? 'purple' : 'blue';
+    
+    return (
+      <div 
+        key={`${attachmentType}-${attachment.media_id || attachment.id}-${index}`} 
+        id={`attachment-${attachment.media_id || attachment.id}`}
+        className={`bg-white border rounded-lg p-3 mb-2 transition-all duration-300 ${
+          isHighlighted 
+            ? `border-${bgColor}-500 border-4 shadow-lg ring-4 ring-${bgColor}-200 bg-${bgColor}-50` 
+            : `border-${bgColor}-200`
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3 flex-1 min-w-0">
+            <FileText className={`w-5 h-5 text-${textColor}-600 flex-shrink-0`} />
+            <div className="min-w-0 flex-1">
+              <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
+              <p className="text-xs text-gray-500">
+                {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
+                {attachment.task_id && ` • Task #${attachment.task_id}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-1">
+            {attachment.file_url && (
+              <>
+                <button
+                  onClick={() => window.open(attachment.file_url, '_blank')}
+                  className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>View</span>
+                </button>
+                <button
+                  onClick={() => handleEditMediaFile(attachment)}
+                  className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
+                >
+                  <Edit className="w-3 h-3" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  onClick={() => downloadFile(attachment.file_url, attachment.filename)}
+                  className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Download</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderTree = (folders = items, level = 0) => {
-    // First, group project attachments by project name and type
+    // Group project attachments by project name and task_id
     const projectAttachmentsGrouped = projectAttachments.reduce((acc, attachment) => {
       const projectKey = attachment.projectName || 'Uncategorized';
       if (!acc[projectKey]) {
         acc[projectKey] = {
-          case: [], // project-level attachments
-          task: []  // task-level attachments
+          case: [], // project-level attachments (task_id is null)
+          byTask: {} // task-level attachments grouped by task_id
         };
       }
-      if (attachment.attachmentType === 'case') {
+      if (attachment.attachmentType === 'case' || !attachment.task_id) {
         acc[projectKey].case.push(attachment);
-      } else if (attachment.attachmentType === 'task') {
-        acc[projectKey].task.push(attachment);
+      } else {
+        const taskId = attachment.task_id;
+        if (!acc[projectKey].byTask[taskId]) {
+          acc[projectKey].byTask[taskId] = [];
+        }
+        acc[projectKey].byTask[taskId].push(attachment);
       }
+      return acc;
+    }, {});
+
+    // Group tasks by project and phase
+    const tasksByProjectAndPhase = projectTasks.reduce((acc, task) => {
+      const projectKey = task.projectName || 'Uncategorized';
+      if (!acc[projectKey]) {
+        acc[projectKey] = {};
+      }
+      const phaseName = task.phase || 'Unassigned';
+      if (!acc[projectKey][phaseName]) {
+        acc[projectKey][phaseName] = [];
+      }
+      acc[projectKey][phaseName].push(task);
       return acc;
     }, {});
 
@@ -266,9 +545,9 @@ const DocumentManager = () => {
       if (selectedCase && folder.project_name && folder.project_name !== selectedCase.name) {
         return acc; // Skip this folder if it doesn't belong to the selected case
       }
-      
+
       let groupKey;
-      
+
       if (folder.project_name) {
         // Use project name as group key
         groupKey = folder.project_name;
@@ -276,219 +555,61 @@ const DocumentManager = () => {
         // For folders without project name, group by folder name
         groupKey = `folder_${folder.name}`;
       }
-      
+
       if (!acc[groupKey]) {
-        acc[groupKey] = [];
+        acc[groupKey] = {
+          mainFolders: [], // Folders without phase_name (main case folders)
+          phaseFolders: {} // Folders with phase_name, grouped by phase
+        };
       }
-      acc[groupKey].push(folder);
+      
+      if (folder.phase_name) {
+        // This is a phase folder
+        if (!acc[groupKey].phaseFolders[folder.phase_name]) {
+          acc[groupKey].phaseFolders[folder.phase_name] = [];
+        }
+        acc[groupKey].phaseFolders[folder.phase_name].push(folder);
+      } else {
+        // This is a main folder
+        acc[groupKey].mainFolders.push(folder);
+      }
       return acc;
     }, {});
 
-    // Get all unique group keys from both folders and project attachments
-    const allGroupKeys = new Set([
-      ...Object.keys(groupedByProject),
-      ...Object.keys(projectAttachmentsGrouped)
-    ]);
+    // Only show groups that have folders - attachments will be shown inside folders
+    const allGroupKeys = Object.keys(groupedByProject);
 
     return Array.from(allGroupKeys).map((groupKey) => {
-      const projectFolders = groupedByProject[groupKey] || [];
-      const attachmentGroup = projectAttachmentsGrouped[groupKey] || { case: [], task: [] };
+      const projectFolderData = groupedByProject[groupKey] || { mainFolders: [], phaseFolders: {} };
+      const mainFolders = projectFolderData.mainFolders || [];
+      const phaseFoldersMap = projectFolderData.phaseFolders || {};
+      const attachmentGroup = projectAttachmentsGrouped[groupKey] || { case: [], byTask: {} };
       const caseAttachments = attachmentGroup.case || [];
-      const taskAttachments = attachmentGroup.task || [];
-      const totalAttachments = caseAttachments.length + taskAttachments.length;
+      const tasksByPhase = tasksByProjectAndPhase[groupKey] || {};
       
       // Determine the display name for the group
-      const displayName = groupKey.startsWith('folder_') 
-        ? (projectFolders[0]?.name || groupKey)
+      const displayName = groupKey.startsWith('folder_')
+        ? (mainFolders[0]?.name || groupKey)
         : groupKey;
 
-      // If this is a project with attachments but no folders
-      if (totalAttachments > 0 && projectFolders.length === 0) {
-        return (
-          <div key={groupKey} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
-            <div className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-purple-300 hover:shadow-lg transition-all duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <button
-                    onClick={() => {
-                      setExpandedFolders(prev => ({
-                        ...prev,
-                        [groupKey]: !prev[groupKey]
-                      }));
-                    }}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    title={expandedFolders[groupKey] ? "Hide contents" : "Show contents"}
-                  >
-                    {expandedFolders[groupKey] ? (
-                      <ChevronDown className="w-6 h-6 text-gray-600" />
-                    ) : (
-                      <ChevronRight className="w-6 h-6 text-gray-600" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setExpandedFolders(prev => ({
-                        ...prev,
-                        [groupKey]: !prev[groupKey]
-                      }));
-                    }}
-                    className="p-2 hover:bg-purple-100 rounded-lg transition-colors"
-                    title={expandedFolders[groupKey] ? "Hide contents" : "Show contents"}
-                  >
-                    <FolderOpen className="w-8 h-8 text-purple-500" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setExpandedFolders(prev => ({
-                        ...prev,
-                        [groupKey]: !prev[groupKey]
-                      }));
-                    }}
-                    className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
-                    title={expandedFolders[groupKey] ? "Hide contents" : "Show contents"}
-                  >
-                    <h3 className="text-lg font-semibold text-gray-800 hover:text-purple-600 transition-colors">
-                      {displayName}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {caseAttachments.length > 0 && `${caseAttachments.length} case file${caseAttachments.length !== 1 ? 's' : ''}`}
-                      {caseAttachments.length > 0 && taskAttachments.length > 0 && ' • '}
-                      {taskAttachments.length > 0 && `${taskAttachments.length} task file${taskAttachments.length !== 1 ? 's' : ''}`}
-                    </p>
-                  </button>
-                </div>
-              </div>
+      // Get all phase names from:
+      // 1. Project phases (all phases defined for the project)
+      // 2. Phase folders (phases that have folders)
+      // 3. Tasks by phase (phases that have tasks)
+      const projectPhasesList = projectPhases[groupKey] || [];
+      const allPhaseNames = new Set([
+        ...projectPhasesList, // Include all phases from the project
+        ...Object.keys(phaseFoldersMap),
+        ...Object.keys(tasksByPhase)
+      ]);
 
-              {/* Expanded Content - Show attachments */}
-              {expandedFolders[groupKey] && (
-                <div className="mt-4 space-y-3">
-                  {/* Case-level attachments */}
-                  {caseAttachments.length > 0 && (
-                    <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                      <p className="text-sm font-medium text-purple-800 mb-2">📎 Case Files ({caseAttachments.length})</p>
-                      {caseAttachments.map((attachment, index) => (
-                        <div key={`case-${attachment.media_id}-${index}`} className="bg-white border border-purple-200 rounded-lg p-3 mb-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3 flex-1 min-w-0">
-                              <FileText className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
-                                <p className="text-xs text-gray-500">
-                                  {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              {attachment.file_url && (
-                                <>
-                                  <button
-                                    onClick={() => window.open(attachment.file_url, '_blank')}
-                                    className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>View</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditMediaFile(attachment)}
-                                    className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                    <span>Edit</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = attachment.file_url;
-                                      link.download = attachment.filename || 'document';
-                                      link.click();
-                                    }}
-                                    className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                    <span>Get</span>
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* Task-level attachments */}
-                  {taskAttachments.length > 0 && (
-                    <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-sm font-medium text-blue-800 mb-2">📋 Task Files ({taskAttachments.length})</p>
-                      {taskAttachments.map((attachment, index) => (
-                        <div key={`task-${attachment.media_id}-${index}`} className="bg-white border border-blue-200 rounded-lg p-3 mb-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3 flex-1 min-w-0">
-                              <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
-                                <p className="text-xs text-gray-500">
-                                  {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
-                                  {attachment.task_id && ` • Task #${attachment.task_id}`}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              {attachment.file_url && (
-                                <>
-                                  <button
-                                    onClick={() => window.open(attachment.file_url, '_blank')}
-                                    className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>View</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditMediaFile(attachment)}
-                                    className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                    <span>Edit</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = attachment.file_url;
-                                      link.download = attachment.filename || 'document';
-                                      link.click();
-                                    }}
-                                    className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                    <span>Get</span>
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      }
-
-      // Handle regular folders (existing logic)
-      const shouldGroup = projectFolders.length > 1;
-
-      if (!shouldGroup && projectFolders.length > 0) {
-        // Single folder - show directly
-        const folder = projectFolders[0];
+      // Render main folder (case folder) - show case files and phase folders
+      if (mainFolders.length > 0) {
+        const mainFolder = mainFolders[0]; // Take first main folder as the case folder
         
-        // Check if this folder also has project attachments
-        const hasAttachments = totalAttachments > 0;
         return (
-          <div key={folder.folder_id} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
-            {/* Folder Card */}
+          <div key={mainFolder.folder_id} className={level > 0 ? 'ml-8 mb-4' : 'mb-4'}>
+            {/* Main Case Folder Card */}
             <div className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-lg transition-all duration-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
@@ -496,13 +617,13 @@ const DocumentManager = () => {
                     onClick={() => {
                       setExpandedFolders(prev => ({
                         ...prev,
-                        [folder.folder_id]: !prev[folder.folder_id]
+                        [mainFolder.folder_id]: !prev[mainFolder.folder_id]
                       }));
                     }}
                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                    title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                    title={expandedFolders[mainFolder.folder_id] ? "Hide contents" : "Show contents"}
                   >
-                    {expandedFolders[folder.folder_id] ? (
+                    {expandedFolders[mainFolder.folder_id] ? (
                       <ChevronDown className="w-6 h-6 text-gray-600" />
                     ) : (
                       <ChevronRight className="w-6 h-6 text-gray-600" />
@@ -512,11 +633,11 @@ const DocumentManager = () => {
                     onClick={() => {
                       setExpandedFolders(prev => ({
                         ...prev,
-                        [folder.folder_id]: !prev[folder.folder_id]
+                        [mainFolder.folder_id]: !prev[mainFolder.folder_id]
                       }));
                     }}
                     className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
-                    title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                    title={expandedFolders[mainFolder.folder_id] ? "Hide contents" : "Show contents"}
                   >
                     <FolderOpen className="w-8 h-8 text-blue-500" />
                   </button>
@@ -524,28 +645,27 @@ const DocumentManager = () => {
                     onClick={() => {
                       setExpandedFolders(prev => ({
                         ...prev,
-                        [folder.folder_id]: !prev[folder.folder_id]
+                        [mainFolder.folder_id]: !prev[mainFolder.folder_id]
                       }));
                     }}
                     className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
-                    title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
+                    title={expandedFolders[mainFolder.folder_id] ? "Hide contents" : "Show contents"}
                   >
                     <h3 className="text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors">
-                      {folder.name}
+                      {mainFolder.name}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      {folder.files?.length || 0} files
-                      {folder.subfolders?.length > 0 && ` • ${folder.subfolders.length} subfolders`}
+                      {mainFolder.files?.length || 0} files
                       {caseAttachments.length > 0 && ` • ${caseAttachments.length} case file${caseAttachments.length !== 1 ? 's' : ''}`}
-                      {taskAttachments.length > 0 && ` • ${taskAttachments.length} task file${taskAttachments.length !== 1 ? 's' : ''}`}
+                      {allPhaseNames.size > 0 && ` • ${allPhaseNames.size} phase${allPhaseNames.size !== 1 ? 's' : ''}`}
                     </p>
                   </button>
                 </div>
-                
+
                 {/* Folder Action Buttons */}
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => createFolder(folder.folder_id)}
+                    onClick={() => createFolder(mainFolder.folder_id)}
                     className="flex items-center space-x-2 bg-emerald-300 text-emerald-800 px-4 py-2 rounded-lg hover:bg-emerald-400 transition-colors text-sm font-medium"
                     title="Create a new folder inside this folder"
                   >
@@ -553,7 +673,7 @@ const DocumentManager = () => {
                     <span>New Folder</span>
                   </button>
                   <button
-                    onClick={() => uploadFile(folder.folder_id)}
+                    onClick={() => uploadFile(mainFolder.folder_id)}
                     className="flex items-center space-x-2 bg-cyan-300 text-cyan-800 px-4 py-2 rounded-lg hover:bg-cyan-400 transition-colors text-sm font-medium"
                     title="Upload a file to this folder"
                   >
@@ -561,7 +681,7 @@ const DocumentManager = () => {
                     <span>Upload File</span>
                   </button>
                   <button
-                    onClick={() => deleteItem(folder.folder_id, 'folder', folder.name)}
+                    onClick={() => deleteItem(mainFolder.folder_id, 'folder', mainFolder.name)}
                     className="flex items-center space-x-2 bg-rose-300 text-rose-800 px-4 py-2 rounded-lg hover:bg-rose-400 transition-colors text-sm font-medium"
                     title="Delete this folder"
                   >
@@ -571,153 +691,36 @@ const DocumentManager = () => {
                 </div>
               </div>
 
-              {/* Expanded Content */}
-              {expandedFolders[folder.folder_id] && (
+              {/* Expanded Content - Show case files and phase folders */}
+              {expandedFolders[mainFolder.folder_id] && (
                 <div className="mt-4 space-y-3">
                   {/* Case-level attachments */}
                   {caseAttachments.length > 0 && (
                     <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
                       <p className="text-sm font-medium text-purple-800 mb-2">📎 Case Files ({caseAttachments.length})</p>
-                      {caseAttachments.map((attachment, index) => (
-                        <div key={`case-${attachment.media_id}-${index}`} className="bg-white border border-purple-200 rounded-lg p-3 mb-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3 flex-1 min-w-0">
-                              <FileText className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
-                                <p className="text-xs text-gray-500">
-                                  {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              {attachment.file_url && (
-                                <>
-                                  <button
-                                    onClick={() => window.open(attachment.file_url, '_blank')}
-                                    className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>View</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditMediaFile(attachment)}
-                                    className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                    <span>Edit</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = attachment.file_url;
-                                      link.download = attachment.filename || 'document';
-                                      link.click();
-                                    }}
-                                    className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                    <span>Get</span>
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                      {caseAttachments.map((attachment, index) => renderAttachment(attachment, 'case', index))}
                     </div>
                   )}
-                  
-                  {/* Task-level attachments */}
-                  {taskAttachments.length > 0 && (
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-sm font-medium text-blue-800 mb-2">📋 Task Files ({taskAttachments.length})</p>
-                      {taskAttachments.map((attachment, index) => (
-                        <div key={`task-${attachment.media_id}-${index}`} className="bg-white border border-blue-200 rounded-lg p-3 mb-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3 flex-1 min-w-0">
-                              <FileText className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-sm font-medium text-gray-800 truncate">{attachment.filename || 'Unnamed Document'}</h4>
-                                <p className="text-xs text-gray-500">
-                                  {attachment.mimeType || 'Unknown type'} • {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : 'Unknown size'}
-                                  {attachment.task_id && ` • Task #${attachment.task_id}`}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              {attachment.file_url && (
-                                <>
-                                  <button
-                                    onClick={() => window.open(attachment.file_url, '_blank')}
-                                    className="flex items-center space-x-1 bg-blue-200 text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>View</span>
-                                  </button>
-                                  <button
-                                    onClick={() => handleEditMediaFile(attachment)}
-                                    className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Edit className="w-3 h-3" />
-                                    <span>Edit</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = attachment.file_url;
-                                      link.download = attachment.filename || 'document';
-                                      link.click();
-                                    }}
-                                    className="flex items-center space-x-1 bg-green-200 text-green-700 px-2 py-1 rounded-lg hover:bg-green-300 transition-colors text-xs font-medium"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                    <span>Get</span>
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* Files in this folder */}
-                  {folder.files && folder.files.map(file => (
+
+                  {/* Files in main folder */}
+                  {mainFolder.files && mainFolder.files.map(file => (
                     <div
                       key={file.file_id}
                       className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                          <button
-                            onClick={() => {
-                              // You can add file preview functionality here later
-                              toast.info(`📄 ${file.name} - Click an action button to work with this file`);
-                            }}
-                            className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
-                            title="Click to see file info"
-                          >
-                            <FileText className="w-6 h-6 text-gray-600 hover:text-blue-600 transition-colors" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              // You can add file preview functionality here later
-                              toast.info(`📄 ${file.name} - Click an action button to work with this file`);
-                            }}
-                            className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
-                            title="Click to see file info"
-                          >
+                          <FileText className="w-6 h-6 text-gray-600 hover:text-blue-600 transition-colors" />
+                          <div className="text-left flex-1">
                             <h4 className="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors">
                               {file.name}
                             </h4>
                             <p className="text-sm text-gray-500">
                               {formatFileSize(file.size)}
                             </p>
-                          </button>
+                          </div>
                         </div>
-                        
+
                         {/* File Action Buttons */}
                         <div className="flex items-center space-x-2">
                           <button
@@ -749,9 +752,178 @@ const DocumentManager = () => {
                     </div>
                   ))}
 
-                  {/* Subfolders recursively */}
-                  {folder.subfolders && folder.subfolders.length > 0 &&
-                    renderTree(folder.subfolders, level + 1)
+                  {/* Phase Folders - Show each phase with its tasks */}
+                  {Array.from(allPhaseNames).map((phaseName) => {
+                    const phaseFolders = phaseFoldersMap[phaseName] || [];
+                    const phaseFolder = phaseFolders[0]; // Take first phase folder if exists
+                    const phaseTasks = tasksByPhase[phaseName] || [];
+                    const phaseTaskIds = new Set(phaseTasks.map(t => t.task_id));
+                    const phaseTaskAttachments = Object.entries(attachmentGroup.byTask || {})
+                      .filter(([taskId]) => phaseTaskIds.has(parseInt(taskId)))
+                      .flatMap(([, attachments]) => attachments);
+
+                    return (
+                      <div key={`phase-${phaseName}`} className="mb-4">
+                        {/* Phase Folder Card */}
+                        <div className="bg-white border-2 border-indigo-200 rounded-xl p-4 hover:border-indigo-300 hover:shadow-lg transition-all duration-200">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <button
+                                onClick={() => {
+                                  const phaseKey = `phase-${groupKey}-${phaseName}`;
+                                  setExpandedFolders(prev => ({
+                                    ...prev,
+                                    [phaseKey]: !prev[phaseKey]
+                                  }));
+                                }}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                              >
+                                {expandedFolders[`phase-${groupKey}-${phaseName}`] ? (
+                                  <ChevronDown className="w-6 h-6 text-gray-600" />
+                                ) : (
+                                  <ChevronRight className="w-6 h-6 text-gray-600" />
+                                )}
+                              </button>
+                              <FolderOpen className="w-8 h-8 text-indigo-500" />
+                              <div className="text-left flex-1">
+                                <h4 className="text-lg font-semibold text-gray-800">
+                                  {phaseName}
+                                </h4>
+                                <p className="text-sm text-gray-500">
+                                  Phase • {phaseTasks.length} task{phaseTasks.length !== 1 ? 's' : ''}
+                                  {phaseTaskAttachments.length > 0 && ` • ${phaseTaskAttachments.length} file${phaseTaskAttachments.length !== 1 ? 's' : ''}`}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Phase Folder Action Buttons */}
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => createFolder(phaseFolder?.folder_id || mainFolder.folder_id)}
+                                className="flex items-center space-x-2 bg-emerald-300 text-emerald-800 px-4 py-2 rounded-lg hover:bg-emerald-400 transition-colors text-sm font-medium"
+                                title="Create a new folder inside this phase"
+                              >
+                                <Plus className="w-4 h-4" />
+                                <span>New Folder</span>
+                              </button>
+                              <button
+                                onClick={() => uploadFile(phaseFolder?.folder_id || mainFolder.folder_id)}
+                                className="flex items-center space-x-2 bg-cyan-300 text-cyan-800 px-4 py-2 rounded-lg hover:bg-cyan-400 transition-colors text-sm font-medium"
+                                title="Upload a file to this phase"
+                              >
+                                <Upload className="w-4 h-4" />
+                                <span>Upload File</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expanded Phase Content - Show task folders */}
+                          {expandedFolders[`phase-${groupKey}-${phaseName}`] && (
+                            <div className="mt-4 space-y-3 ml-4">
+                              {/* Phase folder files if any */}
+                              {phaseFolder && phaseFolder.files && phaseFolder.files.length > 0 && (
+                                <div className="mb-3">
+                                  {phaseFolder.files.map(file => (
+                                    <div
+                                      key={file.file_id}
+                                      className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                          <FileText className="w-5 h-5 text-gray-600" />
+                                          <div>
+                                            <h5 className="text-sm font-medium text-gray-800">{file.name}</h5>
+                                            <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                          <button
+                                            onClick={() => handleEditSend(file)}
+                                            className="flex items-center space-x-1 bg-amber-200 text-amber-700 px-2 py-1 rounded-lg hover:bg-amber-300 transition-colors text-xs font-medium"
+                                          >
+                                            <Edit className="w-3 h-3" />
+                                            <span>Edit</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Show empty state if phase has no tasks, files, or attachments */}
+                              {phaseTasks.length === 0 && 
+                               (!phaseFolder || !phaseFolder.files || phaseFolder.files.length === 0) && 
+                               phaseTaskAttachments.length === 0 && (
+                                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                                  <p className="text-sm text-gray-500 italic text-center">
+                                    This phase is empty. No tasks or files yet.
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Task Folders */}
+                              {phaseTasks.map((task) => {
+                                const taskAttachments = attachmentGroup.byTask[task.task_id] || [];
+                                const taskKey = `task-${groupKey}-${phaseName}-${task.task_id}`;
+                                
+                                return (
+                                  <div key={taskKey} className="mb-3">
+                                    {/* Task Folder Card */}
+                                    <div className="bg-white border-2 border-green-200 rounded-lg p-3 hover:border-green-300 transition-all">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                          <button
+                                            onClick={() => {
+                                              setExpandedFolders(prev => ({
+                                                ...prev,
+                                                [taskKey]: !prev[taskKey]
+                                              }));
+                                            }}
+                                            className="p-1 hover:bg-gray-100 rounded transition-colors"
+                                          >
+                                            {expandedFolders[taskKey] ? (
+                                              <ChevronDown className="w-5 h-5 text-gray-600" />
+                                            ) : (
+                                              <ChevronRight className="w-5 h-5 text-gray-600" />
+                                            )}
+                                          </button>
+                                          <Folder className="w-6 h-6 text-green-500" />
+                                          <div className="text-left flex-1">
+                                            <h5 className="text-base font-semibold text-gray-800">{task.name}</h5>
+                                            <p className="text-xs text-gray-500">
+                                              Task • {taskAttachments.length} file{taskAttachments.length !== 1 ? 's' : ''}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Expanded Task Content - Show task files */}
+                                      {expandedFolders[taskKey] && (
+                                        <div className="mt-3 ml-8 space-y-2">
+                                          {taskAttachments.length > 0 ? (
+                                            <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                              {taskAttachments.map((attachment, index) => renderAttachment(attachment, 'task', index))}
+                                            </div>
+                                          ) : (
+                                            <p className="text-sm text-gray-400 italic p-2">No files in this task</p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Regular subfolders (if any) */}
+                  {mainFolder.subfolders && mainFolder.subfolders.length > 0 &&
+                    renderTree(mainFolder.subfolders, level + 1)
                   }
                 </div>
               )}
@@ -760,215 +932,127 @@ const DocumentManager = () => {
         );
       }
 
-      // Multiple folders - show grouped with dropdown
-      return (
-        <div key={groupKey} className={`${level > 0 ? 'ml-8' : ''} mb-4`}>
-          {/* Project Group Header */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-4 shadow-sm">
-            <button
-              onClick={() => {
-                setExpandedFolders(prev => ({
-                  ...prev,
-                  [groupKey]: !prev[groupKey]
-                }))
-              }}
-              className="flex items-center justify-between w-full hover:bg-blue-100 rounded-lg p-2 -m-2 transition-colors"
-            >
-              <div className="flex items-center space-x-4">
-                {expandedFolders[groupKey] ? (
-                  <ChevronDown className="w-6 h-6 text-blue-600" />
-                ) : (
-                  <ChevronRight className="w-6 h-6 text-blue-600" />
-                )}
-                <Folder className="w-8 h-8 text-blue-600" />
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">
-                    {displayName}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    {projectFolders.length} folder{projectFolders.length !== 1 ? 's' : ''} • {projectFolders.reduce((total, folder) => total + (folder.files?.length || 0), 0)} files
-                  </p>
-                </div>
-              </div>
-            </button>
-          </div>
+      // If no main folders, return null (shouldn't happen but handle gracefully)
+      return null;
 
-          {/* Expanded Project Folders */}
-          {expandedFolders[groupKey] && (
-            <div className="ml-8 mt-4 space-y-4">
-              {projectFolders.map((folder, index) => (
-                <div key={folder.folder_id} className="relative">
-                  {/* Folder Card */}
-                  <div className="bg-white border-2 border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-lg transition-all duration-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <button
-                          onClick={() => {
-                            setExpandedFolders(prev => ({
-                              ...prev,
-                              [folder.folder_id]: !prev[folder.folder_id]
-                            }));
-                          }}
-                          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                          title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
-                        >
-                          {expandedFolders[folder.folder_id] ? (
-                            <ChevronDown className="w-6 h-6 text-gray-600" />
-                          ) : (
-                            <ChevronRight className="w-6 h-6 text-gray-600" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setExpandedFolders(prev => ({
-                              ...prev,
-                              [folder.folder_id]: !prev[folder.folder_id]
-                            }));
-                          }}
-                          className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
-                          title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
-                        >
-                          <FolderOpen className="w-8 h-8 text-blue-500" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setExpandedFolders(prev => ({
-                              ...prev,
-                              [folder.folder_id]: !prev[folder.folder_id]
-                            }));
-                          }}
-                          className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
-                          title={expandedFolders[folder.folder_id] ? "Hide contents" : "Show contents"}
-                        >
-                          <h4 className="text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors">
-                            {folder.name}
-                          </h4>
-                          <p className="text-sm text-gray-500">
-                            {folder.phase_name && `Phase: ${folder.phase_name} • `}
-                            {folder.files?.length || 0} files
-                            {folder.subfolders?.length > 0 && ` • ${folder.subfolders.length} subfolders`}
-                          </p>
-                        </button>
-                      </div>
-                      
-                      {/* Folder Action Buttons */}
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => createFolder(folder.folder_id)}
-                          className="flex items-center space-x-2 bg-emerald-300 text-emerald-800 px-4 py-2 rounded-lg hover:bg-emerald-400 transition-colors text-sm font-medium"
-                          title="Create a new folder inside this folder"
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>New Folder</span>
-                        </button>
-                        <button
-                          onClick={() => uploadFile(folder.folder_id)}
-                          className="flex items-center space-x-2 bg-cyan-300 text-cyan-800 px-4 py-2 rounded-lg hover:bg-cyan-400 transition-colors text-sm font-medium"
-                          title="Upload a file to this folder"
-                        >
-                          <Upload className="w-4 h-4" />
-                          <span>Upload File</span>
-                        </button>
-                        <button
-                          onClick={() => deleteItem(folder.folder_id, 'folder', folder.name)}
-                          className="flex items-center space-x-2 bg-rose-300 text-rose-800 px-4 py-2 rounded-lg hover:bg-rose-400 transition-colors text-sm font-medium"
-                          title="Delete this folder"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Expanded Content */}
-                    {expandedFolders[folder.folder_id] && (
-                      <div className="mt-4 space-y-3">
-                        {/* Files in this folder */}
-                        {folder.files && folder.files.map(file => (
-                          <div
-                            key={file.file_id}
-                            className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-4">
-                                <button
-                                  onClick={() => {
-                                    // You can add file preview functionality here later
-                                    toast.info(`📄 ${file.name} - Click an action button to work with this file`);
-                                  }}
-                                  className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
-                                  title="Click to see file info"
-                                >
-                                  <FileText className="w-6 h-6 text-gray-600 hover:text-blue-600 transition-colors" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    // You can add file preview functionality here later
-                                    toast.info(`📄 ${file.name} - Click an action button to work with this file`);
-                                  }}
-                                  className="text-left hover:bg-gray-50 rounded-lg p-2 transition-colors flex-1"
-                                  title="Click to see file info"
-                                >
-                                  <h5 className="text-base font-medium text-gray-800 hover:text-blue-600 transition-colors">
-                                    {file.name}
-                                  </h5>
-                                  <p className="text-sm text-gray-500">
-                                    {formatFileSize(file.size)}
-                                  </p>
-                                </button>
-                              </div>
-                              
-                              {/* File Action Buttons */}
-                              <div className="flex items-center space-x-2">
-                                <button
-                                  onClick={() => handleEditSend(file)}
-                                  className="flex items-center space-x-2 bg-amber-300 text-amber-800 px-3 py-2 rounded-lg hover:bg-amber-400 transition-colors text-sm font-medium"
-                                  title="Edit this file"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  <span>Edit</span>
-                                </button>
-                                <button
-                                  onClick={() => handleFileAction(file)}
-                                  className="flex items-center space-x-2 bg-violet-300 text-violet-800 px-3 py-2 rounded-lg hover:bg-violet-400 transition-colors text-sm font-medium"
-                                  title="Send this file to your lawyer"
-                                >
-                                  <Send className="w-4 h-4" />
-                                  <span>Send to Lawyer</span>
-                                </button>
-                                <button
-                                  onClick={() => deleteItem(file.file_id, 'file', file.name)}
-                                  className="flex items-center space-x-2 bg-pink-300 text-pink-800 px-3 py-2 rounded-lg hover:bg-pink-400 transition-colors text-sm font-medium"
-                                  title="Delete this file"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  <span>Delete</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-
-                        {/* Subfolders recursively */}
-                        {folder.subfolders && folder.subfolders.length > 0 &&
-                          renderTree(folder.subfolders, level + 1)
-                        }
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
+      // If we reach here, there are no main folders to display
+      return null;
     });
   };
 
   // No more context menu listeners needed
 
+  // Count reviewed documents (APPROVED or REJECTED)
+  const reviewedDocumentsCount = reviewedDocuments.filter(doc => 
+    doc.status === 'APPROVED' || doc.status === 'REJECTED'
+  ).length;
+
+  // Count new status changes (reviewed in last 24 hours, excluding seen ones)
+  const newStatusChangesCount = reviewedDocuments.filter(doc => 
+    (doc.status === 'APPROVED' || doc.status === 'REJECTED') &&
+    doc.reviewed_at &&
+    dayjs(doc.reviewed_at).isAfter(dayjs().subtract(24, 'hours')) &&
+    !seenDocumentUpdates.has(doc.t_document_id)
+  ).length;
+
+  // Mark document update as seen
+  const markUpdateAsSeen = (docId) => {
+    setSeenDocumentUpdates(prev => {
+      const newSet = new Set(prev);
+      newSet.add(docId);
+      // Persist to localStorage
+      localStorage.setItem('seenDocumentUpdates', JSON.stringify(Array.from(newSet)));
+      return newSet;
+    });
+  };
+
+  // Get new status changes for banner (excluding seen ones)
+  const newStatusChanges = reviewedDocuments.filter(doc => 
+    (doc.status === 'APPROVED' || doc.status === 'REJECTED') &&
+    doc.reviewed_at &&
+    dayjs(doc.reviewed_at).isAfter(dayjs().subtract(24, 'hours')) &&
+    !seenDocumentUpdates.has(doc.t_document_id)
+  ).slice(0, 3); // Show max 3 in banner
+
   return (
     <main className="flex-1 overflow-auto p-6 bg-gray-50 min-h-screen">
+      {/* Notification Banner for New Status Changes */}
+      {newStatusChangesCount > 0 && (
+        <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-4 shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-6 h-6 text-blue-600 animate-pulse" />
+              <h3 className="text-lg font-bold text-blue-900">
+                {newStatusChangesCount} New Document Status Update{newStatusChangesCount > 1 ? 's' : ''}!
+              </h3>
+            </div>
+            <button
+              onClick={() => {
+                const firstDoc = newStatusChanges[0];
+                if (firstDoc) handleReviewClick(firstDoc);
+              }}
+              className="text-sm text-blue-700 hover:text-blue-900 font-medium underline"
+            >
+              View Details →
+            </button>
+          </div>
+          <div className="space-y-2">
+            {newStatusChanges.map((doc) => (
+              <div
+                key={doc.t_document_id}
+                className={`p-3 rounded-lg border-2 transition-all hover:shadow-md relative ${
+                  doc.status === 'APPROVED'
+                    ? 'bg-green-50 border-green-300 hover:border-green-400'
+                    : 'bg-red-50 border-red-300 hover:border-red-400'
+                }`}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    markUpdateAsSeen(doc.t_document_id);
+                  }}
+                  className="absolute top-2 right-2 p-1 hover:bg-gray-200 rounded-full transition-colors"
+                  title="Mark as seen"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                </button>
+                <div
+                  onClick={() => handleReviewClick(doc)}
+                  className="cursor-pointer pr-6"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {doc.status === 'APPROVED' ? (
+                        <div className="w-8 h-8 bg-green-200 rounded-full flex items-center justify-center">
+                          <FileText className="w-5 h-5 text-green-700" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 bg-red-200 rounded-full flex items-center justify-center">
+                          <AlertCircle className="w-5 h-5 text-red-700" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-semibold text-gray-900">{doc.filename}</p>
+                        <p className="text-xs text-gray-600">
+                          {doc.status === 'APPROVED' ? '✅ Approved' : '❌ Rejected'}
+                          {doc.reviewed_at && ` • ${dayjs(doc.reviewed_at).format('MMM D, h:mm A')}`}
+                        </p>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-gray-400" />
+                  </div>
+                  {doc.status === 'REJECTED' && doc.rejection_reason && (
+                    <p className="text-sm text-red-700 mt-2 ml-11 line-clamp-1">
+                      Reason: {doc.rejection_reason}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
@@ -1005,7 +1089,7 @@ const DocumentManager = () => {
             </button>
           </div>
         </div>
-        
+
         {/* Help Section */}
         {showHelp && (
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-6">
@@ -1044,11 +1128,11 @@ const DocumentManager = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <h2 className="text-xl font-semibold text-gray-800">📂 Your Documents</h2>
-             
-             
+
+
             </div>
             <div className="flex items-center space-x-4">
-              
+
               <button
                 onClick={fetchFiles}
                 className="flex items-center space-x-2 bg-white text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200 shadow-sm"
@@ -1087,7 +1171,7 @@ const DocumentManager = () => {
                 Create your first folder to organize your personal documents and files
               </p>
               <p className="text-base text-gray-500 mb-8 max-w-lg mx-auto">
-                This is your personal document space - you can organize files and folders however you like. 
+                This is your personal document space - you can organize files and folders however you like.
                 Everything is clearly labeled and easy to use!
               </p>
               <button
@@ -1100,11 +1184,20 @@ const DocumentManager = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {renderTree()}
+              {renderTree(items)}
             </div>
           )}
         </div>
       </div>
+
+      {/* Document Editor Modal */}
+      {editingDocument && (
+        <DocumentEditorModal
+          document={editingDocument}
+          onClose={() => setEditingDocument(null)}
+          onSave={handleSaveDocument}
+        />
+      )}
     </main>
   );
 };

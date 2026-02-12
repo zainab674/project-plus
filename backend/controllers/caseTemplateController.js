@@ -1379,6 +1379,98 @@ export const useTemplateForProject = catchAsyncError(async (req, res, next) => {
         data: { usage_count: { increment: 1 } }
     });
 
+    // Automatically create folder structure for the case in template-documents
+    try {
+        // Get or create TemplateDocument for the user
+        let template_document = await prisma.templateDocument.findFirst({
+            where: {
+                owner_id: user_id
+            }
+        });
+
+        if (!template_document) {
+            template_document = await prisma.templateDocument.create({
+                data: {
+                    owner_id: user_id,
+                }
+            });
+        }
+
+        const template_document_id = template_document.template_document_id;
+
+        // Check if a folder with the same name and project_name already exists
+        const existingMainFolder = await prisma.folder.findFirst({
+            where: {
+                name: projectName,
+                project_name: projectName,
+                template_document_id: template_document_id,
+                parent_id: null
+            }
+        });
+
+        let mainFolder;
+        if (existingMainFolder) {
+            // Use existing folder if it already exists
+            mainFolder = existingMainFolder;
+            console.log(`📁 Using existing folder for case "${projectName}"`);
+        } else {
+            // Create main folder with case name
+            mainFolder = await prisma.folder.create({
+                data: {
+                    name: projectName,
+                    template_document_id: template_document_id,
+                    project_name: projectName,
+                    parent_id: null // Root level folder
+                }
+            });
+            console.log(`✅ Created main folder for case "${projectName}"`);
+        }
+
+        // Get phases from project (either from request or template)
+        const projectPhases = phases || (template.phases && Array.isArray(template.phases) ? template.phases.map(phase => phase.name) : []);
+
+        // Create subfolders for each phase
+        if (projectPhases && Array.isArray(projectPhases) && projectPhases.length > 0) {
+            let createdPhases = 0;
+            for (const phase of projectPhases) {
+                if (phase && typeof phase === 'string' && phase.trim()) {
+                    const phaseName = phase.trim();
+                    
+                    // Check if phase folder already exists
+                    const existingPhaseFolder = await prisma.folder.findFirst({
+                        where: {
+                            name: phaseName,
+                            project_name: projectName,
+                            phase_name: phaseName,
+                            parent_id: mainFolder.folder_id,
+                            template_document_id: template_document_id
+                        }
+                    });
+
+                    if (!existingPhaseFolder) {
+                        await prisma.folder.create({
+                            data: {
+                                name: phaseName,
+                                template_document_id: template_document_id,
+                                project_name: projectName,
+                                phase_name: phaseName,
+                                parent_id: mainFolder.folder_id // Subfolder of main case folder
+                            }
+                        });
+                        createdPhases++;
+                    }
+                }
+            }
+            console.log(`✅ Created ${createdPhases} phase folder(s) for case "${projectName}"`);
+        }
+
+        console.log(`✅ Folder structure ready for case "${projectName}"`);
+    } catch (folderError) {
+        // Log error but don't fail project creation if folder creation fails
+        console.error('❌ Error creating folder structure:', folderError);
+        // Continue with project creation even if folder creation fails
+    }
+
     res.status(201).json({
         success: true,
         project,

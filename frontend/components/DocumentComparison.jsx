@@ -848,6 +848,7 @@ const AILegalDoc = () => {
                                                 return fileName === normalizedModifiedName;
                                             });
                                             
+                    
                                             // If no exact match, try contains match
                                             if (targetFileIndex === -1 || targetFileIndex === undefined) {
                                                 targetFileIndex = selectedFileIndexes.find(idx => {

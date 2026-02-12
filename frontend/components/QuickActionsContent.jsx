@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTabNavigation } from '@/hooks/useTabNavigation';
-import { useUser } from '../providers/UserProvider';
+import { useDashboardFilter } from '@/providers/DashboardFilterProvider';
 import {
   Calendar,
   Mail,
@@ -18,6 +18,9 @@ import {
   FileSignature,
   DollarSign,
   Brain,
+  Activity,
+  Workflow,
+  ListTodo,
 } from 'lucide-react';
 
 // Quick Actions Content Component
@@ -29,12 +32,20 @@ export const QuickActionsContent = ({
   modalFunctions
 }) => {
   const router = useTabNavigation();
-
+  const { selectedCase } = useDashboardFilter();
   const handleActionClick = (action) => {
     if (action.action) {
       action.action();
     } else if (action.name === 'Cases') {
-      router.push('/dashboard/cases');
+      // If a case is selected in top navbar, navigate to that case detail page
+      // Otherwise, show all cases
+      if (selectedCase?.project_id) {
+        router.push(`/dashboard/project/${selectedCase.project_id}`);
+      } else {
+        router.push('/dashboard/cases');
+      }
+    } else if (action.name === 'Tasks') {
+      router.push('/dashboard/tasks');
     } else if (action.name === 'Add Task') {
       router.push('/dashboard/tasks/add');
     } else if (action.name === 'TimeLine') {
@@ -45,6 +56,8 @@ export const QuickActionsContent = ({
       modalFunctions.openEnhancedMailModal();
     } else if (action.name === 'Chat') {
       modalFunctions.openEnhancedChatModal();
+    } else if (action.name === 'Updates') {
+      router.push('/dashboard/updates');
     } else if (action.name === 'Team') {
       router.push('/dashboard/team');
     } else if (action.name === 'TemplateDocs') {
@@ -55,14 +68,16 @@ export const QuickActionsContent = ({
       router.push('/dashboard/flowchart');
     } else if (action.name === 'Phone') {
       router.push('/dashboard/phone');
-    } else if (action.name === 'InviteBiller') {
-      router.push('/dashboard/invite-biller');
     } else if (action.name === 'AssignToBiller') {
       router.push('/dashboard/case-assignment');
     } else if (action.name === 'AI Assistant') {
       router.push('/dashboard/ai-assistant');
     } else if (action.name === 'Dashboard') {
       router.push('/dashboard');
+    } else if (action.name === 'Time Tracking') {
+      router.push('/dashboard/time-tracking-analytics');
+    } else if (action.name === 'Case Workflow') {
+      router.push('/dashboard/case-workflow');
     } else if (action.route) {
       router.push(action.route);
     }
@@ -119,8 +134,9 @@ export const QuickActionsContent = ({
   // Horizontal mode layout
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-0  justify-center mx-auto">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1" />
+        <div className="flex items-center gap-0 justify-center">
           {quickActions.map((action, index) => {
             const IconComponent = action.icon;
             const isAIAssistant = action.isAIAssistant;
@@ -150,6 +166,7 @@ export const QuickActionsContent = ({
             );
           })}
         </div>
+        <div className="flex-1" />
       </div>
     </div>
   );

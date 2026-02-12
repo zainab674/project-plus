@@ -128,7 +128,9 @@ const TaskComments = ({ open, onClose, project_id, project }) => {
                       <div className="flex items-center gap-1">
                         <Clock className="w-3 h-3 text-gray-400" />
                         <time className="text-xs text-gray-500">
-                          {moment(comment?.created_at).calendar()}
+                          {comment?.created_at 
+                            ? moment(comment.created_at).format('MMM DD, YYYY HH:mm')
+                            : 'Date not available'}
                         </time>
                       </div>
                     </div>

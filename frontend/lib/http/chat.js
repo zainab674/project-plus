@@ -37,6 +37,14 @@ export const getPrivateConversationsListRequest = async () => {
     return await api.get(`/private-chat/conversations`);
 };
 
+export const markPrivateMessagesAsReadRequest = async (private_conversation_id) => {
+    return await api.post(`/private-chat/mark-as-read`, { private_conversation_id });
+};
+
+export const markPrivateMessageAsReadRequest = async (private_message_id) => {
+    return await api.put(`/private-chat/message/${private_message_id}/mark-as-read`);
+};
+
 // OLD Private Chat API functions (keeping for backward compatibility)
 export const getPrivateChatConversationIdRequest = async (data) => {
     return await api.post(`/chat/private/get-conversation-id`, data);
@@ -61,6 +69,14 @@ export const createGroupChatMessage = async (projectId, taskId, messageData) => 
 
 export const getProjectGroupChatInfo = async (projectId) => {
     return await api.get(`/project/${projectId}/chat/info`);
+};
+
+export const markGroupChatMessagesAsReadRequest = async (projectId, taskId) => {
+    return await api.post(`/project/${projectId}/chat/${taskId}/mark-as-read`);
+};
+
+export const getUnreadGroupChatMessagesRequest = async () => {
+    return await api.get(`/project/chat/unread`);
 };
 
 // Custom Group Chat API functions

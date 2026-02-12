@@ -12,8 +12,7 @@ import { generateDocumentSentHtml } from "../processors/generateDocumentSentHtml
 
 export const createProject = catchAsyncError(async (req, res, next) => {
     let projectData;
-    
-    // Parse project data from JSON string if it exists
+
     if (req.body.projectData) {
         try {
             projectData = JSON.parse(req.body.projectData);
@@ -21,7 +20,6 @@ export const createProject = catchAsyncError(async (req, res, next) => {
             return next(new ErrorHandler('Invalid JSON format for project data', 400));
         }
     } else {
-        // Fallback to direct body parsing for backward compatibility
         projectData = req.body;
     }
 
@@ -49,24 +47,20 @@ export const createProject = catchAsyncError(async (req, res, next) => {
         },
     });
 
-    // Handle file uploads if any files are provided
     let uploadedFiles = [];
     if (req.files && Object.keys(req.files).length > 0) {
         console.log('📎 Files received:', Object.keys(req.files).length, 'field(s)');
         try {
-            // Process all uploaded files
             for (const fieldName in req.files) {
                 const files = Array.isArray(req.files[fieldName]) ? req.files[fieldName] : [req.files[fieldName]];
-                
+
                 for (const file of files) {
                     if (file && file.buffer) {
                         console.log(`📤 Uploading file: ${file.originalname}, size: ${file.size}`);
                         const cloudRes = await uploadToCloud(file);
-                        
+
                         console.log(`✅ File uploaded to Cloudinary: ${cloudRes.url}`);
-                        
-                        // Create media record for the uploaded file
-                        // task_id is null for project-level attachments (not associated with a specific task)
+
                         const mediaRecord = await prisma.media.create({
                             data: {
                                 filename: file.originalname,
@@ -78,9 +72,9 @@ export const createProject = catchAsyncError(async (req, res, next) => {
                                 task_id: null // null for project-level attachments
                             }
                         });
-                        
+
                         console.log(`✅ Media record created: ${mediaRecord.media_id}`);
-                        
+
                         uploadedFiles.push({
                             media_id: mediaRecord.media_id,
                             filename: file.originalname,
@@ -94,8 +88,7 @@ export const createProject = catchAsyncError(async (req, res, next) => {
             console.log(`✅ Successfully processed ${uploadedFiles.length} file(s)`);
         } catch (uploadError) {
             console.error('❌ Error uploading files:', uploadError);
-            // Don't fail the project creation if file upload fails
-            // Just log the error and continue
+          
         }
     } else {
         console.log('📎 No files received in request');
@@ -109,15 +102,12 @@ export const createProject = catchAsyncError(async (req, res, next) => {
         },
     });
 
-    // Add selected team members to project (if any)
     if (selectedTeamMembers && Array.isArray(selectedTeamMembers) && selectedTeamMembers.length > 0) {
         for (const memberData of selectedTeamMembers) {
-            // Handle both old format (just memberId) and new format (object with memberId and legalRole)
             const memberId = typeof memberData === 'object' ? memberData.memberId : memberData;
             const legalRole = typeof memberData === 'object' ? memberData.legalRole : null;
             const customLegalRole = typeof memberData === 'object' ? memberData.customLegalRole : null;
 
-            // Get the team member's role from UserTeam
             const teamMember = await prisma.userTeam.findFirst({
                 where: {
                     user_id: parseInt(memberId),
@@ -139,18 +129,97 @@ export const createProject = catchAsyncError(async (req, res, next) => {
         }
     }
 
+    try {
+        let template_document = await prisma.templateDocument.findFirst({
+            where: {
+                owner_id: userId
+            }
+        });
+
+        if (!template_document) {
+            template_document = await prisma.templateDocument.create({
+                data: {
+                    owner_id: userId,
+                }
+            });
+        }
+
+        const template_document_id = template_document.template_document_id;
+
+        const existingMainFolder = await prisma.folder.findFirst({
+            where: {
+                name: name,
+                project_name: name,
+                template_document_id: template_document_id,
+                parent_id: null
+            }
+        });
+
+        let mainFolder;
+        if (existingMainFolder) {
+            mainFolder = existingMainFolder;
+            console.log(`📁 Using existing folder for case "${name}"`);
+        } else {
+            mainFolder = await prisma.folder.create({
+                data: {
+                    name: name,
+                    template_document_id: template_document_id,
+                    project_name: name,
+                    parent_id: null // Root level folder
+                }
+            });
+            console.log(`✅ Created main folder for case "${name}"`);
+        }
+
+        if (phases && Array.isArray(phases) && phases.length > 0) {
+            let createdPhases = 0;
+            for (const phase of phases) {
+                if (phase && typeof phase === 'string' && phase.trim()) {
+                    const phaseName = phase.trim();
+
+                    const existingPhaseFolder = await prisma.folder.findFirst({
+                        where: {
+                            name: phaseName,
+                            project_name: name,
+                            phase_name: phaseName,
+                            parent_id: mainFolder.folder_id,
+                            template_document_id: template_document_id
+                        }
+                    });
+
+                    if (!existingPhaseFolder) {
+                        await prisma.folder.create({
+                            data: {
+                                name: phaseName,
+                                template_document_id: template_document_id,
+                                project_name: name,
+                                phase_name: phaseName,
+                                parent_id: mainFolder.folder_id // Subfolder of main case folder
+                            }
+                        });
+                        createdPhases++;
+                    }
+                }
+            }
+            console.log(`✅ Created ${createdPhases} phase folder(s) for case "${name}"`);
+        }
+
+        console.log(`✅ Folder structure ready for case "${name}"`);
+    } catch (folderError) {
+        console.error('❌ Error creating folder structure:', folderError);
+    }
+
     res.status(201).json({
         success: true,
         project,
         uploadedFiles,
-        message: uploadedFiles.length > 0 
-            ? `Project created successfully with ${uploadedFiles.length} attachment(s)` 
+        message: uploadedFiles.length > 0
+            ? `Project created successfully with ${uploadedFiles.length} attachment(s)`
             : 'Project created successfully'
     });
 });
 
 export const getMyProjects = catchAsyncError(async (req, res, next) => {
-    // Use a lighter selector to avoid N+1 queries
     const lightProjectSelector = {
         project_id: true,
         name: true,
@@ -186,12 +255,12 @@ export const getMyProjects = catchAsyncError(async (req, res, next) => {
         },
     });
 
-    collaboratedProjects = collaboratedProjects.map(collabrationMember => ({ 
-        ...collabrationMember.project, 
-        isCollabrationProject: true 
+    collaboratedProjects = collaboratedProjects.map(collabrationMember => ({
+        ...collabrationMember.project,
+        isCollabrationProject: true
     }));
     collaboratedProjects = collaboratedProjects.filter(project => project.created_by !== req.user.user_id)
-    
+
     // Add this section to get projects where user is a client
     let clientProjects = await prisma.projectClient.findMany({
         where: { user_id: req.user.user_id },
@@ -202,18 +271,18 @@ export const getMyProjects = catchAsyncError(async (req, res, next) => {
         },
     });
 
-    clientProjects = clientProjects.map(clientProject => ({ 
-        ...clientProject.project, 
-        isClientProject: true 
+    clientProjects = clientProjects.map(clientProject => ({
+        ...clientProject.project,
+        isClientProject: true
     }));
 
     // Combine all projects
     const allProjects = [
-        ...projects, 
-        ...collaboratedProjects, 
+        ...projects,
+        ...collaboratedProjects,
         ...clientProjects
     ];
-    
+
     res.status(200).json({
         success: true,
         projects: allProjects,
@@ -367,12 +436,12 @@ export const getMyProjectsWithTasks = catchAsyncError(async (req, res, next) => 
         },
     });
 
-    collaboratedProjects = collaboratedProjects.map(collabrationMember => ({ 
-        ...collabrationMember.project, 
-        isCollabrationProject: true 
+    collaboratedProjects = collaboratedProjects.map(collabrationMember => ({
+        ...collabrationMember.project,
+        isCollabrationProject: true
     }));
     collaboratedProjects = collaboratedProjects.filter(project => project.created_by !== req.user.user_id)
-    
+
     res.status(200).json({
         success: true,
         projects,
@@ -524,12 +593,12 @@ export const getMyProjectsComprehensive = catchAsyncError(async (req, res, next)
         },
     });
 
-    collaboratedProjects = collaboratedProjects.map(collabrationMember => ({ 
-        ...collabrationMember.project, 
-        isCollabrationProject: true 
+    collaboratedProjects = collaboratedProjects.map(collabrationMember => ({
+        ...collabrationMember.project,
+        isCollabrationProject: true
     }));
     collaboratedProjects = collaboratedProjects.filter(project => project.created_by !== req.user.user_id)
-    
+
     res.status(200).json({
         success: true,
         projects,
@@ -747,25 +816,135 @@ export const deleteProject = catchAsyncError(async (req, res, next) => {
         return next(new ErrorHandler("You are not authorized to delete this project", 403));
     }
 
-    // Use a transaction to delete the project and related records
-    await prisma.$transaction([
-        prisma.projectMember.deleteMany({
-            where: { project_id: parseInt(id) }, // Delete project members
-        }),
-        prisma.taskMember.deleteMany({
+    // Use a transaction to delete the project and related records in correct order
+    // Increased timeout to 30 seconds to handle large deletions
+    await prisma.$transaction(async (tx) => {
+        // Get all ProjectClient IDs for this project (inside transaction)
+        const projectClients = await tx.projectClient.findMany({
+            where: { project_id: parseInt(id) },
+            select: { project_client_id: true }
+        });
+        const projectClientIds = projectClients.map(pc => pc.project_client_id);
+
+        // 1. Delete signed records first (they have foreign key constraints)
+        // Delete by project_id first to handle any direct references
+        await tx.signed.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        // 2. Delete billing line items (they reference billing)
+        if (projectClientIds.length > 0) {
+            // Get billing IDs inside transaction
+            const billings = await tx.billing.findMany({
+                where: { project_client_id: { in: projectClientIds } },
+                select: { billing_id: true }
+            });
+            const billingIds = billings.map(b => b.billing_id);
+
+            if (billingIds.length > 0) {
+                await tx.billingLineItem.deleteMany({
+                    where: { billing_id: { in: billingIds } }
+                });
+            }
+
+            // 3. Delete billings
+            await tx.billing.deleteMany({
+                where: { project_client_id: { in: projectClientIds } }
+            });
+
+            // 4. Delete documents, filled, signed, updates (all reference project_client_id)
+            // These must be deleted before ProjectClient due to RESTRICT constraints
+            await tx.documents.deleteMany({
+                where: { project_client_id: { in: projectClientIds } }
+            });
+
+            await tx.filled.deleteMany({
+                where: { project_client_id: { in: projectClientIds } }
+            });
+
+            // Delete signed by project_client_id (in case some weren't caught by project_id)
+            await tx.signed.deleteMany({
+                where: { project_client_id: { in: projectClientIds } }
+            });
+
+            await tx.updates.deleteMany({
+                where: { project_client_id: { in: projectClientIds } }
+            });
+        }
+
+        // 5. Delete other records that reference project_id directly
+        await tx.documents.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        await tx.filled.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        await tx.updates.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        await tx.billing.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        // 6. Delete ProjectClient records
+        await tx.projectClient.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        // 7. Delete project members
+        await tx.projectMember.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        // 8. Delete task members (linked to project's tasks)
+        await tx.taskMember.deleteMany({
             where: {
                 task: {
-                    project_id: parseInt(id), // Delete task members linked to the project's tasks
-                },
-            },
-        }),
-        prisma.task.deleteMany({
-            where: { project_id: parseInt(id) }, // Delete tasks
-        }),
-        prisma.project.delete({
-            where: { project_id: parseInt(id) }, // Delete the project itself
-        }),
-    ]);
+                    project_id: parseInt(id)
+                }
+            }
+        });
+
+        // 9. Delete tasks
+        await tx.task.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        // 10. Delete other project-related records
+        await tx.media.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        await tx.comment.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        await tx.taskTime.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        await tx.billingConfig.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        await tx.caseAssignment.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        await tx.invoice.deleteMany({
+            where: { project_id: parseInt(id) }
+        });
+
+        // 11. Finally delete the project itself
+        await tx.project.delete({
+            where: { project_id: parseInt(id) }
+        });
+    }, {
+        timeout: 30000 // Increase timeout to 30 seconds to handle large deletions
+    });
 
     res.status(200).json({
         success: true,
@@ -1228,50 +1407,50 @@ export const addMemberThroughInvitationPublic = catchAsyncError(async (req, res,
             requiresVerification: true
         });
     } else {
-            // Handle client invitations (with project_id)
-    if (!invitation.project_id) {
-        return next(new ErrorHandler("Invalid client invitation - project ID is missing", 400));
-    }
-
-    // Check if user is already a project client
-    const existingProjectClient = await prisma.projectClient.findFirst({
-        where: {
-            project_id: invitation.project_id,
-            user_id: user_id
+        // Handle client invitations (with project_id)
+        if (!invitation.project_id) {
+            return next(new ErrorHandler("Invalid client invitation - project ID is missing", 400));
         }
-    });
 
-    if (existingProjectClient) {
-        return next(new ErrorHandler("You are already a client of this project", 400));
-    }
-
-    // For CLIENT invitations, directly process the invitation and set role to CLIENT
-    // No need for role selection since the invitation already specifies CLIENT role
-    if (user.Role !== 'CLIENT') {
-        // Update user role to CLIENT first
-        await prisma.user.update({
-            where: { user_id: user_id },
-            data: { Role: "CLIENT" }
+        // Check if user is already a project client
+        const existingProjectClient = await prisma.projectClient.findFirst({
+            where: {
+                project_id: invitation.project_id,
+                user_id: user_id
+            }
         });
-    }
 
-    // Add client to ProjectClient table only (not to ProjectMember)
-    await prisma.projectClient.create({
-        data: {
-            project_id: invitation.project_id,
-            user_id: user_id
+        if (existingProjectClient) {
+            return next(new ErrorHandler("You are already a client of this project", 400));
         }
-    });
 
-    // Update user role to CLIENT
-    await prisma.user.update({
-        where: {
-            user_id: user_id
-        },
-        data: {
-            Role: "CLIENT",
+        // For CLIENT invitations, directly process the invitation and set role to CLIENT
+        // No need for role selection since the invitation already specifies CLIENT role
+        if (user.Role !== 'CLIENT') {
+            // Update user role to CLIENT first
+            await prisma.user.update({
+                where: { user_id: user_id },
+                data: { Role: "CLIENT" }
+            });
         }
-    });
+
+        // Add client to ProjectClient table only (not to ProjectMember)
+        await prisma.projectClient.create({
+            data: {
+                project_id: invitation.project_id,
+                user_id: user_id
+            }
+        });
+
+        // Update user role to CLIENT
+        await prisma.user.update({
+            where: {
+                user_id: user_id
+            },
+            data: {
+                Role: "CLIENT",
+            }
+        });
 
         // Create conversation for the project
         // Find an existing task in the project to use for conversation
@@ -1418,7 +1597,7 @@ export const sendInvitationViaMail = catchAsyncError(async (req, res, next) => {
 
     try {
         const result = await sendInviation(invitation, mail);
-        
+
         res.status(200).json({
             success: true,
             message: "Mail sent successfully",
@@ -1443,7 +1622,7 @@ export const createFolder = catchAsyncError(async (req, res, next) => {
     const user = req.user;
 
     let user_id = user.user_id;
-    
+
     // For team members, get their leader_id from UserTeam table
     if (user.Role === "TEAM") {
         const teamMember = await prisma.userTeam.findFirst({
@@ -1454,7 +1633,7 @@ export const createFolder = catchAsyncError(async (req, res, next) => {
                 leader_id: true
             }
         });
-        
+
         if (teamMember && teamMember.leader_id) {
             user_id = teamMember.leader_id;
         } else {
@@ -1512,7 +1691,7 @@ export const fileUpload = catchAsyncError(async (req, res, next) => {
     const user = req.user;
 
     let user_id = user.user_id;
-    
+
     // For team members, get their leader_id from UserTeam table
     if (user.Role === "TEAM") {
         const teamMember = await prisma.userTeam.findFirst({
@@ -1523,7 +1702,7 @@ export const fileUpload = catchAsyncError(async (req, res, next) => {
                 leader_id: true
             }
         });
-        
+
         if (teamMember && teamMember.leader_id) {
             user_id = teamMember.leader_id;
         } else {
@@ -1580,8 +1759,36 @@ export const fileUpload = catchAsyncError(async (req, res, next) => {
 
 
 export const updateFileUpload = catchAsyncError(async (req, res, next) => {
-    const { file_id, media_id } = req.body;
-    const file = req.file;
+    // Get values from req.body (FormData fields)
+    const file_id = req.body.file_id;
+    const media_id = req.body.media_id;
+    const t_document_id = req.body.t_document_id;
+    const htmlContent = req.body.htmlContent;
+    const isDocx = req.body.isDocx;
+    let file = req.file;
+    
+    // Debug logging
+    console.log('Update file request:', { file_id, media_id, t_document_id, hasFile: !!file });
+
+    // If HTML content is provided for DOCX conversion, convert it first
+    if (htmlContent && isDocx === 'true') {
+        try {
+            const { htmlToDocx } = await import('../utils/htmlToDocx.js');
+            const docxBuffer = await htmlToDocx(htmlContent);
+
+            // Create a file object from the buffer
+            const filename = req.body.filename || 'document.docx';
+            file = {
+                buffer: docxBuffer,
+                originalname: filename.endsWith('.docx') ? filename : `${filename}.docx`,
+                mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                size: docxBuffer.length
+            };
+        } catch (conversionError) {
+            console.error('Error converting HTML to DOCX:', conversionError);
+            return next(new ErrorHandler('Failed to convert HTML to DOCX: ' + conversionError.message, 500));
+        }
+    }
 
     if (!file) {
         return next(new ErrorHandler("File is required", 400));
@@ -1598,13 +1805,14 @@ export const updateFileUpload = catchAsyncError(async (req, res, next) => {
             },
             data: {
                 file_url: cloudRes.url,
-                size: file.size,
+                key: cloudRes.key,
+                filename: file.originalname,
                 mimeType: file.mimetype,
-                filename: file.originalname
+                size: file.size,
             }
         });
 
-        res.status(200).json({
+        res.status(201).json({
             success: true,
             message: "File updated successfully",
             media: updatedMedia
@@ -1612,28 +1820,148 @@ export const updateFileUpload = catchAsyncError(async (req, res, next) => {
         return;
     }
 
-    // Otherwise, update File table (for template documents)
-    if (!file_id) {
-        return next(new ErrorHandler("file_id or media_id is required", 400));
+    // If t_document_id is provided, update TDocuments table
+    if (t_document_id && t_document_id !== 'undefined' && t_document_id !== 'null') {
+        try {
+            // First, get the TDocument to find the user_id and old file_url BEFORE updating
+            const oldTDoc = await prisma.tDocuments.findUnique({
+                where: { t_document_id: String(t_document_id) },
+                select: { user_id: true, filename: true, file_url: true }
+            });
+
+            if (!oldTDoc) {
+                return next(new ErrorHandler("Document not found", 404));
+            }
+
+            const updatedDoc = await prisma.tDocuments.update({
+                where: { t_document_id: String(t_document_id) },
+                data: {
+                    file_url: cloudRes.url,
+                    key: cloudRes.key,
+                    filename: file.originalname,
+                    mimeType: file.mimetype,
+                    size: file.size,
+                }
+            });
+
+            // Also update the corresponding File record if it exists
+            // This ensures that when user opens the File from create-document page,
+            // they see the latest version that the lawyer edited
+            if (oldTDoc && oldTDoc.user_id) {
+                try {
+
+                    // Try multiple strategies to find the matching File:
+                    // 1. Match by filename and client_id (user who sent it)
+                    // 2. Match by old file_url path (if File.path matches old TDocument file_url)
+                    let matchingFile = null;
+
+                    // Strategy 1: Match by filename and client_id
+                    matchingFile = await prisma.file.findFirst({
+                        where: {
+                            name: file.originalname,
+                            client_id: oldTDoc.user_id
+                        },
+                        orderBy: {
+                            updatedAt: 'desc'
+                        }
+                    });
+
+                    // Strategy 2: If not found, try matching by old file_url path
+                    if (!matchingFile && oldTDoc.file_url) {
+                        matchingFile = await prisma.file.findFirst({
+                            where: {
+                                path: oldTDoc.file_url,
+                                client_id: oldTDoc.user_id
+                            },
+                            orderBy: {
+                                updatedAt: 'desc'
+                            }
+                        });
+                    }
+
+                    // Strategy 3: Match by filename only (last resort)
+                    if (!matchingFile) {
+                        matchingFile = await prisma.file.findFirst({
+                            where: {
+                                name: file.originalname
+                            },
+                            orderBy: {
+                                updatedAt: 'desc'
+                            }
+                        });
+                    }
+
+                    if (matchingFile) {
+                        // Update the File record with the new path
+                        await prisma.file.update({
+                            where: { file_id: matchingFile.file_id },
+                            data: {
+                                path: cloudRes.url,
+                                size: file.size,
+                                type: file.mimetype,
+                                name: file.originalname
+                            }
+                        });
+                        console.log('✅ Updated corresponding File record:', matchingFile.file_id);
+                    } else {
+                        console.log('ℹ️ No matching File record found to update');
+                    }
+                } catch (fileUpdateError) {
+                    // Don't fail the whole request if File update fails
+                    console.warn('⚠️ Could not update corresponding File record:', fileUpdateError.message);
+                }
+            }
+
+            res.status(201).json({
+                success: true,
+                message: "Document updated successfully",
+                document: updatedDoc
+            });
+            return;
+        } catch (error) {
+            console.error('Error updating TDocument:', error);
+            return next(new ErrorHandler(`Failed to update document: ${error.message}`, 400));
+        }
     }
 
-    const savedFile = await prisma.file.update({
-        where: {
-            file_id
-        },
-        data: {
-            size: file.size,
-            type: file.mimetype,
-            path: cloudRes.url
-        }
-    });
+    // Otherwise, update File table (for template documents)
+    if (!file_id) {
+        return next(new ErrorHandler("file_id, media_id, or t_document_id is required", 400));
+    }
 
-    res.status(201).json({
-        success: true,
-        message: "File updated successfully",
-        file: savedFile
-    });
+    try {
+        // Check if file exists first
+        const existingFile = await prisma.file.findUnique({
+            where: { file_id }
+        });
+
+        if (!existingFile) {
+            return next(new ErrorHandler(`File with id ${file_id} not found. Cannot update non-existent file.`, 404));
+        }
+
+        const savedFile = await prisma.file.update({
+            where: {
+                file_id
+            },
+            data: {
+                size: file.size,
+                type: file.mimetype,
+                path: cloudRes.url,
+                name: file.originalname || existingFile.name
+            }
+        });
+
+        res.status(201).json({
+            success: true,
+            message: "File updated successfully",
+            file: savedFile
+        });
+    } catch (error) {
+        console.error('Error updating File:', error);
+        return next(new ErrorHandler(`Failed to update file: ${error.message}`, 400));
+    }
 });
+
 
 
 
@@ -1660,7 +1988,7 @@ export const getFolderTreeByTemplateDocument = catchAsyncError(async (req, res, 
                 leader_id: true
             }
         });
-        
+
         if (teamMember && teamMember.leader_id) {
             owner_id = teamMember.leader_id;
         } else {
@@ -1675,7 +2003,7 @@ export const getFolderTreeByTemplateDocument = catchAsyncError(async (req, res, 
             where: { project_id: parseInt(project_id) },
             select: { created_by: true }
         });
-        
+
         if (project) {
             owner_id = project.created_by; // Use project creator's user_id
         }
@@ -1708,7 +2036,7 @@ export const getFolderTreeByTemplateDocument = catchAsyncError(async (req, res, 
 
     // Build where clause for folder filtering
     const whereClause = { template_document_id: String(template_document_id) };
-    
+
     // If phase is provided, first try to get folders for that specific phase
     if (phase) {
         whereClause.phase_name = phase;
@@ -1781,7 +2109,7 @@ export const checkPhaseHasFolders = catchAsyncError(async (req, res, next) => {
                 leader_id: true
             }
         });
-        
+
         if (teamMember && teamMember.leader_id) {
             owner_id = teamMember.leader_id;
         } else {
@@ -1796,7 +2124,7 @@ export const checkPhaseHasFolders = catchAsyncError(async (req, res, next) => {
             where: { project_id: parseInt(project_id) },
             select: { created_by: true }
         });
-        
+
         if (project) {
             owner_id = project.created_by;
         }
@@ -1841,12 +2169,12 @@ export const checkPhaseHasFolders = catchAsyncError(async (req, res, next) => {
 
 
 export const sendToLawyer = catchAsyncError(async (req, res, next) => {
-    const { description } = req.body;
-    const file = req.file;
+    const { description, htmlContent, isDocx } = req.body;
+    let file = req.file;
 
     const user = req.user;
     let user_id = user.user_id;
-    
+
     // For team members, get their leader_id from UserTeam table
     if (user.Role === "TEAM") {
         const teamMember = await prisma.userTeam.findFirst({
@@ -1857,7 +2185,7 @@ export const sendToLawyer = catchAsyncError(async (req, res, next) => {
                 leader_id: true
             }
         });
-        
+
         if (teamMember && teamMember.leader_id) {
             user_id = teamMember.leader_id;
         } else {
@@ -1869,6 +2197,26 @@ export const sendToLawyer = catchAsyncError(async (req, res, next) => {
     // Validate user_id is not null
     if (!user_id) {
         return next(new ErrorHandler("Unable to determine document owner. Please ensure you are properly assigned to a project.", 400));
+    }
+
+    // If HTML content is provided for DOCX conversion, convert it first
+    if (htmlContent && isDocx === 'true') {
+        try {
+            const { htmlToDocx } = await import('../utils/htmlToDocx.js');
+            const docxBuffer = await htmlToDocx(htmlContent);
+
+            // Create a file object from the buffer
+            const filename = req.body.filename || 'document.docx';
+            file = {
+                buffer: docxBuffer,
+                originalname: filename.endsWith('.docx') ? filename : `${filename}.docx`,
+                mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                size: docxBuffer.length
+            };
+        } catch (conversionError) {
+            console.error('Error converting HTML to DOCX:', conversionError);
+            return next(new ErrorHandler('Failed to convert HTML to DOCX: ' + conversionError.message, 500));
+        }
     }
 
     if (!file) {
@@ -1887,6 +2235,7 @@ export const sendToLawyer = catchAsyncError(async (req, res, next) => {
             filename: file.originalname,
             mimeType: file.mimetype,
             size: file.size,
+            status: 'SENT_TO_LAWYER'
         }
     });
 
@@ -1979,7 +2328,7 @@ export const sendToClient = catchAsyncError(async (req, res, next) => {
     try {
         const html = generateDocumentSentHtml(file.originalname, description, sender.name);
         await sendMail("Document Sent - FlexyWexy", client.email, html);
-        
+
         // Create email record in database for mail center
         await prisma.email.create({
             data: {
@@ -2025,6 +2374,40 @@ export const updateTDocumentStatus = catchAsyncError(async (req, res, next) => {
     res.status(200).json({
         success: true,
         message: `Status Update Successfully`,
+    });
+});
+
+export const deleteTDocument = catchAsyncError(async (req, res, next) => {
+    const { id } = req.params;
+    const user_id = req.user.user_id;
+
+    // Find the document and validate permissions
+    const document = await prisma.tDocuments.findUnique({
+        where: { t_document_id: String(id) },
+        include: {
+            user: true
+        }
+    });
+
+    if (!document) {
+        return next(new ErrorHandler("Document not found", 404));
+    }
+
+    // Check if user has permission to delete this document
+    // User can delete their own documents or if they're a lawyer/admin
+    const userRole = req.user.Role || req.user.role;
+    if (document.user_id !== user_id && userRole !== 'PROVIDER' && userRole !== 'ADMIN') {
+        return next(new ErrorHandler("You are not authorized to delete this document", 403));
+    }
+
+    // Delete the document
+    await prisma.tDocuments.delete({
+        where: { t_document_id: String(id) }
+    });
+
+    res.status(200).json({
+        success: true,
+        message: "Document deleted successfully"
     });
 });
 
@@ -2086,13 +2469,13 @@ export const getTemplateDocumentFiles = catchAsyncError(async (req, res, next) =
             });
         }
     });
-    
+
     const transformedClients = Array.from(uniqueClientsMap.values());
 
     // Additional validation to ensure clean data
-    const finalClients = transformedClients.filter(client => 
-        client.user_id && 
-        client.name && 
+    const finalClients = transformedClients.filter(client =>
+        client.user_id &&
+        client.name &&
         client.email &&
         typeof client.user_id === 'number' &&
         typeof client.name === 'string' &&
@@ -2685,7 +3068,7 @@ export const getGroupChatMessages = catchAsyncError(async (req, res, next) => {
         project_id: parseInt(project_id),
         is_group_chat: true
     };
-    
+
     // If task_id is 0, get general project chat messages (task_id: 0 or -1)
     // Otherwise, get messages for specific task
     if (parseInt(task_id) === 0) {
@@ -2693,7 +3076,7 @@ export const getGroupChatMessages = catchAsyncError(async (req, res, next) => {
     } else {
         whereClause.task_id = parseInt(task_id);
     }
-    
+
     const messages = await prisma.message.findMany({
         where: whereClause,
         orderBy: {
@@ -2705,6 +3088,15 @@ export const getGroupChatMessages = catchAsyncError(async (req, res, next) => {
                     user_id: true,
                     name: true,
                     email: true
+                }
+            },
+            reads: {
+                where: {
+                    user_id: userId
+                },
+                select: {
+                    user_id: true,
+                    read_at: true
                 }
             }
         }
@@ -2724,7 +3116,9 @@ export const getGroupChatMessages = catchAsyncError(async (req, res, next) => {
         attachment_url: message.attachment_url,
         attachment_name: message.attachment_name,
         attachment_size: message.attachment_size,
-        attachment_mime_type: message.attachment_mime_type
+        attachment_mime_type: message.attachment_mime_type,
+        is_read: message.reads && message.reads.length > 0,
+        read_at: message.reads && message.reads.length > 0 ? message.reads[0].read_at : null
     }));
 
     res.status(200).json({
@@ -2862,6 +3256,199 @@ export const createGroupChatMessage = catchAsyncError(async (req, res, next) => 
     });
 });
 
+// Mark group chat messages as read
+export const markGroupChatMessagesAsRead = catchAsyncError(async (req, res, next) => {
+    const { project_id, task_id } = req.params;
+    const userId = req.user.user_id;
+
+    // Verify user is a member of the project
+    const projectMember = await prisma.projectMember.findFirst({
+        where: {
+            project_id: parseInt(project_id),
+            user_id: userId
+        }
+    });
+
+    if (!projectMember) {
+        return next(new ErrorHandler('You are not a member of this project', 403));
+    }
+
+    // Build where clause for messages
+    const whereClause = {
+        project_id: parseInt(project_id),
+        is_group_chat: true
+    };
+
+    if (parseInt(task_id) === 0) {
+        whereClause.task_id = { in: [0, -1] };
+    } else {
+        whereClause.task_id = parseInt(task_id);
+    }
+
+    // Get all unread messages for this user in this conversation
+    // Only get messages that haven't been read by this user yet
+    const unreadMessages = await prisma.message.findMany({
+        where: {
+            ...whereClause,
+            NOT: {
+                reads: {
+                    some: {
+                        user_id: userId
+                    }
+                }
+            }
+        },
+        select: {
+            message_id: true
+        }
+    });
+
+    const messageIds = unreadMessages.map(msg => msg.message_id);
+
+    // Mark all messages as read for this user
+    const readRecords = messageIds.map(messageId => ({
+        message_id: messageId,
+        user_id: userId
+    }));
+
+    // Use createMany with skipDuplicates to avoid errors if already read
+    if (readRecords.length > 0) {
+        await prisma.messageRead.createMany({
+            data: readRecords,
+            skipDuplicates: true
+        });
+    }
+
+    res.status(200).json({
+        success: true,
+        message: `Marked ${readRecords.length} message(s) as read`,
+        count: readRecords.length
+    });
+});
+
+// Get unread group chat messages for all user's projects
+export const getUnreadGroupChatMessages = catchAsyncError(async (req, res, next) => {
+    const userId = req.user.user_id;
+
+    // Get all projects user is a member of
+    const userProjects = await prisma.projectMember.findMany({
+        where: {
+            user_id: userId
+        },
+        include: {
+            project: {
+                select: {
+                    project_id: true,
+                    name: true
+                }
+            }
+        }
+    });
+
+    const projectIds = userProjects.map(pm => pm.project.project_id);
+
+    if (projectIds.length === 0) {
+        return res.status(200).json({
+            success: true,
+            projects: []
+        });
+    }
+
+    // Get all unread group chat messages for user's projects
+    const allUnreadMessages = await prisma.message.findMany({
+        where: {
+            project_id: { in: projectIds },
+            is_group_chat: true,
+            NOT: {
+                reads: {
+                    some: {
+                        user_id: userId
+                    }
+                }
+            }
+        },
+        include: {
+            sender: {
+                select: {
+                    user_id: true,
+                    name: true,
+                    email: true
+                }
+            }
+            // Note: project relation temporarily removed - will fetch project name separately
+            // project: {
+            //     select: {
+            //         project_id: true,
+            //         name: true
+            //     }
+            // }
+        },
+        orderBy: {
+            createdAt: 'desc'
+        }
+    });
+
+    // Filter messages by recipient_ids:
+    // - If recipient_ids is null, message was sent to all project members (include it)
+    // - If recipient_ids is an array, only include if current user_id is in the array
+    const unreadMessages = allUnreadMessages.filter(message => {
+        if (message.recipient_ids === null) {
+            // Message sent to all project members
+            return true;
+        }
+        if (Array.isArray(message.recipient_ids)) {
+            // Message sent to specific members - check if current user is in the list
+            return message.recipient_ids.includes(userId);
+        }
+        // If recipient_ids exists but is not an array, exclude it (safety check)
+        return false;
+    });
+
+    // Get project names for all unique project IDs
+    const uniqueProjectIds = [...new Set(unreadMessages.map(m => m.project_id).filter(Boolean))];
+    const projects = uniqueProjectIds.length > 0
+        ? await prisma.project.findMany({
+            where: { project_id: { in: uniqueProjectIds } },
+            select: { project_id: true, name: true }
+        })
+        : [];
+    const projectMap = new Map(projects.map(p => [p.project_id, p.name]));
+
+    // Group messages by project
+    const projectsWithUnread = {};
+
+    unreadMessages.forEach(message => {
+        const projectId = message.project_id;
+        if (!projectsWithUnread[projectId]) {
+            projectsWithUnread[projectId] = {
+                project_id: projectId,
+                project_name: projectMap.get(projectId) || `Project ${projectId}`,
+                unread_count: 0,
+                last_message: null,
+                messages: []
+            };
+        }
+        projectsWithUnread[projectId].unread_count++;
+        projectsWithUnread[projectId].messages.push(message);
+        if (!projectsWithUnread[projectId].last_message ||
+            new Date(message.createdAt) > new Date(projectsWithUnread[projectId].last_message.createdAt)) {
+            projectsWithUnread[projectId].last_message = message;
+        }
+    });
+
+    // Convert to array and sort by last message time
+    const result = Object.values(projectsWithUnread).sort((a, b) => {
+        if (!a.last_message) return 1;
+        if (!b.last_message) return -1;
+        return new Date(b.last_message.createdAt) - new Date(a.last_message.createdAt);
+    });
+
+    res.status(200).json({
+        success: true,
+        projects: result
+    });
+});
+
 export const getProjectGroupChatInfo = catchAsyncError(async (req, res, next) => {
     const { project_id } = req.params;
     const userId = req.user.user_id;
@@ -2947,7 +3534,7 @@ export const deleteFolder = catchAsyncError(async (req, res, next) => {
 
     // Check if user has permission to delete this folder
     // The folder belongs to the user's template document
-    
+
     // Temporarily comment out permission check for debugging
     // if (folder.templateDocument.owner_id !== user_id) {
     //     return next(new ErrorHandler("You are not authorized to delete this folder", 403));
@@ -2983,7 +3570,7 @@ export const deleteFile = catchAsyncError(async (req, res, next) => {
 
     // Check if user has permission to delete this file
     // The file belongs to the user's template document
-    
+
     // Temporarily comment out permission check for debugging
     // if (file.templateDocument.owner_id !== user_id) {
     //     return next(new ErrorHandler("You are not authorized to delete this file", 403));

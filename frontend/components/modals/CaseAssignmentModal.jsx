@@ -394,7 +394,6 @@ const CaseAssignmentModal = ({ isOpen, onClose }) => {
                                         <div className="space-y-4">
                                             {assignedCases.map((assignment) => {
                                                 const project = projects.find(p => p.project_id === assignment.project_id);
-                                                const biller = teamMembers.find(tm => tm.user_id === assignment.biller_id);
 
                                                 return (
                                                     <div key={assignment.assignment_id} className="p-4 border border-gray-200 rounded-lg">
@@ -414,11 +413,11 @@ const CaseAssignmentModal = ({ isOpen, onClose }) => {
                                                                     <span className="text-sm text-gray-600">Assigned to:</span>
                                                                     <Avatar className="w-8 h-8">
                                                                         <AvatarFallback className="bg-green-100 text-green-600">
-                                                                            {biller?.user?.name?.charAt(0) || 'B'}
+                                                                            {assignment.biller?.name?.charAt(0) || 'B'}
                                                                         </AvatarFallback>
                                                                     </Avatar>
                                                                     <span className="font-medium text-gray-900">
-                                                                        {biller?.user?.name || 'Unknown Biller'}
+                                                                        {assignment.biller?.name || 'Unknown Biller'}
                                                                     </span>
                                                                 </div>
                                                                 <Badge variant="outline" className="text-xs">

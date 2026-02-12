@@ -35,19 +35,25 @@ export const useTimelineState = () => {
           const timelineData = {
             progress: Array.isArray(res.data.progress) ? res.data.progress : [],
             times: Array.isArray(res.data.times) ? res.data.times : [],
-            documents: Array.isArray(res.data.documents) ? res.data.documents : []
+            documents: Array.isArray(res.data.documents) ? res.data.documents : [],
+            caseComments: Array.isArray(res.data.caseComments) ? res.data.caseComments : [],
+            taskComments: Array.isArray(res.data.taskComments) ? res.data.taskComments : []
           };
           console.log('✅ Setting timeline data:', timelineData);
           console.log('Progress items:', timelineData.progress.length);
           console.log('Time entries:', timelineData.times.length);
           console.log('Documents:', timelineData.documents.length);
+          console.log('Case comments:', timelineData.caseComments.length);
+          console.log('Task comments:', timelineData.taskComments.length);
           setTimelineData(timelineData);
         } else {
           console.warn('⚠️ Timeline API returned error');
           setTimelineData({
             progress: [],
             times: [],
-            documents: []
+            documents: [],
+            caseComments: [],
+            taskComments: []
           });
         }
       } else {
@@ -55,7 +61,9 @@ export const useTimelineState = () => {
         setTimelineData({
           progress: [],
           times: [],
-          documents: []
+          documents: [],
+          caseComments: [],
+          taskComments: []
         });
       }
     } catch (error) {
@@ -63,7 +71,9 @@ export const useTimelineState = () => {
       setTimelineData({
         progress: [],
         times: [],
-        documents: []
+        documents: [],
+        caseComments: [],
+        taskComments: []
       });
     } finally {
       setTimelineLoading(false);

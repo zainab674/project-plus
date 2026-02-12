@@ -39,6 +39,10 @@ export const handleMessage = async (data, redis, io) => {
             project_id: data.project_id ? parseInt(data.project_id) : null,
             task_id: data.task_id ? parseInt(data.task_id) : null,
             is_group_chat: data.is_group_chat || false,
+            // Store recipient_ids if message is sent to specific members (null = all project members)
+            recipient_ids: data.recipient_ids && Array.isArray(data.recipient_ids) && data.recipient_ids.length > 0 
+                ? data.recipient_ids.map(id => parseInt(id)) 
+                : null,
             // Include attachment data when saving to database
             attachment_url: data.attachment_url || null,
             attachment_name: data.attachment_name || null,
@@ -186,7 +190,7 @@ export const handleLeaveProjectRoom = async (data, socket, io) => {
 }
 
 export const handleProjectMessage = async (data, redis, io) => {
-    const { project_id, sender_id, content, content_type = "PLAIN_TEXT" } = data;
+    const { project_id, sender_id, content, content_type = "PLAIN_TEXT", task_id, recipient_ids } = data;
 
     // Verify user is a member of the project
     const projectMember = await prisma.projectMember.findFirst({
@@ -207,11 +211,14 @@ export const handleProjectMessage = async (data, redis, io) => {
         return;
     }
 
-    // Get or create project group conversation
+    // Determine task_id (use provided task_id or default to -1 for general project chat)
+    const messageTaskId = task_id !== undefined ? parseInt(task_id) : -1;
+
+    // Get or create project group conversation for the task
     let conversation = await prisma.conversation.findFirst({
         where: {
             project_id: parseInt(project_id),
-            task_id: -1, // Look for general project chat
+            task_id: messageTaskId,
             isGroup: true
         }
     });
@@ -220,9 +227,9 @@ export const handleProjectMessage = async (data, redis, io) => {
         conversation = await prisma.conversation.create({
             data: {
                 project_id: parseInt(project_id),
-                task_id: -1, // Default task_id for general project chat
+                task_id: messageTaskId,
                 isGroup: true,
-                name: `Project ${project_id} Chat`,
+                name: `Project ${project_id} Chat${messageTaskId !== -1 && messageTaskId !== 0 ? ` - Task ${messageTaskId}` : ''}`,
                 participants: {
                     create: await prisma.projectMember.findMany({
                         where: { project_id: parseInt(project_id) },
@@ -235,7 +242,7 @@ export const handleProjectMessage = async (data, redis, io) => {
         });
     }
 
-    // Save message to database
+    // Save message to database with task_id
     const message = await prisma.message.create({
         data: {
             conversation_id: conversation.conversation_id,
@@ -243,6 +250,13 @@ export const handleProjectMessage = async (data, redis, io) => {
             reciever_id: parseInt(project_id), // Using project_id as receiver for group chat
             content: content,
             content_type: content_type,
+            project_id: parseInt(project_id),
+            task_id: messageTaskId,
+            is_group_chat: true,
+            // Store recipient_ids if message is sent to specific members (null = all project members)
+            recipient_ids: recipient_ids && Array.isArray(recipient_ids) && recipient_ids.length > 0 
+                ? recipient_ids.map(id => parseInt(id)) 
+                : null,
             // Include attachment data when saving to database
             attachment_url: data.attachment_url || null,
             attachment_name: data.attachment_name || null,
@@ -259,6 +273,8 @@ export const handleProjectMessage = async (data, redis, io) => {
         sender_name: projectMember.user.name,
         content: content,
         content_type: content_type,
+        task_id: messageTaskId,
+        task_name: data.task_name || null,
         createdAt: message.createdAt,
         event: RedisEvent.onProjectMessage,
         // Include attachment data in broadcast (same as private chat)
@@ -268,9 +284,37 @@ export const handleProjectMessage = async (data, redis, io) => {
         attachment_mime_type: data.attachment_mime_type || null
     };
 
-    // Broadcast to all members in the project room
-    const roomName = `project-${project_id}`;
-    io.to(roomName).emit(ON_PROJECT_MESSAGE_RECEIVED, messageData);
+    // If recipient_ids is provided, send only to those specific members
+    if (recipient_ids && Array.isArray(recipient_ids) && recipient_ids.length > 0) {
+        // Send to specific recipients
+        recipient_ids.forEach(recipientId => {
+            const recipientSocketId = userSocketMap.get(recipientId.toString());
+            if (!recipientSocketId) {
+                // Try with parseInt
+                const altSocketId = userSocketMap.get(parseInt(recipientId));
+                if (altSocketId && io) {
+                    io.to(altSocketId).emit(ON_PROJECT_MESSAGE_RECEIVED, messageData);
+                }
+            } else if (io) {
+                io.to(recipientSocketId).emit(ON_PROJECT_MESSAGE_RECEIVED, messageData);
+            }
+        });
+        
+        // Also send to sender for confirmation
+        const senderSocketId = userSocketMap.get(sender_id.toString());
+        if (!senderSocketId) {
+            const altSenderSocketId = userSocketMap.get(parseInt(sender_id));
+            if (altSenderSocketId && io) {
+                io.to(altSenderSocketId).emit(ON_PROJECT_MESSAGE_RECEIVED, messageData);
+            }
+        } else if (io) {
+            io.to(senderSocketId).emit(ON_PROJECT_MESSAGE_RECEIVED, messageData);
+        }
+    } else {
+        // Broadcast to all members in the project room (default behavior)
+        const roomName = `project-${project_id}`;
+        io.to(roomName).emit(ON_PROJECT_MESSAGE_RECEIVED, messageData);
+    }
 
     // Send real-time notification for project message
     chatNotificationService.notifyProjectMessage(messageData);

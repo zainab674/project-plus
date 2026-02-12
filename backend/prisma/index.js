@@ -16,12 +16,17 @@ if (process.env.NODE_ENV === 'production') {
 } else {
   // In development, use a global variable to prevent multiple instances
   if (!global.prisma) {
+    // Build the connection URL properly, appending pool parameters without breaking existing query params
+    const baseUrl = process.env.DATABASE_URL;
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const connectionUrl = baseUrl + separator + 'connection_limit=5&pool_timeout=20';
+
     global.prisma = new PrismaClient({
       log: ['error', 'warn'],
       // Add connection pool configuration
       datasources: {
         db: {
-          url: process.env.DATABASE_URL + '?connection_limit=5&pool_timeout=20',
+          url: connectionUrl,
         },
       },
     });

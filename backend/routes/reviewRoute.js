@@ -5,12 +5,37 @@ import {
     getReviewById,
     updateReview,
     deleteReview,
-    getAllReviews
+    getAllReviews,
+    getPendingDocuments,
+    getMySubmissions,
+    acceptDocument,
+    rejectDocument,
+    resubmitDocument
 } from "../controllers/reviewController.js";
 import { authMiddleware } from '../middlewares/authMiddleware.js';
 import singleUpload from "../middlewares/multerMiddleware.js";
 
 const router = express.Router();
+
+// ============================================
+// DOCUMENT REVIEW ROUTES
+// ============================================
+
+// Get documents pending lawyer review
+router.get("/documents/pending", authMiddleware, getPendingDocuments);
+
+// Get user's submitted documents
+router.get("/documents/my-submissions", authMiddleware, getMySubmissions);
+
+// Accept/Reject/Resubmit document
+router.post("/documents/:id/accept", authMiddleware, acceptDocument);
+router.post("/documents/:id/reject", authMiddleware, rejectDocument);
+router.post("/documents/:id/resubmit", authMiddleware, resubmitDocument);
+
+
+// ============================================
+// TASK REVIEW ROUTES
+// ============================================
 
 // Create a new review submission (with optional file upload)
 router
@@ -36,4 +61,4 @@ router
     .route("/")
     .get(authMiddleware, getAllReviews);
 
-export default router; 
+export default router;

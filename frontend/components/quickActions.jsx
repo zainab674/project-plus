@@ -45,13 +45,16 @@ import {
   GitBranch,
   Phone,
   FileSignature,
-  DollarSign,
   X,
   Building,
   User,
   StickyNote,
   MessageSquare,
   Brain,
+  Activity,
+  Workflow,
+  ListTodo,
+  NotebookPen,
 } from 'lucide-react';
 
 const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
@@ -174,23 +177,27 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
 
   // Define all available actions (after functions are defined)
   const allActions = [
-    { name: 'Dashboard', icon: BarChart3, route: '/dashboard', color: 'bg-slate-200' },
+    { name: 'Dashboard', icon: BarChart3, route: '/dashboard', color: 'bg-gray-300' },
     { name: 'Cases', icon: Briefcase, route: '/dashboard/cases', color: 'bg-purple-200' },
+    { name: 'Tasks', icon: ListTodo, route: '/dashboard/tasks', color: 'bg-green-200' },
     { name: 'Add Task', icon: Plus, route: '/dashboard/tasks/add', color: 'bg-blue-200' },
-    { name: 'Timer', icon: Clock, route: '', color: 'bg-green-200', action: modalState.openTimerModal },
-    { name: 'TimeLine', icon: Clock, route: '/dashboard/timeline', color: 'bg-orange-200' },
+    { name: 'Timer', icon: Clock, route: '', color: 'bg-orange-200', action: modalState.openTimerModal },
+    { name: 'TimeLine', icon: Clock, route: '/dashboard/timeline', color: 'bg-neutral-500' },
+    { name: 'Time Tracking', icon: Activity, route: '/dashboard/time-tracking-analytics', color: 'bg-cyan-400' },
+    { name: 'Case Workflow', icon: Workflow, route: '/dashboard/case-workflow', color: 'bg-indigo-200' },
     { name: 'Meeting', icon: Calendar, route: '/dashboard/meeting', color: 'bg-pink-200' },
     { name: 'Mail', icon: Mail, route: '', color: 'bg-red-200', action: modalState.openEnhancedMailModal },
     { name: 'Chat', icon: MessageCircle, route: '', color: 'bg-yellow-200', action: openEnhancedChatModal },
     { name: 'Notes', icon: StickyNote, route: '', color: 'bg-emerald-200', action: modalState.openNotesModal },
-    { name: 'Project Chat', icon: MessageSquare, route: '', color: 'bg-blue-200', action: openInternalChatModal },
-    { name: 'Team', icon: Users, route: '/dashboard/team', color: 'bg-emerald-200' },
-    { name: 'TemplateDocs', icon: FileText, route: '/dashboard/create-document/1', color: 'bg-indigo-200' },
+    { name: 'WhitePage', icon: NotebookPen, route: '/dashboard/whitepage', color: 'bg-amber-200' },
+    { name: 'Project Chat', icon: MessageSquare, route: '', color: 'bg-lime-400', action: openInternalChatModal },
+    { name: 'Updates', icon: MessageSquare, route: '/dashboard/updates', color: 'bg-green-300' },
+    { name: 'Team', icon: Users, route: '/dashboard/team', color: 'bg-teal-200' },
+    { name: 'TemplateDocs', icon: FileText, route: '/dashboard/create-document/1', color: 'bg-fuchsia-200' },
     { name: 'CompareDocs', icon: GitCompare, route: '/ai-legal-doc', color: 'bg-violet-200' },
-    { name: 'Flowchart', icon: GitBranch, route: '/dashboard/flowchart', color: 'bg-cyan-200' },
-    { name: 'Phone', icon: Phone, route: '/dashboard/phone', color: 'bg-teal-200' },
-    { name: 'InviteBiller', icon: DollarSign, route: '/dashboard/invite-biller', color: 'bg-green-200' },
-    { name: 'AssignToBiller', icon: Briefcase, route: '/dashboard/case-assignment', color: 'bg-indigo-200' },
+    { name: 'Flowchart', icon: GitBranch, route: '/dashboard/flowchart', color: 'bg-rose-400' },
+    { name: 'Phone', icon: Phone, route: '/dashboard/phone', color: 'bg-sky-400' },
+    { name: 'AssignToBiller', icon: Briefcase, route: '/dashboard/case-assignment', color: 'bg-stone-200' },
     { name: 'AI Assistant', icon: Brain, route: '/dashboard/ai-assistant', color: 'bg-green-500', isAIAssistant: true },
   ];
 
@@ -205,7 +212,7 @@ const QuickActions = ({ children, isSidebarMode, setIsSidebarMode }) => {
         ['Dashboard', 'Meeting', 'Mail', 'Chat'].includes(action.name)
       );
       clientActions.push(
-        { name: 'My Signatures', icon: FileSignature, route: '/dashboard/client-signatures-simple', color: 'bg-purple-200' }
+        { name: 'My Signatures', icon: FileSignature, route: '/dashboard/client-signatures-simple', color: 'bg-zinc-500' }
       );
       return clientActions;
     } else if (user?.Role === 'TEAM' || user?.Role === 'PROVIDER') {

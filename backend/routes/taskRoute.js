@@ -27,9 +27,13 @@ import {
     checkMeetingEmails,
     addTaskNote,
     getTaskNotes,
+    createTaskUpdate,
+    getTaskUpdates,
+    getTaskUpdatesByTask,
+    markTaskUpdatesAsRead,
 } from "../controllers/taskController.js";
 import { authMiddleware } from '../middlewares/authMiddleware.js'
-import singleUpload from "../middlewares/multerMiddleware.js";
+import singleUpload, { multipleUpload } from "../middlewares/multerMiddleware.js";
 
 const router = express.Router();
 
@@ -84,6 +88,17 @@ router
 router
     .route("/needing-review").get(authMiddleware, getTasksNeedingReview);
 
+// Task Updates routes - must come before parameterized routes
+router
+    .route("/update").post(authMiddleware, multipleUpload, createTaskUpdate);
+router
+    .route("/updates").get(authMiddleware, getTaskUpdates);
+router
+    .route("/updates/mark-read").post(authMiddleware, markTaskUpdatesAsRead);
+
+router
+    .route("/note").post(authMiddleware, addTaskNote);
+
 // Parameterized routes - must come after specific routes
 router
     .route("/:task_id")
@@ -103,9 +118,6 @@ router
     .route("/comment/:task_id").get(authMiddleware, getComments);
 
 router
-    .route("/note").post(authMiddleware, addTaskNote);
-
-router
     .route("/note/:task_id").get(authMiddleware, getTaskNotes);
 
 router
@@ -115,5 +127,8 @@ router
     .route("/time/:task_id").post(authMiddleware, createTime);
 router
     .route("/time-stop/:time_id").post(authMiddleware, stopTime);
+
+router
+    .route("/:task_id/updates").get(authMiddleware, getTaskUpdatesByTask);
 
 export default router;

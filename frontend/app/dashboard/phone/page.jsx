@@ -103,7 +103,7 @@ export default function Phone() {
                 transcribeServiceRef.current = null;
             }
 
-            const service = new TranscribedService({ 
+            const service = new TranscribedService({
                 call_sid: callSid,
                 user_id: 1 // You might want to get this from auth context
             });
@@ -118,7 +118,7 @@ export default function Phone() {
             setIsTranscribing(true);
             setCurrentCallSid(callSid);
             setCallTranscript('');
-            
+
         } catch (error) {
             console.error('Failed to start transcription:', error);
             toast.error('Failed to start transcription');
@@ -166,7 +166,7 @@ export default function Phone() {
         try {
             setIsLoading(true);
             setError(null);
-            
+
             // Check if AudioContext is available
             if (!isAudioContextResumed) {
                 const audioSuccess = await initializeAudioContext();
@@ -174,135 +174,334 @@ export default function Phone() {
                     throw new Error('AudioContext initialization failed');
                 }
             }
-            
+
             const res = await createTwilioToken({});
-            
+
             const { token, from, expiresAt } = res.data;
-            
+
             if (!token) {
                 throw new Error('No token received from server');
             }
-            
+
             // Only clean up existing device if we're not already registered
+            let twilioDevice = deviceRef.current;
+            let shouldAttachListeners = false;
+
             if (deviceRef.current && deviceRef.current.state !== 'registered') {
                 deviceRef.current.destroy();
-            } else if (deviceRef.current && deviceRef.current.state === 'registered') {
+                deviceRef.current = null;
+                twilioDevice = null;
+            }
+
+            if (twilioDevice && twilioDevice.state === 'registered') {
                 // Update token without destroying the device
-                deviceRef.current.updateToken(token);
+                twilioDevice.updateToken(token);
                 setIsReady(true);
                 setIsLoading(false);
                 setTokenExpiry(expiresAt);
                 setFromNumber(from);
-                return;
-            }
-            
-            
-            // Test token validity by decoding it
-            try {
-                const tokenParts = token.split('.');
-                if (tokenParts.length === 3) {
-                    const payload = JSON.parse(atob(tokenParts[1]));
-                   
-                }
-            } catch (decodeError) {
-                console.warn('Could not decode token:', decodeError);
-            }
-            
-            const twilioDevice = new Device(token, { 
-                debug: true, // Enable debug to see what's happening
-                region: "us1", 
-                closeProtection: true 
-            });
+                // Device exists and is registered, but we still need to ensure listeners are attached
+                shouldAttachListeners = true;
+            } else {
+                // Create new device
+                // Test token validity by decoding it
+                try {
+                    const tokenParts = token.split('.');
+                    if (tokenParts.length === 3) {
+                        const payload = JSON.parse(atob(tokenParts[1]));
 
-            // Log device state changes
-            
-            // Check if device is already ready
-            if (twilioDevice.state === 'registered') {
-                setIsReady(true);
-                setIsLoading(false);
-                setTokenExpiry(expiresAt);
-                toast.success("Phone system ready!");
+                    }
+                } catch (decodeError) {
+                    console.warn('Could not decode token:', decodeError);
+                }
+
+                twilioDevice = new Device(token, {
+                    debug: true, // Enable debug to see what's happening
+                    region: "us1",
+                    closeProtection: true
+                });
+                shouldAttachListeners = true;
             }
-            
-            // Try to manually register if needed
-            setTimeout(() => {
-                if (twilioDevice.state === 'unregistered') {
-                    twilioDevice.register();
-                } else if (twilioDevice.state === 'registered' && !isReady) {
+
+            // Only attach listeners if we're creating a new device or need to ensure they're attached
+            if (shouldAttachListeners) {
+                // Remove any existing incoming listeners to avoid duplicates
+                twilioDevice.removeAllListeners("incoming");
+
+                // Log device state changes
+                console.log('Attaching event listeners to device. Current state:', twilioDevice.state);
+
+                // Check if device is already ready
+                if (twilioDevice.state === 'registered') {
+                    console.log('Device is already registered');
                     setIsReady(true);
                     setIsLoading(false);
                     setTokenExpiry(expiresAt);
                     toast.success("Phone system ready!");
                 }
-            }, 2000);
 
-            // Add more debugging for registration process
-            setTimeout(() => {
-                if (twilioDevice.state === 'unregistered') {
-                } else if (twilioDevice.state === 'registered' && !isReady) {
+                // Try to manually register if needed
+                setTimeout(() => {
+                    if (twilioDevice.state === 'unregistered') {
+                        twilioDevice.register();
+                    } else if (twilioDevice.state === 'registered' && !isReady) {
+                        setIsReady(true);
+                        setIsLoading(false);
+                        setTokenExpiry(expiresAt);
+                        toast.success("Phone system ready!");
+                    }
+                }, 2000);
+
+                // Add more debugging for registration process
+                setTimeout(() => {
+                    if (twilioDevice.state === 'unregistered') {
+                        console.log('Device still unregistered after 5 seconds');
+                    } else if (twilioDevice.state === 'registered' && !isReady) {
+                        setIsReady(true);
+                        setIsLoading(false);
+                        setTokenExpiry(expiresAt);
+                        toast.success("Phone system ready!");
+                    }
+                }, 5000);
+
+                // Add comprehensive event logging
+                twilioDevice.on("registered", () => {
+                    console.log('Device registered successfully');
                     setIsReady(true);
                     setIsLoading(false);
                     setTokenExpiry(expiresAt);
                     toast.success("Phone system ready!");
-                }
-            }, 5000);
+                });
 
-            // Add comprehensive event logging
-            twilioDevice.on("registered", () => {
-                setIsReady(true);
-                setIsLoading(false);
-                setTokenExpiry(expiresAt);
-                toast.success("Phone system ready!");
-            });
+                twilioDevice.on("unregistered", () => {
+                    console.log('Device unregistered');
+                    setIsReady(false);
+                });
 
-            twilioDevice.on("unregistered", () => {
-                setIsReady(false);
-            });
+                twilioDevice.on("tokenWillExpire", () => {
+                    if (!isRefreshingToken) {
+                        setIsRefreshingToken(true);
+                        getToken().finally(() => setIsRefreshingToken(false));
+                    }
+                });
 
-            twilioDevice.on("tokenWillExpire", () => {
-                if (!isRefreshingToken) {
-                    setIsRefreshingToken(true);
-                    getToken().finally(() => setIsRefreshingToken(false));
-                }
-            });
+                twilioDevice.on("ready", () => {
+                    console.log('Device ready');
+                    setIsReady(true);
+                    setIsLoading(false);
+                    setTokenExpiry(expiresAt);
+                    toast.success("Phone system ready!");
+                });
 
-            twilioDevice.on("ready", () => {
-                setIsReady(true);
-                setIsLoading(false);
-                setTokenExpiry(expiresAt);
-                toast.success("Phone system ready!");
-            });
+                twilioDevice.on("error", (error) => {
+                    console.error("Device error:", error);
+                    console.error("Error code:", error.code);
+                    console.error("Error message:", error.message);
+                    console.error("Error details:", error);
+                    setIsReady(false);
+                    setIsLoading(false);
+                    setError(`Device error: ${error.message}`);
+                    toast.error(`Device error: ${error.message}`);
 
-            twilioDevice.on("error", (error) => {
-                console.error("Device error:", error);
-                console.error("Error code:", error.code);
-                console.error("Error message:", error.message);
-                console.error("Error details:", error);
-                setIsReady(false);
-                setIsLoading(false);
-                setError(`Device error: ${error.message}`);
-                toast.error(`Device error: ${error.message}`);
-                
-                // Retry after 5 seconds
-                if (retryCount < 3) {
-                    retryTimeoutRef.current = setTimeout(() => {
-                        getToken(retryCount + 1);
-                    }, 5000);
-                }
-            });
+                    // Retry after 5 seconds
+                    if (retryCount < 3) {
+                        retryTimeoutRef.current = setTimeout(() => {
+                            getToken(retryCount + 1);
+                        }, 5000);
+                    }
+                });
 
-            // Handle call connection
-            twilioDevice.on("connect", (conn) => {
-                toast.success("Call connected!");
-            });
+                // Handle call connection
+                twilioDevice.on("connect", (conn) => {
+                    console.log('Call connected:', conn);
+                    toast.success("Call connected!");
+                });
 
-            // Handle call disconnection
-            twilioDevice.on("disconnect", () => {
-                setConnection(null);
-                setControllView(null);
-                stopTimer();
-                toast.info("Call ended");
-            });
+                // Handle call disconnection
+                twilioDevice.on("disconnect", () => {
+                    console.log('Call disconnected');
+                    setConnection(null);
+                    setControllView(null);
+                    stopTimer();
+                    toast.info("Call ended");
+                });
+
+                // Handle incoming calls - THIS IS CRITICAL
+                console.log('Attaching incoming call handler');
+                twilioDevice.on("incoming", (incomingConnection) => {
+                    console.log("=== INCOMING CALL RECEIVED ===", incomingConnection);
+                    console.log("Incoming call received:", incomingConnection);
+                    setIsInComingCall(true);
+                    setConnection(incomingConnection);
+
+                    // Get caller information
+                    const fromNumber = incomingConnection.parameters.From || 'Unknown';
+                    const callSid = incomingConnection.parameters.CallSid;
+
+                    // Find contact name if available
+                    const contactInfo = contact.find(c => c.phone_number === fromNumber);
+                    const callerName = contactInfo ? contactInfo.name : fromNumber;
+
+                    setCallInfo({
+                        number: fromNumber,
+                        name: callerName,
+                        callSid: callSid
+                    });
+                    setStatus("Incoming Call");
+                    setCallOpen(true);
+                    setControllView('incoming');
+
+                    // Add to call history as incoming
+                    const incomingCallRecord = {
+                        call_id: Date.now().toString(),
+                        type: "incoming",
+                        number: fromNumber,
+                        name: callerName,
+                        timestamp: Date.now() + Math.random(),
+                        status: 'ringing',
+                        callSid: callSid
+                    };
+                    setCallHistory(prev => [incomingCallRecord, ...prev]);
+
+                    // Show browser notification if permission granted
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new Notification('Incoming Call', {
+                            body: `Call from ${callerName || fromNumber}`,
+                            icon: '/favicon.ico',
+                            badge: '/favicon.ico',
+                            tag: 'incoming-call',
+                            requireInteraction: true,
+                            vibrate: [200, 100, 200]
+                        });
+                    } else if ('Notification' in window && Notification.permission !== 'denied') {
+                        // Request permission if not yet requested
+                        Notification.requestPermission().then(permission => {
+                            if (permission === 'granted') {
+                                new Notification('Incoming Call', {
+                                    body: `Call from ${callerName || fromNumber}`,
+                                    icon: '/favicon.ico',
+                                    tag: 'incoming-call',
+                                    requireInteraction: true
+                                });
+                            }
+                        });
+                    }
+
+                    // Play ringtone or show notification
+                    toast.info(`Incoming call from ${callerName || fromNumber}`, {
+                        autoClose: false,
+                        closeOnClick: false,
+                        draggable: false
+                    });
+
+                    // Focus the window/tab to bring attention
+                    if (document.hidden) {
+                        window.focus();
+                    }
+
+                    // Handle call cancellation (caller hung up before answer)
+                    incomingConnection.on("cancel", () => {
+                        console.log("Incoming call was cancelled");
+                        setIsInComingCall(false);
+                        setCallOpen(false);
+                        setConnection(null);
+                        setCallInfo({});
+                        setControllView(null);
+
+                        // Mark as missed call in history
+                        setCallHistory(prev =>
+                            prev.map(call =>
+                                call.timestamp === incomingCallRecord.timestamp
+                                    ? { ...call, status: 'NO_RESPONSE', call_type: 'INCOMING' }
+                                    : call
+                            )
+                        );
+
+                        // Reload call history to sync with backend
+                        loadCallHistory();
+                        toast.warning("Missed call");
+                    });
+
+                    // Handle call rejection
+                    incomingConnection.on("reject", () => {
+                        console.log("Incoming call was rejected");
+                        setIsInComingCall(false);
+                        setCallOpen(false);
+                        setConnection(null);
+                        setCallInfo({});
+                        setControllView(null);
+
+                        // Mark as rejected in history
+                        setCallHistory(prev =>
+                            prev.map(call =>
+                                call.timestamp === incomingCallRecord.timestamp
+                                    ? { ...call, status: 'REJECTED', call_type: 'INCOMING' }
+                                    : call
+                            )
+                        );
+
+                        loadCallHistory();
+                    });
+
+                    // Handle call acceptance
+                    incomingConnection.on("accept", () => {
+                        console.log("Incoming call accepted");
+                        setControllView('processing');
+                        setStatus("Connected");
+                        setAccepted(true);
+                        startTimer();
+
+                        // Start transcription
+                        if (callSid) {
+                            startTranscription(callSid);
+                        }
+
+                        // Update call history
+                        setCallHistory(prev =>
+                            prev.map(call =>
+                                call.timestamp === incomingCallRecord.timestamp
+                                    ? { ...call, status: 'PROCESSING' }
+                                    : call
+                            )
+                        );
+                    });
+
+                    // Handle call disconnect
+                    incomingConnection.on("disconnect", () => {
+                        console.log("Incoming call disconnected");
+                        setStatus("Call Ended");
+                        setIsDisconnecting(false);
+
+                        // Save transcript
+                        if (callTranscript && callSid) {
+                            saveCallTranscript(callSid, callTranscript);
+                        }
+
+                        stopTranscription();
+
+                        setTimeout(() => {
+                            setIsInComingCall(false);
+                            setCallOpen(false);
+                            setConnection(null);
+                            setCallInfo({});
+                            setControllView(null);
+                            setCallTranscript('');
+                        }, 600);
+                        stopTimer();
+
+                        // Update call history
+                        setCallHistory(prev =>
+                            prev.map(call =>
+                                call.timestamp === incomingCallRecord.timestamp
+                                    ? { ...call, status: 'ENDED', duration: callTimer, transcript: callTranscript }
+                                    : call
+                            )
+                        );
+
+                        loadCallHistory();
+                    });
+                }); // End of incoming call handler
+            } // End of shouldAttachListeners if block
 
             deviceRef.current = twilioDevice;
             setDevice(twilioDevice);
@@ -322,7 +521,7 @@ export default function Phone() {
             const clearDeviceTimeout = () => {
                 clearTimeout(deviceTimeout);
             };
-            
+
             twilioDevice.on("ready", clearDeviceTimeout);
             twilioDevice.on("registered", clearDeviceTimeout);
             twilioDevice.on("error", clearDeviceTimeout);
@@ -332,7 +531,7 @@ export default function Phone() {
             setIsLoading(false);
             setError(`Failed to initialize phone system: ${error.message}`);
             toast.error(`Failed to initialize phone system: ${error.message}`);
-            
+
             // Retry after 10 seconds
             if (retryCount < 3) {
                 retryTimeoutRef.current = setTimeout(() => {
@@ -362,6 +561,13 @@ export default function Phone() {
     // Initialize token on mount
     useEffect(() => {
         getToken();
+
+        // Request notification permission on mount
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().catch(err => {
+                console.log('Notification permission request failed:', err);
+            });
+        }
     }, []);
 
     // Handle user interaction to resume AudioContext
@@ -425,7 +631,7 @@ export default function Phone() {
                     getToken().finally(() => setIsRefreshingToken(false));
                 }
             };
-            
+
             const interval = setInterval(checkExpiry, 60000); // Check every minute
             return () => clearInterval(interval);
         }
@@ -454,32 +660,32 @@ export default function Phone() {
 
         try {
             const formattedNumber = validation.formatted;
-         
-            
-        const connection = await device.connect({
+
+
+            const connection = await device.connect({
                 params: { To: formattedNumber, From: fromNumber }
-        });
+            });
 
-        // Log Call SID immediately after connection
-      
-        // Check if Call SID is available
-        if (!connection.parameters.CallSid) {
-            console.warn('WARNING: Call SID is undefined - call may not be properly established');
-          
-            // Wait a bit and check again
-            setTimeout(() => {
-                if (!connection.parameters.CallSid) {
-                    console.error('CRITICAL: Call SID still undefined after 2 seconds - TwiML Application issue likely');
-                    toast.error('Call setup failed - check TwiML Application configuration');
-                }
-            }, 2000);
-        }
+            // Log Call SID immediately after connection
 
-        setStatus("Ringing...");
-        setConnection(connection);
+            // Check if Call SID is available
+            if (!connection.parameters.CallSid) {
+                console.warn('WARNING: Call SID is undefined - call may not be properly established');
+
+                // Wait a bit and check again
+                setTimeout(() => {
+                    if (!connection.parameters.CallSid) {
+                        console.error('CRITICAL: Call SID still undefined after 2 seconds - TwiML Application issue likely');
+                        toast.error('Call setup failed - check TwiML Application configuration');
+                    }
+                }, 2000);
+            }
+
+            setStatus("Ringing...");
+            setConnection(connection);
             setCallInfo({ number: formattedNumber, name, callSid: connection.parameters.CallSid });
-        setCallOpen(true);
-        setControllView('ringing');
+            setCallOpen(true);
+            setControllView('ringing');
 
             // Note: Call records are created by Twilio webhooks, not here
             // This ensures we have proper CallSid and recording data
@@ -496,87 +702,87 @@ export default function Phone() {
             };
             setCallHistory(prev => [callRecord, ...prev]);
 
-        connection.on("accept", () => {
-            setControllView('processing');
-            setStatus("Connected");
-            startTimer();
-            toast.success("Call connected!");
-            
-            // Start transcription when call is accepted
-            if (connection.parameters.CallSid) {
-                startTranscription(connection.parameters.CallSid);
-            }
-            
-            // Update call history
-            setCallHistory(prev => 
-                prev.map(call => 
-                    call.timestamp === callRecord.timestamp 
-                        ? { ...call, status: 'connected' }
-                        : call
-                )
-            );
-        });
+            connection.on("accept", () => {
+                setControllView('processing');
+                setStatus("Connected");
+                startTimer();
+                toast.success("Call connected!");
 
-        connection.on("disconnect", () => {
-            setStatus("Call Ended");
-            setIsDisconnecting(false);
-            
-            // Save transcript before stopping transcription
-            if (callTranscript && connection.parameters.CallSid) {
-                saveCallTranscript(connection.parameters.CallSid, callTranscript);
-            }
-            
-            // Stop transcription when call ends
-            stopTranscription();
-            
-            setTimeout(() => {
-                setIsInComingCall(false);
-                setCallOpen(false);
-                setConnection(null);
-                setCallInfo({});
-                setControllView(null);
-                setCallTranscript('');
-            }, 600);
-            stopTimer();
-            toast.info("Call ended");
-            
-            // Update call history
-            setCallHistory(prev => 
-                prev.map(call => 
-                    call.timestamp === callRecord.timestamp 
-                        ? { ...call, status: 'ended', duration: callTimer, transcript: callTranscript }
-                        : call
-                )
-            );
-        });
-            
+                // Start transcription when call is accepted
+                if (connection.parameters.CallSid) {
+                    startTranscription(connection.parameters.CallSid);
+                }
+
+                // Update call history
+                setCallHistory(prev =>
+                    prev.map(call =>
+                        call.timestamp === callRecord.timestamp
+                            ? { ...call, status: 'connected' }
+                            : call
+                    )
+                );
+            });
+
+            connection.on("disconnect", () => {
+                setStatus("Call Ended");
+                setIsDisconnecting(false);
+
+                // Save transcript before stopping transcription
+                if (callTranscript && connection.parameters.CallSid) {
+                    saveCallTranscript(connection.parameters.CallSid, callTranscript);
+                }
+
+                // Stop transcription when call ends
+                stopTranscription();
+
+                setTimeout(() => {
+                    setIsInComingCall(false);
+                    setCallOpen(false);
+                    setConnection(null);
+                    setCallInfo({});
+                    setControllView(null);
+                    setCallTranscript('');
+                }, 600);
+                stopTimer();
+                toast.info("Call ended");
+
+                // Update call history
+                setCallHistory(prev =>
+                    prev.map(call =>
+                        call.timestamp === callRecord.timestamp
+                            ? { ...call, status: 'ended', duration: callTimer, transcript: callTranscript }
+                            : call
+                    )
+                );
+            });
+
             connection.on("error", (err) => {
                 console.error('VOICE ERROR', err?.code, err?.message, 'SID:', connection.parameters.CallSid);
                 console.error("Call connection error:", err);
                 console.error("Error code:", err.code);
                 console.error("Error message:", err.message);
                 console.error("Error details:", err);
-                
+
                 setStatus(`Error: ${err.message}`);
                 toast.error(`Call error: ${err.message}`);
-                
+
                 // Update call history
-                setCallHistory(prev => 
-                    prev.map(call => 
-                        call.timestamp === callRecord.timestamp 
+                setCallHistory(prev =>
+                    prev.map(call =>
+                        call.timestamp === callRecord.timestamp
                             ? { ...call, status: 'error', error: err.message, callSid: connection.parameters.CallSid }
                             : call
                     )
                 );
             });
-            
+
         } catch (error) {
             console.error("Call initiation failed:", error);
             console.error("Error details:", error);
             console.error("Error code:", error.code);
             console.error("Error message:", error.message);
             toast.error(`Failed to make call: ${error.message}`);
-            
+
             // Add to call history as failed attempt
             const failedCallRecord = {
                 type: "outgoing",
@@ -607,9 +813,48 @@ export default function Phone() {
         }
     }, [connection, isMuted]);
 
+    const acceptCall = useCallback(() => {
+        if (connection && isInComingCall) {
+            try {
+                connection.accept();
+                setAccepted(true);
+                toast.success("Call accepted");
+            } catch (error) {
+                console.error("Failed to accept call:", error);
+                toast.error(`Failed to accept call: ${error.message}`);
+            }
+        }
+    }, [connection, isInComingCall]);
+
+    const rejectCall = useCallback(() => {
+        if (connection && isInComingCall) {
+            try {
+                connection.reject();
+                setIsInComingCall(false);
+                setCallOpen(false);
+                setConnection(null);
+                setCallInfo({});
+                setControllView(null);
+                toast.info("Call rejected");
+
+                // Reload call history to sync with backend
+                loadCallHistory();
+            } catch (error) {
+                console.error("Failed to reject call:", error);
+                toast.error(`Failed to reject call: ${error.message}`);
+                // Force cleanup if reject fails
+                setIsInComingCall(false);
+                setCallOpen(false);
+                setConnection(null);
+                setCallInfo({});
+                setControllView(null);
+            }
+        }
+    }, [connection, isInComingCall, loadCallHistory]);
+
     const hangupCall = useCallback(() => {
         if (connection && !isDisconnecting) {
-            try{
+            try {
                 setIsDisconnecting(true);
                 connection.disconnect();
                 // Don't immediately clear state - let the disconnect event handler do it
@@ -630,6 +875,12 @@ export default function Phone() {
         }
     }, [connection, isDisconnecting]);
 
+
+    const handleNumberAssigned = (number) => {
+        setFromNumber(number);
+        toast.info("Updating phone system with your new number...");
+        getToken();
+    };
 
 
     //upload contact
@@ -689,8 +940,8 @@ export default function Phone() {
 
     const handleCallUpdate = (updatedCall) => {
         // Update the call in the local history
-        setCallHistory(prev => 
-            prev.map(call => 
+        setCallHistory(prev =>
+            prev.map(call =>
                 call.call_id === updatedCall.call_id || call.timestamp === updatedCall.timestamp
                     ? { ...call, ...updatedCall }
                     : call
@@ -701,7 +952,7 @@ export default function Phone() {
     const saveCallTranscript = async (callSid, transcript) => {
         try {
             if (!callSid || !transcript) return;
-            
+
             // Find the call record to update
             const callRecord = history.find(call => call.callSid === callSid);
             if (!callRecord) return;
@@ -709,12 +960,12 @@ export default function Phone() {
             // Update call record with transcript
             const updateData = { transcript };
             const response = await updateCallStatus(callRecord.call_id, updateData);
-            
+
             if (response.data.success) {
                 // Update local history
-                setCallHistory(prev => 
-                    prev.map(call => 
-                        call.callSid === callSid 
+                setCallHistory(prev =>
+                    prev.map(call =>
+                        call.callSid === callSid
                             ? { ...call, transcript }
                             : call
                     )
@@ -815,7 +1066,7 @@ export default function Phone() {
                             <span className="text-sm text-gray-600">From: {formatPhoneNumber(fromNumber)}</span>
                         </div>
                     </div>
-                    
+
                     {/* Error Display */}
                     {error && (
                         <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
@@ -824,17 +1075,17 @@ export default function Phone() {
                                 <span className="text-sm text-red-800">{error}</span>
                             </div>
                             <div className="flex gap-2 mt-2">
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
+                                <Button
+                                    variant="outline"
+                                    size="sm"
                                     onClick={() => getToken()}
                                 >
                                     Retry Connection
                                 </Button>
                                 {!isAudioContextResumed && (
-                                    <Button 
-                                        variant="default" 
-                                        size="sm" 
+                                    <Button
+                                        variant="default"
+                                        size="sm"
                                         onClick={handleUserInteraction}
                                     >
                                         Enable Audio
@@ -843,7 +1094,7 @@ export default function Phone() {
                             </div>
                         </div>
                     )}
-                    
+
                     {/* AudioContext Warning */}
                     {!isAudioContextResumed && !error && (
                         <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -853,9 +1104,9 @@ export default function Phone() {
                                     Audio permissions required. Click "Enable Audio" to start calling.
                                 </span>
                             </div>
-                            <Button 
-                                variant="default" 
-                                size="sm" 
+                            <Button
+                                variant="default"
+                                size="sm"
                                 className="mt-2"
                                 onClick={handleUserInteraction}
                             >
@@ -884,7 +1135,7 @@ export default function Phone() {
                     activeTab == "dialer" &&
                     <div className="flex flex-col gap-4 p-6 h-full relative">
                         <div className="flex items-center justify-between">
-                            <Button 
+                            <Button
                                 onClick={() => {
                                     setContactToCreate({ phone_number: toNumber });
                                     setShowCreateContact(true);
@@ -898,30 +1149,9 @@ export default function Phone() {
                             <MoreOption />
                         </div>
                         <div className="flex flex-col h-full">
-                            {
-                                history.length == 0 &&
-                                <div className="flex-1 flex items-center justify-center">
-                                    <h1 className="text-2xl">No Call History</h1>
-                                </div>
-                            }
-
-                            {
-                                history.length != 0 &&
-                                <div className="flex-1 overflow-y-auto">
-                                    <CallHistoryComponent 
-                                        history={history} 
-                                        makeCall={makeCall}
-                                        contacts={contact}
-                                        onSaveAsContact={(phoneNumber) => {
-                                            setContactToCreate({ phone_number: phoneNumber });
-                                            setShowCreateContact(true);
-                                        }}
-                                        onViewDetails={handleViewCallDetails}
-                                    />
-                                </div>
-                            }
+                            <div className="flex-1"></div>
                             <div onClick={handleUserInteraction}>
-                            <DialerPad phoneNumber={toNumber} setPhoneNumber={setToNumber} handleCall={() => makeCall(undefined,toNumber)} />
+                                <DialerPad phoneNumber={toNumber} setPhoneNumber={setToNumber} handleCall={() => makeCall(undefined, toNumber)} />
                             </div>
                         </div>
                     </div>
@@ -934,7 +1164,7 @@ export default function Phone() {
                     <div className='mx-2 my-4 px-5'>
                         <div className="flex items-center gap-4 mb-4">
                             <Input className='py-2 w-full px-2 ring-0 outline-none bg-gray-50 shadow-sm rounded-3xl focus:ring-0 flex-1' placeholder='Search Contact' />
-                            <Button 
+                            <Button
                                 onClick={() => setShowCreateContact(true)}
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
                             >
@@ -954,7 +1184,7 @@ export default function Phone() {
                         <div className="flex items-center gap-4 mb-4">
                             <h2 className="text-lg font-semibold">Call History</h2>
                             <div className="flex-1" />
-                            <Button 
+                            <Button
                                 onClick={() => loadCallHistory()}
                                 variant="outline"
                                 size="sm"
@@ -973,8 +1203,8 @@ export default function Phone() {
                                     </div>
                                 </div>
                             ) : (
-                                <CallHistoryComponent 
-                                    history={history} 
+                                <CallHistoryComponent
+                                    history={history}
                                     makeCall={makeCall}
                                     contacts={contact}
                                     onSaveAsContact={(phoneNumber) => {
@@ -991,21 +1221,24 @@ export default function Phone() {
                 {
                     activeTab == "numbers" &&
                     <div className='mx-2 my-4 px-5'>
-                        <AvailablePhoneNumbers />
+                        <AvailablePhoneNumbers
+                            currentNumber={fromNumber}
+                            onNumberAssigned={handleNumberAssigned}
+                        />
                     </div>
                 }
             </div>
             {
                 callOpen &&
-                <TwilioCallComponent 
-                    accepted={accepted} 
-                    timer={formatTime(callTimer)} 
-                    controllView={controllView} 
-                    status={status} 
-                    callInfo={callInfo} 
-                    isIncoming={false} 
-                    hangupCall={hangupCall} 
-                    toggleMute={toggleMute} 
+                <TwilioCallComponent
+                    accepted={accepted}
+                    timer={formatTime(callTimer)}
+                    controllView={controllView}
+                    status={status}
+                    callInfo={callInfo}
+                    isIncoming={isInComingCall}
+                    hangupCall={hangupCall}
+                    toggleMute={toggleMute}
                     isMuted={isMuted}
                     transcript={callTranscript}
                     isTranscribing={isTranscribing}
@@ -1015,11 +1248,13 @@ export default function Phone() {
                         }
                     }}
                     isTranscriptionEnabled={isTranscribing}
+                    acceptCall={acceptCall}
+                    rejectCall={rejectCall}
                 />
             }
-            
+
             {/* Create Contact Modal */}
-            <CreateContactModal 
+            <CreateContactModal
                 isOpen={showCreateContact}
                 onClose={() => {
                     setShowCreateContact(false);
@@ -1030,7 +1265,7 @@ export default function Phone() {
             />
 
             {/* Call Details Modal */}
-            <CallDetailsModal 
+            <CallDetailsModal
                 isOpen={showCallDetails}
                 onClose={() => {
                     setShowCallDetails(false);

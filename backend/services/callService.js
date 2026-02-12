@@ -73,12 +73,12 @@ class CallService {
             } = filters;
 
             const skip = (parseInt(page) - 1) * parseInt(limit);
-            
+
             const where = { user_id: userId };
 
             if (status) where.status = status;
             if (call_type) where.call_type = call_type;
-            
+
             if (start_date || end_date) {
                 where.start_time = {};
                 if (start_date) where.start_time.gte = new Date(start_date);
@@ -240,10 +240,10 @@ class CallService {
 
             if (!existingCall) {
                 // Call doesn't exist, create it first
-                
+
                 // Try to determine user_id from phone number (optional)
                 let userId = null;
-                
+
                 try {
                     // Look for a user with this phone number
                     const user = await prisma.user.findFirst({
@@ -254,38 +254,48 @@ class CallService {
                             ]
                         }
                     });
-                    
+
                     if (user) {
                         userId = user.user_id;
                     } else {
                     }
                 } catch (userError) {
                 }
-                
+
+                const mappedStatus = mapTwilioStatus(CallStatus);
+                const isMissedCall = Direction === 'inbound' && mappedStatus === 'NO_RESPONSE';
+
                 const newCallData = {
                     user_id: userId, // Can be null now
                     call_sid: CallSid,
                     from_number: From || 'Unknown',
                     to_number: To || 'Unknown',
                     call_type: Direction === 'inbound' ? 'INCOMING' : 'OUTGOING',
-                    status: mapTwilioStatus(CallStatus),
+                    status: mappedStatus,
                     duration: RecordingDuration ? parseInt(RecordingDuration) : (CallDuration ? parseInt(CallDuration) : 0),
                     recording_url: RecordingUrl || null,
                     start_time: new Date(),
-                    end_time: CallStatus?.toLowerCase() === 'completed' ? new Date() : null
+                    end_time: CallStatus?.toLowerCase() === 'completed' ? new Date() : null,
+                    is_checked: !isMissedCall // Missed calls start as unchecked
                 };
 
                 const newCall = await prisma.call.create({
                     data: newCallData
                 });
-                
+
                 return { success: true, data: newCall };
             } else {
                 // Call exists, update it
+                const mappedStatus = mapTwilioStatus(CallStatus);
                 const updateData = {
-                    status: mapTwilioStatus(CallStatus),
+                    status: mappedStatus,
                     updated_at: new Date()
                 };
+
+                // If call becomes a missed call (incoming + NO_RESPONSE), mark as unchecked
+                if (existingCall.call_type === 'INCOMING' && mappedStatus === 'NO_RESPONSE' && existingCall.is_checked) {
+                    updateData.is_checked = false;
+                }
 
                 if (RecordingUrl) {
                     updateData.recording_url = RecordingUrl;
@@ -299,6 +309,19 @@ class CallService {
 
                 if (CallStatus?.toLowerCase() === 'completed') {
                     updateData.end_time = new Date();
+                }
+
+                // Update phone numbers if they are missing in the existing record and present in the webhook
+                if (From && (existingCall.from_number === 'Unknown' || !existingCall.from_number)) {
+                    updateData.from_number = From;
+                }
+                if (To && (existingCall.to_number === 'Unknown' || !existingCall.to_number)) {
+                    updateData.to_number = To;
+                }
+
+                // Also update call_type if it was inferred incorrectly
+                if (Direction && existingCall.call_type === 'OUTGOING' && Direction === 'inbound') {
+                    updateData.call_type = 'INCOMING';
                 }
 
                 const result = await this.updateCallStatus(CallSid, updateData);

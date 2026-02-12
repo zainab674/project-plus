@@ -266,7 +266,7 @@ export const changePassword = catchAsyncError(async (req, res, next) => {
 });
 
 export const updateUser = catchAsyncError(async (req, res, next) => {
-    const { name, account_name, bring, teams_member_count, focus, hear_about_as } = req.body;
+    const { name, account_name, bring, teams_member_count, focus, hear_about_as, phone } = req.body;
 
     const [err, isValidate] = await validateRequestBody(req.body, UpdateRequestBodySchema);
 
@@ -283,6 +283,7 @@ export const updateUser = catchAsyncError(async (req, res, next) => {
     if (bring) updateData.bring = bring;
     if (teams_member_count) updateData.teams_member_count = teams_member_count;
     if (focus) updateData.focus = focus;
+    if (phone) updateData.phone = phone;
     if (hear_about_as) updateData.hear_about_as = hear_about_as;
 
     if (Object.keys(updateData).length === 0) {

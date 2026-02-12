@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+const phoneRegex = /^\+\d{7,15}$/;
 
 export const RegisterRequestBodySchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -53,4 +54,8 @@ export const UpdateRequestBodySchema = z.object({
     bring: z.string().optional(),
     teams_member_count: z.string().optional(),
     focus: z.array(z.string()).optional(),
+    phone: z
+        .string()
+        .regex(phoneRegex, 'Phone number must be in E.164 format (e.g., +19862108561)')
+        .optional(),
 });

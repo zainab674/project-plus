@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
 import moment from 'moment';
 import {
     Table,
@@ -22,7 +23,6 @@ import RenderMembers from "./RenderMembers"
 import Timer from "./Timer"
 import BigDialog from "./Dialogs/BigDialog"
 import AddWorkDescription from "./AddWorkDescription"
-import { TaskDetailModal } from "./TaskDetailModal"
 import InternalDocumentSelector from "./InternalDocumentSelector"
 import { usePhaseFolders } from '@/hooks/usePhaseFolders'
 import {
@@ -831,6 +831,7 @@ const ReasonModal = ({ isOpen, onClose, onSubmit, title, placeholder, isLoading 
 }
 
 const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => {
+    const router = useRouter()
     const [project, setProject] = useState(null)
     const [viewMode, setViewMode] = useState(() => {
         // Get view mode from localStorage, default to 'kanban'
@@ -856,7 +857,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
     const [phases, setPhases] = useState([])
     const [stopTimeOpen, setStopTimeOpen] = useState(null)
     const [selectedTask, setSelectedTask] = useState(null)
-    const [taskDetailOpen, setTaskDetailOpen] = useState(false)
     
     // Phase modal states
     const [phaseModalOpen, setPhaseModalOpen] = useState(false)
@@ -1230,10 +1230,12 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
 
     // Handle task click from phase modal
     const handleTaskClickFromPhase = useCallback((task) => {
-        setSelectedTask(task)
-        setTaskDetailOpen(true)
-        setPhaseModalOpen(false) // Close phase modal when opening task detail
-    }, [])
+        // Navigate to task detail page instead of opening modal
+        setPhaseModalOpen(false) // Close phase modal when navigating
+        if (project?.project_id) {
+            router.push(`/dashboard/project/${project.project_id}/task/${task.task_id}`)
+        }
+    }, [project?.project_id, router])
 
     // Phase change handler
     const handlePhaseChange = useCallback(async (task_id, newPhase) => {
@@ -1360,14 +1362,12 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
         if (event.target.closest('button')) {
             return
         }
-        setSelectedTask(task)
-        setTaskDetailOpen(true)
-    }, [])
+        // Navigate to task detail page instead of opening modal
+        if (project?.project_id) {
+            router.push(`/dashboard/project/${project.project_id}/task/${task.task_id}`)
+        }
+    }, [project?.project_id, router])
 
-    const closeTaskDetail = useCallback(() => {
-        setTaskDetailOpen(false)
-        setSelectedTask(null)
-    }, [])
 
     // Handle review actions button click
     const handleReviewActionsClick = useCallback((task, event) => {
@@ -1869,17 +1869,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                                                             <ChevronDown className="h-3 w-3 flex-shrink-0" />
                                                         )}
                                                     </button>
-                                                    
-                                                    {/* Phase name clickable area for modal */}
-                                                    <div 
-                                                        className="absolute inset-0 cursor-pointer z-10"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            e.preventDefault()
-                                                            handlePhaseClick(task.phase)
-                                                        }}
-                                                        title={`Click to view all tasks in ${task.phase}`}
-                                                    />
                                                 </div>
                                             </TableCell>
 
@@ -2092,14 +2081,6 @@ const TaskManagementView = ({ ccproject, reloadProject, getProjectDetails }) => 
                 isLoading={reasonModal.isLoading}
             />
 
-            {/* Task Detail Modal */}
-            <TaskDetailModal
-                project={project}
-                getProjectDetails={getProjectDetails}
-                task={selectedTask}
-                isOpen={taskDetailOpen}
-                onClose={closeTaskDetail}
-            />
 
             {/* Phase Tasks Modal */}
             <PhaseTasksModal

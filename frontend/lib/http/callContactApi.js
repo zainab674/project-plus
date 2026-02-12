@@ -29,6 +29,14 @@ export const getCallBySid = async (callSid) => {
     return api.get(`/calls/sid/${callSid}`);
 };
 
+export const getUncheckedMissedCalls = async (params = {}) => {
+    return api.get('/calls/missed/unchecked', { params });
+};
+
+export const markMissedCallsAsChecked = async (callIds) => {
+    return api.post('/calls/missed/mark-checked', { call_ids: callIds });
+};
+
 // Contact API functions
 export const createContact = async (contactData) => {
     return api.post('/contacts', contactData);

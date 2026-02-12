@@ -266,8 +266,26 @@ export const getPrivateConversationsList = catchAsyncError(async (req, res, next
     }
   });
 
+  // Get unread message counts for each conversation
+  const conversationsWithUnread = await Promise.all(
+    conversations.map(async (conv) => {
+      const unreadCount = await prisma.privateMessage.count({
+        where: {
+          private_conversation_id: conv.private_conversation_id,
+          receiver_id: my_id,
+          is_read: false
+        }
+      });
+
+      return {
+        ...conv,
+        unread_count: unreadCount
+      };
+    })
+  );
+
   // Format the response to show the other user and last message
-  const formattedConversations = conversations.map(conv => {
+  const formattedConversations = conversationsWithUnread.map(conv => {
     const otherUser = conv.user1_id === my_id ? conv.user2 : conv.user1;
     const lastMessage = conv.messages[0] || null;
 
@@ -275,12 +293,104 @@ export const getPrivateConversationsList = catchAsyncError(async (req, res, next
       private_conversation_id: conv.private_conversation_id,
       other_user: otherUser,
       last_message: lastMessage,
-      updated_at: conv.updated_at
+      updated_at: conv.updated_at,
+      unread_count: conv.unread_count
     };
   });
 
   res.status(200).json({
     success: true,
     conversations: formattedConversations
+  });
+});
+
+// Mark messages as read
+export const markMessagesAsRead = catchAsyncError(async (req, res, next) => {
+  const { private_conversation_id } = req.body;
+  const my_id = req.user.user_id;
+
+  // Verify user is part of this conversation
+  const conversation = await prisma.privateConversation.findFirst({
+    where: {
+      private_conversation_id: private_conversation_id,
+      OR: [
+        { user1_id: my_id },
+        { user2_id: my_id }
+      ]
+    }
+  });
+
+  if (!conversation) {
+    return res.status(404).json({
+      success: false,
+      message: 'Conversation not found or access denied'
+    });
+  }
+
+  // Mark all unread messages sent to current user as read
+  const result = await prisma.privateMessage.updateMany({
+    where: {
+      private_conversation_id: private_conversation_id,
+      receiver_id: my_id,
+      is_read: false
+    },
+    data: {
+      is_read: true,
+      read_at: new Date()
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    message: `Marked ${result.count} message(s) as read`,
+    count: result.count
+  });
+});
+
+// Mark specific message as read
+export const markMessageAsRead = catchAsyncError(async (req, res, next) => {
+  const { private_message_id } = req.params;
+  const my_id = req.user.user_id;
+
+  // Verify message exists and user is the receiver
+  const message = await prisma.privateMessage.findFirst({
+    where: {
+      private_message_id: private_message_id,
+      receiver_id: my_id
+    },
+    include: {
+      conversation: true
+    }
+  });
+
+  if (!message) {
+    return res.status(404).json({
+      success: false,
+      message: 'Message not found or access denied'
+    });
+  }
+
+  // Verify user is part of the conversation
+  if (message.conversation.user1_id !== my_id && message.conversation.user2_id !== my_id) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied'
+    });
+  }
+
+  // Mark message as read
+  const updatedMessage = await prisma.privateMessage.update({
+    where: {
+      private_message_id: private_message_id
+    },
+    data: {
+      is_read: true,
+      read_at: new Date()
+    }
+  });
+
+  res.status(200).json({
+    success: true,
+    message: updatedMessage
   });
 }); 

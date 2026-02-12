@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Clock, BarChart3, TrendingUp, Calendar, Users, Gavel, DollarSign, ChevronRight, Activity, Mail, MessageSquare, Video, FileText as FileTextIcon, Workflow } from 'lucide-react';
+import { Clock, BarChart3, TrendingUp, Calendar, Users, Gavel, DollarSign, ChevronRight, Activity, Mail, MessageSquare, Video, FileText as FileTextIcon, Workflow, CheckCircle, AlertTriangle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { getAllProjectWithTasksRequest } from '@/lib/http/project';
 import Loader from '../Loader';
@@ -10,6 +10,7 @@ import { getHourMinDiff } from '@/utils/calculateTIme';
 import dayjs from 'dayjs';
 import { TaskDetailModal } from '../TaskDetailModal';
 import CaseDetail from '../modals/TimelineCase';
+import { useTabNavigation } from '@/hooks/useTabNavigation';
 
 // Utility function to highlight search terms in text
 const highlightSearchTerm = (text, searchTerm) => {
@@ -324,7 +325,7 @@ const downloadFile = async (url, filename) => {
   }
 };
 
-const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, onClose, timelineData: externalTimelineData, timelineLoading: externalTimelineLoading }) => {
+const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, onClose, timelineData: externalTimelineData, timelineLoading: externalTimelineLoading, selectedUsers: externalSelectedUsers = [], selectedActivityTypes: externalSelectedActivityTypes = [] }) => {
     const [activeModal, setActiveModal] = useState(null);
     const [timelineView, setTimelineView] = useState('daily');
     const [selectedCase, setSelectedCase] = useState(null);
@@ -343,6 +344,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
     });
     const [useCustomDateRange, setUseCustomDateRange] = useState(false);
     const { user } = useUser();
+    const router = useTabNavigation();
 
     // Use external selected project if provided, otherwise use internal state
     const selectedProjectForTimeline = externalSelectedProject || internalSelectedProjectForTimeline;
@@ -354,6 +356,9 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
     const timeData = externalTimelineData?.times || [];
     const progressData = externalTimelineData?.progress || [];
     const documentsData = externalTimelineData?.documents || [];
+    const caseCommentsData = externalTimelineData?.caseComments || [];
+    const taskCommentsData = externalTimelineData?.taskComments || [];
+    const reviewsData = externalTimelineData?.reviews || [];
     const timelineLoading = externalTimelineLoading !== undefined ? externalTimelineLoading : false;
 
     // Get date ranges for different views
@@ -548,33 +553,130 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
             });
         }
 
+        // Add case-level comments (case notes)
+        if (Array.isArray(caseCommentsData)) {
+            caseCommentsData.forEach(project => {
+                (project.Comments || []).forEach(comment => {
+                    timeline.push({
+                        id: `case-comment-${comment.comment_id}`,
+                        type: 'case_comment',
+                        project: project.name,
+                        task: 'Case Note',
+                        message: comment.content || 'Case note added',
+                        user: comment.user?.name || 'Unknown',
+                        timestamp: comment.created_at,
+                        icon: MessageSquare,
+                        color: 'purple',
+                        commentData: comment,
+                        projectData: project
+                    });
+                });
+            });
+        }
+
+        // Add task-level comments (task notes)
+        if (Array.isArray(taskCommentsData)) {
+            taskCommentsData.forEach(project => {
+                (project.Tasks || []).forEach(task => {
+                    (task.Comments || []).forEach(comment => {
+                        timeline.push({
+                            id: `task-comment-${comment.comment_id}`,
+                            type: 'task_comment',
+                            project: project.name,
+                            task: task.name || 'Task',
+                            message: comment.content || 'Task note added',
+                            user: comment.user?.name || 'Unknown',
+                            timestamp: comment.created_at,
+                            icon: MessageSquare,
+                            color: 'indigo',
+                            commentData: comment,
+                            taskData: task,
+                            projectData: project
+                        });
+                    });
+                });
+            });
+        }
+
+        // Add reviews
+        if (Array.isArray(reviewsData)) {
+            reviewsData.forEach(project => {
+                (project.Tasks || []).forEach(task => {
+                    (task.inReview || []).forEach(review => {
+                        let reviewMessage = review.submissionDesc || 'Review submitted';
+                        if (review.action === 'APPROVED') {
+                            reviewMessage = `Review approved: ${review.submissionDesc || 'Review completed'}`;
+                        } else if (review.action === 'REJECTED') {
+                            reviewMessage = `Review rejected: ${review.rejectedReason || review.submissionDesc || 'Review rejected'}`;
+                        }
+                        
+                        timeline.push({
+                            id: `review-${review.review_id}`,
+                            type: 'review',
+                            project: project.name,
+                            task: task.name || 'Task',
+                            message: reviewMessage,
+                            user: review.submitted_by?.name || review.acted_by?.name || 'Unknown',
+                            timestamp: review.created_at,
+                            icon: review.action === 'APPROVED' ? CheckCircle : review.action === 'REJECTED' ? AlertTriangle : FileTextIcon,
+                            color: review.action === 'APPROVED' ? 'green' : review.action === 'REJECTED' ? 'red' : 'purple',
+                            reviewData: review,
+                            taskData: task,
+                            projectData: project,
+                            hasAttachment: !!review.file_url,
+                            attachmentUrl: review.file_url,
+                            attachmentName: review.filename || 'review_file'
+                        });
+                    });
+                });
+            });
+        }
+
         // Sort by timestamp (newest first)
         return timeline.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    }, [timeData, progressData, documentsData]);
+    }, [timeData, progressData, documentsData, caseCommentsData, taskCommentsData, reviewsData]);
 
-    // Filter timeline based on mode and search term
+    // Helper function to check if activity type matches
+    const matchesActivityType = (item, activityType) => {
+        if (activityType === 'case_comment') {
+            return item.type === 'case_comment';
+        } else if (activityType === 'task_comment') {
+            return item.type === 'task_comment';
+        } else if (activityType === 'progress') {
+            return item.type === 'progress';
+        } else if (activityType === 'meeting') {
+            return item.type === 'progress' && item.progressType === 'MEETING';
+        } else if (activityType === 'review') {
+            return item.type === 'review';
+        } else if (activityType === 'time') {
+            return item.type === 'time';
+        } else if (activityType === 'document') {
+            return item.type === 'document';
+        }
+        return false;
+    };
+
+    // Filter timeline based on mode, search term, user, and activity type
     const filteredTimeline = useMemo(() => {
         let filtered = comprehensiveTimeline;
         
-        // Apply search filter
-        if (searchTerm) {
-            filtered = comprehensiveTimeline.filter(item => 
-                item.project?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.task?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.type?.toLowerCase().includes(searchTerm.toLowerCase())
+        // Apply user filter (from external props) - support multiple users
+        if (externalSelectedUsers && externalSelectedUsers.length > 0) {
+            filtered = filtered.filter(item => 
+                externalSelectedUsers.some(user => 
+                    item.user?.toLowerCase().trim() === user.toLowerCase().trim()
+                )
             );
         }
         
-        return filtered;
-    }, [comprehensiveTimeline, searchTerm]);
-
-    // Filtered timeline for a specific project
-    const projectTimeline = useMemo(() => {
-        if (!selectedProjectForTimeline) return [];
-        
-        let filtered = comprehensiveTimeline.filter(item => item.project === selectedProjectForTimeline.name);
+        // Apply activity type filter (from external props) - support multiple activity types
+        if (externalSelectedActivityTypes && externalSelectedActivityTypes.length > 0) {
+            filtered = filtered.filter(item => 
+                externalSelectedActivityTypes.some(activityType => 
+                    matchesActivityType(item, activityType)
+                )
+            );
+        }
         
         // Apply search filter
         if (searchTerm) {
@@ -588,7 +690,45 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
         }
         
         return filtered;
-    }, [comprehensiveTimeline, selectedProjectForTimeline, searchTerm]);
+    }, [comprehensiveTimeline, searchTerm, externalSelectedUsers, externalSelectedActivityTypes]);
+
+    // Filtered timeline for a specific project
+    const projectTimeline = useMemo(() => {
+        if (!selectedProjectForTimeline) return [];
+        
+        let filtered = comprehensiveTimeline.filter(item => item.project === selectedProjectForTimeline.name);
+        
+        // Apply user filter (from external props) - support multiple users
+        if (externalSelectedUsers && externalSelectedUsers.length > 0) {
+            filtered = filtered.filter(item => 
+                externalSelectedUsers.some(user => 
+                    item.user?.toLowerCase().trim() === user.toLowerCase().trim()
+                )
+            );
+        }
+        
+        // Apply activity type filter (from external props) - support multiple activity types
+        if (externalSelectedActivityTypes && externalSelectedActivityTypes.length > 0) {
+            filtered = filtered.filter(item => 
+                externalSelectedActivityTypes.some(activityType => 
+                    matchesActivityType(item, activityType)
+                )
+            );
+        }
+        
+        // Apply search filter
+        if (searchTerm) {
+            filtered = filtered.filter(item => 
+                item.project?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.task?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.user?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.type?.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        
+        return filtered;
+    }, [comprehensiveTimeline, selectedProjectForTimeline, searchTerm, externalSelectedUsers, externalSelectedActivityTypes]);
 
     // Handle task click to show task details
     const handleTaskClick = (task, project) => {
@@ -890,8 +1030,8 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                         const IconComponent = item.icon;
                                         return (
                                             <div key={item.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50">
-                                                <div className={`p-2 rounded-full bg-${item.color}-100`}>
-                                                    <IconComponent className={`text-${item.color}-600`} size={16} />
+                                                <div className={`p-2 rounded-full ${item.color === 'blue' ? 'bg-blue-100' : item.color === 'green' ? 'bg-green-100' : item.color === 'purple' ? 'bg-purple-100' : item.color === 'indigo' ? 'bg-indigo-100' : item.color === 'orange' ? 'bg-orange-100' : 'bg-gray-100'}`}>
+                                                    <IconComponent className={`${item.color === 'blue' ? 'text-blue-600' : item.color === 'green' ? 'text-green-600' : item.color === 'purple' ? 'text-purple-600' : item.color === 'indigo' ? 'text-indigo-600' : item.color === 'orange' ? 'text-orange-600' : 'text-gray-600'}`} size={16} />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between">
@@ -918,6 +1058,11 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                                             'bg-blue-100 text-blue-800'
                                                                     }`}>
                                                                     {item.progressType}
+                                                                </span>
+                                                            )}
+                                                            {(item.type === 'case_comment' || item.type === 'task_comment') && (
+                                                                <span className={`text-xs px-2 py-1 rounded ${item.type === 'case_comment' ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800'}`}>
+                                                                    {item.type === 'case_comment' ? 'Case Note' : 'Task Note'}
                                                                 </span>
                                                             )}
                                                             {item.hasAttachment && item.attachmentUrl && (
@@ -1100,8 +1245,8 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
 
 
 
-    // If external project is provided, render timeline content directly
-    if (externalSelectedProject) {
+    // If external timeline data is provided (from timeline page), render timeline content directly
+    if (externalTimelineData !== undefined) {
         return (
             <div className="p-6">
                 {timelineLoading ? (
@@ -1150,22 +1295,37 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                 </div>
                             </div>
                             {(selectedProjectForTimeline ? projectTimeline : filteredTimeline).length > 0 ? (
-                                <div className="space-y-4 max-h-96 overflow-y-auto">
+                                <div className="space-y-4 max-h-[calc(100vh-400px)] overflow-y-auto">
                                     {(selectedProjectForTimeline ? projectTimeline : filteredTimeline).map((item) => {
                                         const IconComponent = item.icon;
                                         return (
                                             <div key={item.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                                                <div className={`p-2 rounded-full ${item.color === 'blue' ? 'bg-blue-100' : item.color === 'green' ? 'bg-green-100' : 'bg-orange-100'}`}>
-                                                    <IconComponent className={`w-4 h-4 ${item.color === 'blue' ? 'text-blue-600' : item.color === 'green' ? 'text-green-600' : 'text-orange-600'}`} />
+                                                <div className={`p-2 rounded-full ${item.color === 'blue' ? 'bg-blue-100' : item.color === 'green' ? 'bg-green-100' : item.color === 'purple' ? 'bg-purple-100' : item.color === 'indigo' ? 'bg-indigo-100' : 'bg-orange-100'}`}>
+                                                    <IconComponent className={`w-4 h-4 ${item.color === 'blue' ? 'text-blue-600' : item.color === 'green' ? 'text-green-600' : item.color === 'purple' ? 'text-purple-600' : item.color === 'indigo' ? 'text-indigo-600' : 'text-orange-600'}`} />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <span className="font-medium text-gray-800">{highlightSearchTerm(item.message, searchTerm)}</span>
                                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                                             ${item.type === 'time' ? 'bg-blue-100 text-blue-800' :
-                                                                item.type === 'progress' ? (item.progressType === 'MEDIA' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800') :
-                                                                    'bg-orange-100 text-orange-800'}`}>
-                                                            {item.type}
+                                                                item.type === 'review' ? 'bg-orange-100 text-orange-800' :
+                                                                item.type === 'progress' ? (item.progressType === 'MEETING' ? 'bg-purple-100 text-purple-800' :
+                                                                    item.progressType === 'MAIL' ? 'bg-green-100 text-green-800' :
+                                                                        item.progressType === 'MEDIA' ? 'bg-orange-100 text-orange-800' :
+                                                                            item.progressType === 'CHAT' ? 'bg-blue-100 text-blue-800' :
+                                                                                (item.progressType === 'OTHER' && (item.message?.includes('Review approved') || item.message?.includes('Review rejected') || item.message?.includes('Review submitted')) ? 'bg-orange-100 text-orange-800' :
+                                                                                'bg-green-100 text-green-800')) :
+                                                                    item.type === 'case_comment' ? 'bg-purple-100 text-purple-800' :
+                                                                        item.type === 'task_comment' ? 'bg-indigo-100 text-indigo-800' :
+                                                                            'bg-orange-100 text-orange-800'}`}>
+                                                            {item.type === 'case_comment' ? 'Case Note' : 
+                                                                item.type === 'task_comment' ? 'Task Note' : 
+                                                                item.type === 'progress' && item.progressType ? 
+                                                                    (item.progressType === 'MEDIA' ? 'document' :
+                                                                     item.progressType === 'OTHER' && item.message?.includes('created an update for task') ? 'Updates' :
+                                                                     item.progressType === 'OTHER' && (item.message?.includes('Review approved') || item.message?.includes('Review rejected') || item.message?.includes('Review submitted')) ? 'review' :
+                                                                     item.progressType) : 
+                                                                item.type}
                                                         </span>
                                                     </div>
                                                     <div className="text-sm text-gray-600">
@@ -1174,6 +1334,12 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                                                     <div className="text-xs text-gray-500 mt-1">
                                                         {dayjs(item.timestamp).format('MMM DD, YYYY HH:mm')}
                                                     </div>
+                                                    {(item.type === 'case_comment' || item.type === 'task_comment') && (
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mt-2
+                                                            ${item.type === 'case_comment' ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800'}`}>
+                                                            {item.type === 'case_comment' ? 'Case Note' : 'Task Note'}
+                                                        </span>
+                                                    )}
                                                     {item.hasAttachment && item.attachmentUrl && (
                                                         <div className="flex items-center gap-1 mt-2">
                                                             <button
@@ -1226,7 +1392,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
         );
     }
 
-    // Original return for standalone component
+    // Original return for standalone component (not used when external timeline data is provided)
     return (
         <div className="bg-gray-50">
             <div className="max-w-7xl mx-auto">
@@ -1251,24 +1417,6 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                         </div>
                     </div>
 
-                    {/* Case Timeline Section */}
-                    <div className="bg-yellow-200 p-6 mt-4 rounded-lg shadow-sm">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-semibold text-gray-800">Case Timeline</h2>
-                            <Calendar className="text-yellow-400" size={24} />
-                        </div>
-                        <div
-                            className="bg-white p-4 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                            onClick={() => setActiveModal('cases')}
-                        >
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="font-medium">View Case Timelines</span>
-                                <Clock className="text-yellow-400" size={20} />
-                            </div>
-
-                        </div>
-                    </div>
-
                     {/* Case Workflow Section */}
                     <div className="bg-indigo-200 p-6 mt-4 rounded-lg shadow-sm">
                         <div className="flex items-center justify-between mb-4">
@@ -1277,7 +1425,7 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
                         </div>
                         <div
                             className="bg-white p-4 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                            onClick={() => setActiveModal('workflow')}
+                            onClick={() => router.push('/dashboard/case-workflow')}
                         >
                             <div className="flex justify-between items-center mb-2">
                                 <span className="font-medium">View Case Workflows</span>
@@ -1294,7 +1442,6 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
             {activeModal === 'timeline' && <TimelineModal />}
             {activeModal === 'cases' && <CaseTimelineModal />}
             {activeModal === 'billing' && <BillingModal />}
-            {activeModal === 'workflow' && <CaseWorkflowModal onClose={() => setActiveModal(null)} />}
             {isTaskModalOpen && selectedTask && (
                 <TaskDetailModal
                     task={selectedTask}
@@ -1310,82 +1457,6 @@ const LawFirmTimeline = ({ selectedProjectForTimeline: externalSelectedProject, 
     );
 };
 
-// Case Workflow Modal Component
-const CaseWorkflowModal = ({ onClose }) => {
-    const [selectedCase, setSelectedCase] = useState(null);
-    const [allCases, setAllCases] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetchCases();
-    }, []);
-
-    const fetchCases = async () => {
-        try {
-            const response = await getAllProjectWithTasksRequest();
-            
-            if (response && response.data) {
-                const { projects, collaboratedProjects } = response.data;
-                const allProjects = [...(projects || []), ...(collaboratedProjects || [])];
-                
-                setAllCases(allProjects);
-                // Set default to most recent case
-                if (allProjects.length > 0) {
-                    const recentCase = allProjects.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-                    setSelectedCase(recentCase);
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching cases:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleCaseSelect = (caseItem) => {
-        setSelectedCase(caseItem);
-    };
-
-    if (loading) {
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-8">
-                    <Loader />
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-900">Case Workflow Dashboard</h3>
-                        <p className="text-sm text-gray-600">View and manage case workflows</p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-2xl"
-                    >
-                        ×
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    <CaseWorkflowBox
-                        selectedCase={selectedCase}
-                        allCases={allCases}
-                        onCaseSelect={handleCaseSelect}
-                        className="mb-6"
-                    />
-                </div>
-            </div>
-        </div>
-    );
-};
 
 export default LawFirmTimeline;
 

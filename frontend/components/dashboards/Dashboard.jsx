@@ -12,7 +12,7 @@ import { getPedingDocsRequest } from "@/lib/http/client"
 import { getAllTaskProgressRequest } from "@/lib/http/task"
 import { getRecentDatesWithLabels } from "@/utils/getRecentDatesWithLabels"
 import Todo from './todo';
-import LawFirmTimeline from './timeLine';
+import TimeTrackingAndWorkflow from './TimeTrackingAndWorkflow';
 import TimeEfficiency from './timeEfficiency';
 import CreateCase from './createCase';
 import LawFirmMeetingSystem from './meetings';
@@ -99,7 +99,7 @@ const DashboardContent = () => {
         <ClientDashboard />
       ) : (
         <div className="min-h-screen bg-gray-50 p-2">
-          <div className="max-w-7xl mx-auto">
+          <div className="max-w-8xl mx-auto">
             {/* Error Display */}
             {filterError && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -122,7 +122,7 @@ const DashboardContent = () => {
                 <Todo filteredProjects={filteredProjects} />
               )}
               {user?.Role !== 'BILLER' && (
-                < LawFirmTimeline 
+                <TimeTrackingAndWorkflow 
                   timelineData={filteredTimelineData}
                   timelineLoading={filterLoading}
                 />

@@ -37,11 +37,16 @@ import Timer from './Timer'
 import BigDialog from './Dialogs/BigDialog'
 import AddWorkDescription from './AddWorkDescription'
 import TaskComments from './TaskComments'
-import TaskNotes from './TaskNotes'
 import UpdateTask from './Dialogs/UpdateTask'
+import TaskUpdateModal from './Dialogs/TaskUpdateModal'
+import TaskChat from './TaskChat'
 import moment from 'moment'
 import { getMediaByTaskIdRequest } from '@/lib/http/media'
 import { getTemplatesByTaskIdRequest } from '@/lib/http/caseTemplate'
+import { addTaskNoteRequest, getTaskNotesRequest, getTaskUpdatesByTaskRequest } from '@/lib/http/task'
+import AvatarCompoment from './AvatarCompoment'
+import { Send, StickyNote } from 'lucide-react'
+import { downloadFile } from '@/utils/fileUtils'
 
 // Utility function to view files in new tab with proper filename
 const viewFile = async (url, filename) => {
@@ -471,7 +476,7 @@ const AttachmentsCard = ({ task, media, loadingMedia, onEditDocument }) => {
     }
 
     const handleDownload = (attachment) => {
-        window.open(attachment.file_url, '_blank')
+        downloadFile(attachment.file_url, attachment.filename)
     }
 
     return (
@@ -769,9 +774,16 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
     const [taskTemplates, setTaskTemplates] = useState(null)
     const [loadingTemplates, setLoadingTemplates] = useState(false)
     const [stopTimeOpen, setStopTimeOpen] = useState(null)
-    const [notesModalOpen, setNotesModalOpen] = useState(false)
+    const [notes, setNotes] = useState([])
+    const [loadingNotes, setLoadingNotes] = useState(false)
+    const [noteContent, setNoteContent] = useState('')
+    const [isAddingNote, setIsAddingNote] = useState(false)
+    const [updates, setUpdates] = useState([])
+    const [loadingUpdates, setLoadingUpdates] = useState(false)
+    const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
     
     const { activeTimer, startTimer, stopTimer, loadingStart, loadingStop } = useTimer()
+    const { user } = useUser()
 
     // Timer handlers - moved to top to avoid hook order issues
     const handleStartTime = useCallback(async () => {
@@ -802,6 +814,68 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
         const dueDate = moment(task.last_date)
         return dueDate.diff(now, 'days')
     }, [task])
+
+    // Fetch notes
+    const fetchNotes = useCallback(async () => {
+        if (!task?.task_id) return
+        
+        setLoadingNotes(true)
+        try {
+            const res = await getTaskNotesRequest(task.task_id)
+            setNotes(res?.data?.notes || [])
+        } catch (error) {
+            console.error('Error fetching notes:', error)
+            setNotes([])
+        } finally {
+            setLoadingNotes(false)
+        }
+    }, [task?.task_id])
+
+    // Fetch updates
+    const fetchUpdates = useCallback(async () => {
+        if (!task?.task_id) return
+        
+        setLoadingUpdates(true)
+        try {
+            const res = await getTaskUpdatesByTaskRequest(task.task_id)
+            setUpdates(res?.data?.updates || [])
+        } catch (error) {
+            console.error('Error fetching updates:', error)
+            setUpdates([])
+        } finally {
+            setLoadingUpdates(false)
+        }
+    }, [task?.task_id])
+
+    const handleAddNote = useCallback(async () => {
+        if (!noteContent.trim()) {
+            toast.error('Please enter a note')
+            return
+        }
+        
+        setIsAddingNote(true)
+        try {
+            const formdata = {
+                content: noteContent,
+                task_id: task.task_id
+            }
+            const res = await addTaskNoteRequest(formdata)
+            setNoteContent('')
+            await fetchNotes()
+            toast.success(res?.data?.message || 'Note added successfully')
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error?.message || 'Failed to add note')
+        } finally {
+            setIsAddingNote(false)
+        }
+    }, [noteContent, task?.task_id, fetchNotes])
+
+    const handleNoteKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && noteContent.trim()) {
+            e.preventDefault()
+            handleAddNote()
+        }
+    }
 
     // Fetch media data when modal opens
     useEffect(() => {
@@ -839,8 +913,14 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                 .finally(() => {
                     setLoadingTemplates(false)
                 })
+
+            // Fetch notes
+            fetchNotes()
+            
+            // Fetch updates
+            fetchUpdates()
         }
-    }, [isOpen, task, media])
+    }, [isOpen, task?.task_id, media, fetchNotes, fetchUpdates])
 
     if (!isOpen || !task) return null
 
@@ -925,14 +1005,12 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
 
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => setNotesModalOpen(true)}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition-colors"
-                                    title="View task notes"
+                                    onClick={() => setIsUpdateModalOpen(true)}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors"
                                 >
                                     <MessageSquare className="w-3 h-3" />
-                                    Notes
+                                    Updates
                                 </button>
-
                                 <button
                                     onClick={handleEditClick}
                                     className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors"
@@ -998,6 +1076,169 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                                     </div>
                                 </InfoCard>
 
+                                {/* Updates */}
+                                <InfoCard
+                                    icon={MessageSquare}
+                                    title="Updates"
+                                    gradient="from-green-50 to-emerald-50"
+                                >
+                                    <div className="space-y-4">
+                                        {/* Updates List */}
+                                        {loadingUpdates ? (
+                                            <div className="flex items-center justify-center py-4">
+                                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
+                                            </div>
+                                        ) : updates.length > 0 ? (
+                                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                                {updates.map((update) => (
+                                                    <div key={update.update_id} className="bg-white border border-gray-200 rounded-lg p-3">
+                                                        <div className="flex items-start gap-2">
+                                                            <AvatarCompoment
+                                                                name={update?.user?.name}
+                                                                className="!w-7 !h-7 border-2 border-gray-100 flex-shrink-0"
+                                                            />
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <span className="font-semibold text-gray-900 text-xs">
+                                                                        {update?.user?.name}
+                                                                    </span>
+                                                                    <span className="text-xs text-gray-500">
+                                                                        {moment(update?.created_at).format('MMM DD, YYYY HH:mm')}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                                                                    {update?.content}
+                                                                </p>
+                                                                {update.Media && update.Media.length > 0 && (
+                                                                    <div className="mt-2 space-y-2">
+                                                                        {update.Media.map((media, idx) => (
+                                                                            <div key={idx} className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                                                                                <div className="flex items-start justify-between">
+                                                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                                        <Paperclip className="w-3 h-3 text-blue-600 flex-shrink-0" />
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <p className="text-xs font-medium text-blue-700 truncate">
+                                                                                                {media.filename}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                                                                                        <button
+                                                                                            onClick={() => viewFile(media.file_url, media.filename)}
+                                                                                            className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors"
+                                                                                            title="View file"
+                                                                                        >
+                                                                                            <Eye className="w-3 h-3" />
+                                                                                            View
+                                                                                        </button>
+                                                                                        <button
+                                                                                            onClick={() => downloadFile(media.file_url, media.filename)}
+                                                                                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition-colors"
+                                                                                            title="Download file"
+                                                                                        >
+                                                                                            <Download className="w-3 h-3" />
+                                                                                            Download
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-4 text-gray-500 text-sm">
+                                                <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                                                <p>No updates yet</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </InfoCard>
+
+                                {/* Notes */}
+                                <InfoCard
+                                    icon={StickyNote}
+                                    title="Notes"
+                                    gradient="from-purple-50 to-indigo-50"
+                                >
+                                    <div className="space-y-4">
+                                        {/* Notes List */}
+                                        {loadingNotes ? (
+                                            <div className="flex items-center justify-center py-4">
+                                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
+                                            </div>
+                                        ) : notes.length > 0 ? (
+                                            <div className="space-y-3 max-h-64 overflow-y-auto">
+                                                {notes.map((note) => (
+                                                    <div key={note.comment_id} className="bg-white border border-gray-200 rounded-lg p-3">
+                                                        <div className="flex items-start gap-2">
+                                                            <AvatarCompoment
+                                                                name={note?.user?.name}
+                                                                className="!w-7 !h-7 border-2 border-gray-100 flex-shrink-0"
+                                                            />
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <span className="font-semibold text-gray-900 text-xs">
+                                                                        {note?.user?.name}
+                                                                    </span>
+                                                                    <span className="text-xs text-gray-500">
+                                                                        {moment(note?.created_at).format('MMM DD, YYYY HH:mm')}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                                                                    {note?.content}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-4 text-gray-500 text-sm">
+                                                <StickyNote className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                                                <p>No notes yet</p>
+                                            </div>
+                                        )}
+
+                                        {/* Add Note Form */}
+                                        <div className="border-t border-gray-200 pt-3">
+                                            <div className="flex items-start gap-2">
+                                                <AvatarCompoment
+                                                    name={user?.name}
+                                                    className="!w-7 !h-7 border-2 border-gray-100 flex-shrink-0"
+                                                />
+                                                <div className="flex-1">
+                                                    <textarea
+                                                        className="w-full text-gray-900 placeholder:text-gray-500 outline-none border border-gray-300 rounded-lg bg-white px-3 py-2 text-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-200 transition-colors resize-none"
+                                                        placeholder="Add a note..."
+                                                        value={noteContent}
+                                                        onChange={(e) => setNoteContent(e.target.value)}
+                                                        onKeyDown={handleNoteKeyDown}
+                                                        rows={2}
+                                                    />
+                                                    <div className="flex items-center justify-between mt-2">
+                                                        <p className="text-xs text-gray-500">
+                                                            Press Enter to send, Shift + Enter for new line
+                                                        </p>
+                                                        <button
+                                                            onClick={handleAddNote}
+                                                            disabled={isAddingNote || !noteContent.trim()}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <Send className="w-3 h-3" />
+                                                            {isAddingNote ? 'Adding...' : 'Add Note'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </InfoCard>
+
                                 {/* Reason Cards */}
                                 {(task.stuckReason || task.overDueReason) && (
                                     <div className="space-y-3">
@@ -1014,6 +1255,18 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
 
                                 {/* Edited Templates */}
                                 <EditedTemplatesCard task={task} templates={taskTemplates} loadingTemplates={loadingTemplates} />
+
+                                {/* Task Chat */}
+                                <InfoCard
+                                    icon={MessageSquare}
+                                    title="Task Chat"
+                                    gradient="from-blue-50 to-indigo-50"
+                                    className="h-fit"
+                                >
+                                    <div className="h-[450px] -mx-3 -mb-3">
+                                        <TaskChat task={task} project={project} />
+                                    </div>
+                                </InfoCard>
 
                             </div>
 
@@ -1132,13 +1385,19 @@ export const TaskDetailModal = ({ task, project, isOpen, onClose, getProjectDeta
                 />
             </BigDialog>
 
-            {/* Task Notes Modal */}
-            <TaskNotes
-                open={notesModalOpen}
-                onClose={() => setNotesModalOpen(false)}
-                task_id={task?.task_id}
+            {/* Task Update Modal */}
+            <TaskUpdateModal
+                isOpen={isUpdateModalOpen}
+                onClose={() => setIsUpdateModalOpen(false)}
                 task={task}
+                onUpdateCreated={() => {
+                    fetchUpdates()
+                    if (getProjectDetails) {
+                        getProjectDetails()
+                    }
+                }}
             />
+
         </>
     )
 }

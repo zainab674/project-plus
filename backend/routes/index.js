@@ -25,6 +25,8 @@ router.use('/user',userRouter);
 router.use('/project',projectRouter);
 router.use('/task',taskRouter);
 router.use('/notificaion',notificationRouter);
+router.use('/notification',notificationRouter);
+router.use('/notifications',notificationRouter);
 router.use('/chat',chatRouter);
 router.use('/meeting',meetingRoute);
 router.use('/media',mediaRoute);

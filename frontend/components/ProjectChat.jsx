@@ -4,16 +4,17 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Bell, MessageCircle, Moon, PenSquare, Search, Users, ListTodo, Send, Calendar, X, FileText } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import MultiSelect from "@/components/ui/multi-select"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useUser } from "@/providers/UserProvider"
 import useChatHook from "@/hooks/useChatHook"
 import { toast } from "react-toastify"
-import { ON_MESSAGE } from "@/contstant/chatEventConstant"
+import { ON_MESSAGE, ON_PROJECT_MESSAGE_RECEIVED } from "@/contstant/chatEventConstant"
 import { Card } from "@/components/ui/card"
 import AvatarCompoment from "@/components/AvatarCompoment"
 import moment from 'moment'
-import { getGroupChatMessages, getProjectGroupChatInfo } from "@/lib/http/chat"
+import { getGroupChatMessages, getProjectGroupChatInfo, markGroupChatMessagesAsReadRequest } from "@/lib/http/chat"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import InternalDocumentSelector from "./InternalDocumentSelector"
@@ -24,13 +25,14 @@ export default function ProjectChat({ project }) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null); // State for selected task
+  const [selectedMembers, setSelectedMembers] = useState([]); // State for selected members (array of user_ids)
   const [searchDate, setSearchDate] = useState(null); // State for date search
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false); // State for date picker popover
   const [selectedFile, setSelectedFile] = useState(null); // State for file attachment
   const [selectedInternalDoc, setSelectedInternalDoc] = useState(null);
   const [showInternalDocSelector, setShowInternalDocSelector] = useState(false);
   const { user } = useUser();
-  const { handleSendMessage, socketRef } = useChatHook();
+  const { handleSendProjectMessage, socketRef } = useChatHook();
   const containerRef = useRef(null);
   const audioRef = useRef();
 
@@ -48,6 +50,14 @@ export default function ProjectChat({ project }) {
     // Include current user as well
     return teamMembers;
   }, [project]);
+
+  // Prepare member options for MultiSelect
+  const memberOptions = useMemo(() => {
+    return projectTeamMembers.map(member => ({
+      value: member.user_id.toString(),
+      label: member.name || member.email || `User ${member.user_id}`
+    }));
+  }, [projectTeamMembers]);
 
   // Get project tasks for task-based chat
   const projectTasks = useMemo(() => {
@@ -76,6 +86,13 @@ export default function ProjectChat({ project }) {
       const res = await getGroupChatMessages(project.project_id, selectedTask.task_id);
       const existingMessages = res.data.messages || [];
       setMessages(existingMessages);
+      
+      // Mark messages as read when conversation is loaded
+      try {
+        await markGroupChatMessagesAsReadRequest(project.project_id, selectedTask.task_id);
+      } catch (error) {
+        console.error('Error marking messages as read:', error);
+      }
     } catch (error) {
       console.error('❌ Error loading messages:', error);
       console.error('❌ Error response:', error.response?.data);
@@ -161,6 +178,8 @@ export default function ProjectChat({ project }) {
         task_id: selectedTask?.task_id,
         project_id: project.project_id,
         is_group_chat: true,
+        // Include recipient_ids if members are selected, otherwise send to all project members
+        recipient_ids: selectedMembers.length > 0 ? selectedMembers.map(id => parseInt(id)) : null,
         // Include attachment info in socket data
         attachment_url: (fileToUpload || internalDocToUpload) ? 'uploading...' : null,
         attachment_name: fileToUpload?.name || internalDocToUpload?.name,
@@ -170,7 +189,7 @@ export default function ProjectChat({ project }) {
 
       // Send via socket immediately - don't wait for it
       try {
-        handleSendMessage(socketData);
+        handleSendProjectMessage(socketData);
       } catch (error) {
         console.error('❌ Socket send failed:', error);
         toast.error("Failed to send message");
@@ -211,19 +230,23 @@ export default function ProjectChat({ project }) {
     } finally {
       setSending(false);
     }
-  }, [messageValue, user, project, selectedTask, handleSendMessage, selectedFile, sending]);
+  }, [messageValue, user, project, selectedTask, selectedMembers, handleSendProjectMessage, selectedFile, sending, selectedInternalDoc]);
 
   // Handle receiving messages
   const handleMessageReceive = useCallback((data) => {
 
     // Only handle messages for this project
-    if (data.project_id === project?.project_id && data.sender_id !== user?.user_id) {
+    if (data.project_id === project?.project_id) {
       
       // Check if message matches current task or is general project chat
       const isGeneralProjectChat = data.task_id === -1 || data.task_id === 0;
       const isCurrentTaskMessage = data.task_id === selectedTask?.task_id;
       
-      if (isGeneralProjectChat || isCurrentTaskMessage) {
+      // If message was sent to specific recipients, only show if current user is a recipient or sender
+      // Otherwise, show if it matches the current task
+      const shouldShowMessage = isGeneralProjectChat || isCurrentTaskMessage;
+      
+      if (shouldShowMessage) {
 
       // Check if message already exists in state to prevent duplicates
       setMessages(prev => {
@@ -262,12 +285,22 @@ export default function ProjectChat({ project }) {
           attachment_url: data.attachment_url,
           attachment_name: data.attachment_name,
           attachment_size: data.attachment_size,
-          attachment_mime_type: data.attachment_mime_type
+          attachment_mime_type: data.attachment_mime_type,
+          is_read: false // New messages are unread by default
         }];
       });
+      
+      // Mark messages as read when new message is received and user is viewing the conversation
+      if (project?.project_id && selectedTask?.task_id) {
+        markGroupChatMessagesAsReadRequest(project.project_id, selectedTask.task_id).catch(err => {
+          console.error('Error marking messages as read:', err);
+        });
+      }
 
-        // Play notification sound
-        audioRef.current?.play();
+        // Play notification sound only if message is not from current user
+        if (data.sender_id !== user?.user_id) {
+          audioRef.current?.play();
+        }
       }
     }
   }, [project?.project_id, selectedTask?.task_id, user?.user_id]);
@@ -289,6 +322,7 @@ export default function ProjectChat({ project }) {
     const socket = socketRef.current;
     const setupListeners = () => {
       socket.on(ON_MESSAGE, handleMessageReceive);
+      socket.on(ON_PROJECT_MESSAGE_RECEIVED, handleMessageReceive);
     };
 
     if (socket.connected) {
@@ -299,6 +333,7 @@ export default function ProjectChat({ project }) {
 
     return () => {
       socket.off(ON_MESSAGE, handleMessageReceive);
+      socket.off(ON_PROJECT_MESSAGE_RECEIVED, handleMessageReceive);
       socket.off('connect', setupListeners);
     };
   }, [socketRef, project?.project_id, selectedTask?.task_id, user?.user_id, handleMessageReceive]);
@@ -373,6 +408,17 @@ export default function ProjectChat({ project }) {
                   )}
                 </SelectContent>
               </Select>
+              <Users className="w-4 h-4 text-gray-500" />
+              <MultiSelect
+                options={memberOptions}
+                onValueChange={setSelectedMembers}
+                defaultValue={[]}
+                placeholder={selectedMembers.length > 0 ? `${selectedMembers.length} selected` : "All members"}
+                variant="default"
+                animation={0}
+                maxCount={2}
+                className="w-48 h-8 text-sm border-gray-300"
+              />
             </div>
             <p className="text-sm text-gray-600">{projectTeamMembers.length} team members</p>
           </div>
@@ -462,9 +508,12 @@ export default function ProjectChat({ project }) {
           </div>
         )}
 
-        {filteredMessages.map((message, index) => (
-          <div key={message.message_id || index} className={`flex ${message.sender_id === user?.user_id ? 'justify-end' : 'justify-start'}`}>
-            <Card className={`p-3 max-w-md ${message.sender_id === user?.user_id ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'}`}>
+        {filteredMessages.map((message, index) => {
+          const isFromCurrentUser = message.sender_id === user?.user_id;
+          const isRead = message.is_read || false;
+          return (
+          <div key={message.message_id || index} className={`flex ${isFromCurrentUser ? 'justify-end' : 'justify-start'}`}>
+            <Card className={`p-3 max-w-md ${isFromCurrentUser ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'}`}>
                                 <div className="flex items-start space-x-2">
                     <AvatarCompoment
                       name={message.sender_name || 'Unknown'}
@@ -478,6 +527,12 @@ export default function ProjectChat({ project }) {
                         <span className="text-xs opacity-60">
                           {moment(message.createdAt).format("LT")}
                         </span>
+                        {/* Show read status for messages sent by current user */}
+                        {isFromCurrentUser && (
+                          <span className="text-xs opacity-70" title={isRead ? 'Read' : 'Sent'}>
+                            {isRead ? '✓✓' : '✓'}
+                          </span>
+                        )}
                       </div>
                       <p className="break-words">{message.content}</p>
                       
@@ -534,7 +589,8 @@ export default function ProjectChat({ project }) {
                   </div>
             </Card>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Message Input */}

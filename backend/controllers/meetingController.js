@@ -5,6 +5,8 @@ import { prisma } from "../prisma/index.js";
 import { AccessToken, RoomServiceClient, AgentDispatchClient } from 'livekit-server-sdk';
 import agentDispatchService from '../services/agentDispatchService.js';
 import transcriptionCollectionService from '../services/transcriptionCollectionService.js';
+import { NOTIFICATION_EVENT_TYPES } from '../constants/notificationTypeConstant.js';
+import { getTaskInvolvedUserIds, notifyProjectMembers } from '../services/notificationService.js';
 
 export const createMeeting = catchAsyncError(async (req, res, next) => {
     const { heading, description, task_id, time, date, isScheduled, mail_text } = req.body;
@@ -53,6 +55,29 @@ export const createMeeting = catchAsyncError(async (req, res, next) => {
             }
         }
     });
+
+    try {
+        const includeUserIds = await getTaskInvolvedUserIds({ taskId: task.task_id });
+
+        await notifyProjectMembers({
+            projectId: task.project_id,
+            actorId: user_id,
+            eventType: NOTIFICATION_EVENT_TYPES.MEETING,
+            message: `${req.user?.name || 'A teammate'} scheduled a meeting "${heading}" for task "${task.name}"`,
+            entityType: 'MEETING',
+            entityId: String(meeting.meeting_id),
+            metadata: {
+                taskId: task.task_id,
+                projectId: task.project_id,
+                meetingId: meeting.meeting_id,
+                scheduled: isScheduled,
+                date: meeting.date,
+                time: meeting.time,
+            },
+            includeUserIds,
+        });
+    } catch (notificationError) {
+    }
 
     // Send meeting invitations/links
     try {
@@ -155,6 +180,30 @@ export const createClientMeeting = catchAsyncError(async (req, res, next) => {
             type: "MEETING"
         }
     });
+
+    try {
+        const includeUserIds = await getTaskInvolvedUserIds({ taskId: task.task_id });
+
+        await notifyProjectMembers({
+            projectId: task.project_id,
+            actorId: user_id,
+            eventType: NOTIFICATION_EVENT_TYPES.MEETING,
+            message: `${req.user?.name || 'A teammate'} scheduled a client meeting "${heading}"`,
+            entityType: 'MEETING',
+            entityId: String(meeting.meeting_id),
+            metadata: {
+                taskId: task.task_id,
+                projectId: task.project_id,
+                meetingId: meeting.meeting_id,
+                scheduled: isScheduled,
+                clientId: client_id ? parseInt(client_id) : null,
+                date: meeting.date,
+                time: meeting.time,
+            },
+            includeUserIds,
+        });
+    } catch (notificationError) {
+    }
 
     // Return the conversation ID in the response
     res.status(200).json({

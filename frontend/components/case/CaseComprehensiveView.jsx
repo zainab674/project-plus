@@ -126,7 +126,9 @@ const CaseComprehensiveView = ({ project, onClose }) => {
         const timelineData = {
           progress: res.data.progress || [],
           times: res.data.times || [],
-          documents: res.data.documents || []
+          documents: res.data.documents || [],
+          caseComments: res.data.caseComments || [],
+          taskComments: res.data.taskComments || []
         };
         setTimelineData(timelineData);
       } else {
@@ -134,7 +136,9 @@ const CaseComprehensiveView = ({ project, onClose }) => {
         setTimelineData({
           progress: [],
           times: [],
-          documents: []
+          documents: [],
+          caseComments: [],
+          taskComments: []
         });
       }
     } catch (error) {
@@ -142,7 +146,9 @@ const CaseComprehensiveView = ({ project, onClose }) => {
       setTimelineData({
         progress: [],
         times: [],
-        documents: []
+        documents: [],
+        caseComments: [],
+        taskComments: []
       });
     } finally {
       setTimelineLoading(false);

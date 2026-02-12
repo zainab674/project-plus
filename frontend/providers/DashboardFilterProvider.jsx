@@ -164,10 +164,13 @@ export const DashboardFilterProvider = ({ children }) => {
 
    
 
-    const { times, progress, documents } = state.timelineData;
+    const { times, progress, documents, caseComments, taskComments, reviews } = state.timelineData;
     let filteredTimes = times;
     let filteredProgress = progress;
     let filteredDocuments = documents;
+    let filteredCaseComments = caseComments || [];
+    let filteredTaskComments = taskComments || [];
+    let filteredReviews = reviews || [];
 
     // Filter by selected case
     if (state.selectedCase) {
@@ -176,6 +179,9 @@ export const DashboardFilterProvider = ({ children }) => {
       filteredTimes = times.filter(project => project.project_id === caseId);
       filteredProgress = progress.filter(project => project.project_id === caseId);
       filteredDocuments = documents.filter(project => project.project_id === caseId);
+      filteredCaseComments = (caseComments || []).filter(project => project.project_id === caseId);
+      filteredTaskComments = (taskComments || []).filter(project => project.project_id === caseId);
+      filteredReviews = (reviews || []).filter(project => project.project_id === caseId);
     }
 
     // Filter by selected month-year (single month)
@@ -214,6 +220,39 @@ export const DashboardFilterProvider = ({ children }) => {
           }) || []
         })).filter(client => client.Documents.length > 0) || []
       })).filter(project => project.Clients.length > 0);
+
+      // Filter case comments by date
+      filteredCaseComments = (filteredCaseComments || []).map(project => ({
+        ...project,
+        Comments: project.Comments?.filter(comment => {
+          const commentDate = dayjs(comment.created_at);
+          return commentDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+        }) || []
+      })).filter(project => project.Comments && project.Comments.length > 0);
+
+      // Filter task comments by date
+      filteredTaskComments = (filteredTaskComments || []).map(project => ({
+        ...project,
+        Tasks: project.Tasks?.map(task => ({
+          ...task,
+          Comments: task.Comments?.filter(comment => {
+            const commentDate = dayjs(comment.created_at);
+            return commentDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+          }) || []
+        })).filter(task => task.Comments && task.Comments.length > 0) || []
+      })).filter(project => project.Tasks && project.Tasks.length > 0);
+
+      // Filter reviews by date
+      filteredReviews = (filteredReviews || []).map(project => ({
+        ...project,
+        Tasks: project.Tasks?.map(task => ({
+          ...task,
+          inReview: task.inReview?.filter(review => {
+            const reviewDate = dayjs(review.created_at);
+            return reviewDate.isBetween(startOfMonth, endOfMonth, 'day', '[]');
+          }) || []
+        })).filter(task => task.inReview && task.inReview.length > 0) || []
+      })).filter(project => project.Tasks && project.Tasks.length > 0);
     }
 
     // Filter by selected month range
@@ -251,13 +290,49 @@ export const DashboardFilterProvider = ({ children }) => {
           }) || []
         })).filter(client => client.Documents.length > 0) || []
       })).filter(project => project.Clients.length > 0);
+
+      // Filter case comments by date range
+      filteredCaseComments = (filteredCaseComments || []).map(project => ({
+        ...project,
+        Comments: project.Comments?.filter(comment => {
+          const commentDate = dayjs(comment.created_at);
+          return commentDate.isBetween(fromDate, toDate, 'day', '[]');
+        }) || []
+      })).filter(project => project.Comments && project.Comments.length > 0);
+
+      // Filter task comments by date range
+      filteredTaskComments = (filteredTaskComments || []).map(project => ({
+        ...project,
+        Tasks: project.Tasks?.map(task => ({
+          ...task,
+          Comments: task.Comments?.filter(comment => {
+            const commentDate = dayjs(comment.created_at);
+            return commentDate.isBetween(fromDate, toDate, 'day', '[]');
+          }) || []
+        })).filter(task => task.Comments && task.Comments.length > 0) || []
+      })).filter(project => project.Tasks && project.Tasks.length > 0);
+
+      // Filter reviews by date range
+      filteredReviews = (filteredReviews || []).map(project => ({
+        ...project,
+        Tasks: project.Tasks?.map(task => ({
+          ...task,
+          inReview: task.inReview?.filter(review => {
+            const reviewDate = dayjs(review.created_at);
+            return reviewDate.isBetween(fromDate, toDate, 'day', '[]');
+          }) || []
+        })).filter(task => task.inReview && task.inReview.length > 0) || []
+      })).filter(project => project.Tasks && project.Tasks.length > 0);
     }
 
    
     return {
       times: filteredTimes,
       progress: filteredProgress,
-      documents: filteredDocuments
+      documents: filteredDocuments,
+      caseComments: filteredCaseComments,
+      taskComments: filteredTaskComments,
+      reviews: filteredReviews
     };
   }, [state.timelineData, state.selectedCase, state.selectedMonthYear, state.selectedMonthRange]);
 
@@ -318,9 +393,10 @@ export const DashboardFilterProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      // Use provided date range or default to last 6 days
-      const startDate = dateRange?.start || dayjs().subtract(6, 'day').format('YYYY-MM-DD');
-      const endDate = dateRange?.end || dayjs().format('YYYY-MM-DD');
+      // Use provided date range or fetch all data (no date limit)
+      // If no date range provided, use null to get all timeline data
+      const startDate = dateRange?.start || null;
+      const endDate = dateRange?.end || null;
       
       // Get project ID for filtering if a case is selected
       const projectId = state.selectedCase?.project_id || null;

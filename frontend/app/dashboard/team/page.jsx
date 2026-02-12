@@ -6,12 +6,13 @@ import {
     SelectLabel, SelectTrigger, SelectValue
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { X, Plus, Users, UserPlus, Mail, Shield, Calendar, MoreVertical, Edit, Trash2, Pencil } from 'lucide-react'
+import { X, Plus, Users, UserPlus, Mail, Shield, Calendar, MoreVertical, Edit, Trash2, Pencil, DollarSign, Copy, ArrowLeft } from 'lucide-react'
 import { toast } from 'react-toastify'
 import { useUser } from '@/providers/UserProvider'
 import { invitePeopleRequest, sendViaMailRequest } from '@/lib/http/project'
 import { generateInvitation } from '@/utils/createInvitation'
 import { getTeamMembersRequest, updateTeamMemberRequest, deleteTeamMemberRequest } from '@/lib/http/auth'
+import { Textarea } from '@/components/ui/textarea'
 
 // Edit Team Member Modal Component
 function EditTeamMemberModal({ isOpen, onClose, member, onSuccess }) {
@@ -330,6 +331,263 @@ function AddTeamMemberModal({ isOpen, onClose, onSuccess }) {
     )
 }
 
+// Invite Biller Component (inline in team page)
+function InviteBillerSection({ onBack }) {
+    const { user } = useUser()
+    const [isLoading, setIsLoading] = useState(false)
+    const [link, setLink] = useState(null)
+    const [invitation, setInvitation] = useState('')
+    const [sendViaMail, setSendViaMail] = useState(false)
+    const [mail, setMail] = useState('')
+
+    const handleSubmit = useCallback(async (e) => {
+        e.preventDefault()
+        setIsLoading(true)
+        try {
+            const formdata = {
+                role: 'BILLER',
+                projectId: null
+            }
+            const res = await invitePeopleRequest(formdata)
+            setLink(res.data.link)
+            const invitation = generateInvitation(
+                res.data.link,
+                'Billing System',
+                user?.name,
+                'Project Admin',
+                'BILLER',
+                "False",
+                'Biller'
+            )
+            setInvitation(invitation)
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error?.message)
+        } finally {
+            setIsLoading(false)
+        }
+    }, [user])
+
+    const handleCopy = useCallback(() => {
+        try {
+            if (typeof window != 'undefined') {
+                window.navigator.clipboard.writeText(invitation)
+                toast.success("Biller Invitation Copied")
+            }
+        } catch (error) {
+            toast.error(error.message)
+        }
+    }, [invitation])
+
+    const handleSendViaMail = useCallback(async (e) => {
+        e.preventDefault()
+        setIsLoading(true)
+        try {
+            const formdata = {
+                invitation,
+                mail,
+                projectId: null
+            }
+            const res = await sendViaMailRequest(formdata)
+            toast.success(res.data.message)
+            setSendViaMail(false)
+            setMail('')
+            setLink(null)
+            setInvitation('')
+        } catch (error) {
+            toast.error(error?.response?.data?.message || error?.message)
+        } finally {
+            setIsLoading(false)
+        }
+    }, [invitation, mail])
+
+    return (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-8">
+                {/* Header with back button */}
+                <div className="flex items-center gap-4 mb-6">
+                    <button
+                        onClick={onBack}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                        <ArrowLeft className="w-5 h-5 text-gray-600" />
+                    </button>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                            <DollarSign className="w-6 h-6 text-green-600" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900">Invite Biller</h2>
+                            <p className="text-gray-600 mt-1">Invite a biller to handle billing and invoicing</p>
+                        </div>
+                    </div>
+                </div>
+
+                {sendViaMail ? (
+                    <>
+                        <h3 className="text-lg font-medium text-gray-900 mb-4">Send Biller Invitation Via Email</h3>
+                        <form className="space-y-4" onSubmit={handleSendViaMail}>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Email Address
+                                </label>
+                                <Input
+                                    type="email"
+                                    placeholder="Enter biller's email address"
+                                    value={mail}
+                                    onChange={(e) => setMail(e.target.value)}
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setSendViaMail(false)}
+                                    disabled={isLoading}
+                                >
+                                    Back
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    className="bg-green-600 text-white hover:bg-green-700"
+                                    isLoading={isLoading}
+                                    disabled={isLoading || !mail}
+                                >
+                                    Send Invitation
+                                </Button>
+                            </div>
+                        </form>
+                    </>
+                ) : !link ? (
+                    <>
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <DollarSign className="w-8 h-8 text-green-600" />
+                            </div>
+                            <h3 className="text-xl font-medium text-gray-900 mb-2">Create Biller Invitation</h3>
+                            <p className="text-gray-600 max-w-xl mx-auto">
+                                Generate an invitation link for a biller to join your team and handle billing operations.
+                            </p>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                                <h4 className="font-medium text-blue-900 mb-3">Biller Permissions:</h4>
+                                <ul className="text-sm text-blue-800 space-y-2">
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-blue-600 mt-1">•</span>
+                                        <span>Generate invoices and billing reports</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-blue-600 mt-1">•</span>
+                                        <span>Manage client billing and payment tracking</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-blue-600 mt-1">•</span>
+                                        <span>Access to billing dashboard and financial data</span>
+                                    </li>
+                                    <li className="flex items-start gap-2">
+                                        <span className="text-blue-600 mt-1">•</span>
+                                        <span>Create and send invoices to clients</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={onBack}
+                                    disabled={isLoading}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleSubmit}
+                                    className="bg-green-600 text-white hover:bg-green-700"
+                                    isLoading={isLoading}
+                                    disabled={isLoading}
+                                >
+                                    <DollarSign className="w-4 h-4 mr-2" />
+                                    Generate Invitation Link
+                                </Button>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <DollarSign className="w-8 h-8 text-green-600" />
+                            </div>
+                            <h3 className="text-xl font-medium text-gray-900 mb-2">Biller Invitation Created!</h3>
+                            <p className="text-gray-600 max-w-xl mx-auto">
+                                Share this invitation with the biller to grant them access to your billing system.
+                            </p>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Invitation Link
+                                </label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        value={link}
+                                        readOnly
+                                        className="flex-1"
+                                    />
+                                    <Button
+                                        onClick={handleCopy}
+                                        variant="outline"
+                                        className="whitespace-nowrap"
+                                    >
+                                        <Copy className="w-4 h-4 mr-2" />
+                                        Copy
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Email Template
+                                </label>
+                                <Textarea
+                                    value={invitation}
+                                    readOnly
+                                    rows={8}
+                                    className="resize-none"
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setLink(null)
+                                        setInvitation('')
+                                    }}
+                                    disabled={isLoading}
+                                >
+                                    Create New Link
+                                </Button>
+                                <Button
+                                    onClick={() => setSendViaMail(true)}
+                                    className="bg-green-600 text-white hover:bg-green-700"
+                                    disabled={isLoading}
+                                >
+                                    <Mail className="w-4 h-4 mr-2" />
+                                    Send Via Email
+                                </Button>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    )
+}
+
 // Main Team Management Page Component
 export default function TeamManagementPage() {
     const [team, setTeam] = useState([])
@@ -337,6 +595,7 @@ export default function TeamManagementPage() {
     const [showAddModal, setShowAddModal] = useState(false)
     const [showEditModal, setShowEditModal] = useState(false)
     const [selectedMember, setSelectedMember] = useState(null)
+    const [showInviteBiller, setShowInviteBiller] = useState(false)
 
     const loadTeamMembers = async () => {
         setIsLoading(true);
@@ -349,6 +608,7 @@ export default function TeamManagementPage() {
                 email: m.user.email,
                 status: m.user.status,        // if present
                 created_at: m.created_at,     // or m.user.joinedAt, however your API names it
+                role: m.role,                 // role from UserTeam (TEAM or BILLER)
                 legalRole: m.legalRole,       // legal role from UserTeam
                 customLegalRole: m.customLegalRole // custom legal role from UserTeam
             }));
@@ -410,25 +670,38 @@ export default function TeamManagementPage() {
     return (
         <div className="min-h-screen bg-gray-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                            <Users className="w-6 h-6 text-blue-600" />
+                {showInviteBiller ? (
+                    <InviteBillerSection onBack={() => setShowInviteBiller(false)} />
+                ) : (
+                    <>
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                                    <Users className="w-6 h-6 text-blue-600" />
+                                </div>
+                                <div>
+                                    <h1 className="text-3xl font-bold text-gray-900">Team Management</h1>
+                                    <p className="text-gray-600 mt-1">Manage your legal team members and their roles</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    onClick={() => setShowInviteBiller(true)}
+                                    className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 px-6 py-3"
+                                >
+                                    <DollarSign className="w-4 h-4" />
+                                    Invite Biller
+                                </Button>
+                                <Button
+                                    onClick={() => setShowAddModal(true)}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 px-6 py-3"
+                                >
+                                    <UserPlus className="w-4 h-4" />
+                                    Add Team Member
+                                </Button>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900">Team Management</h1>
-                            <p className="text-gray-600 mt-1">Manage your legal team members and their roles</p>
-                        </div>
-                    </div>
-                    <Button
-                        onClick={() => setShowAddModal(true)}
-                        className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 px-6 py-3"
-                    >
-                        <UserPlus className="w-4 h-4" />
-                        Add Team Member
-                    </Button>
-                </div>
 
                 {/* Team Members Table */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -462,7 +735,7 @@ export default function TeamManagementPage() {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider">
-                                            Team Member
+                                            Member / Biller
                                         </th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-900 uppercase tracking-wider">
                                             Legal Role
@@ -479,18 +752,31 @@ export default function TeamManagementPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {team.map((member, idx) => (
+                                    {team.map((member, idx) => {
+                                        const isBiller = member.role === 'BILLER';
+                                        return (
                                         <tr key={`${member.team_member_id}-${idx}`} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
-                                                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                                                        <span className="text-blue-600 font-medium text-sm">
-                                                            {(member.name || member.email)?.charAt(0)?.toUpperCase()}
-                                                        </span>
+                                                    <div className={`w-10 h-10 ${isBiller ? 'bg-green-100' : 'bg-blue-100'} rounded-full flex items-center justify-center`}>
+                                                        {isBiller ? (
+                                                            <DollarSign className={`w-5 h-5 ${isBiller ? 'text-green-600' : 'text-blue-600'}`} />
+                                                        ) : (
+                                                            <span className={`${isBiller ? 'text-green-600' : 'text-blue-600'} font-medium text-sm`}>
+                                                                {(member.name || member.email)?.charAt(0)?.toUpperCase()}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div className="ml-4">
-                                                        <div className="text-sm font-medium text-gray-900">
-                                                            {member.name || 'Pending Invitation'}
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-medium text-gray-900">
+                                                                {member.name || 'Pending Invitation'}
+                                                            </span>
+                                                            {isBiller && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                                                    Biller
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <div className="text-sm text-gray-500 flex items-center gap-1">
                                                             <Mail className="w-3 h-3" />
@@ -501,7 +787,7 @@ export default function TeamManagementPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="text-sm font-medium text-gray-900">
-                                                    {getRoleDisplayName(member.legalRole, member.customLegalRole)}
+                                                    {isBiller ? 'Biller' : getRoleDisplayName(member.legalRole, member.customLegalRole)}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -529,18 +815,29 @@ export default function TeamManagementPage() {
                                                 </button>
                                             </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
                     )}
                 </div>
 
-                {/* Footer */}
-                {team.length > 0 && (
-                    <div className="mt-6 text-sm text-gray-600">
-                        {team.length} team member{team.length === 1 ? '' : 's'} total
-                    </div>
+                        {/* Footer */}
+                        {team.length > 0 && (() => {
+                            const teamMembers = team.filter(m => m.role !== 'BILLER');
+                            const billers = team.filter(m => m.role === 'BILLER');
+                            return (
+                                <div className="mt-6 text-sm text-gray-600">
+                                    {teamMembers.length} team member{teamMembers.length === 1 ? '' : 's'}
+                                    {billers.length > 0 && (
+                                        <> and {billers.length} biller{billers.length === 1 ? '' : 's'}</>
+                                    )}
+                                    {' '}total
+                                </div>
+                            );
+                        })()}
+                    </>
                 )}
             </div>
 
